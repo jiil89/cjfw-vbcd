@@ -43,3 +43,6 @@ out/
 .cache/
 .eslintcache
 .turbo/
+
+# playwright mcp temp artifacts (screenshots, network dumps)
+.playwright-mcp/
