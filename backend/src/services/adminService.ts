@@ -1,0 +1,109 @@
+// Admin 승인 패널 서비스. pending 등록 요청 조회 + 승인/거부 처리.
+// 승인/거부는 항상 DB-1의 안전한 RPC(approve_account_registration_request /
+// reject_account_registration_request)를 통해서만 이루어진다 — 이 파일이 users/
+// account_registration_requests를 직접 UPDATE하지 않는다.
+
+import {
+  findPendingRegistrationRequests,
+  findRegistrationRequestById,
+  approveRegistrationRequestByAdmin,
+  rejectRegistrationRequest,
+  type RegistrationRequest,
+} from "../db/repositories/registrationRequestRepository";
+
+export class RegistrationRequestNotFoundError extends Error {
+  code = "NOT_FOUND";
+  constructor() {
+    super("등록 요청을 찾을 수 없습니다.");
+    this.name = "RegistrationRequestNotFoundError";
+  }
+}
+
+export class RegistrationRequestNotPendingError extends Error {
+  code = "REQUEST_NOT_PENDING";
+  constructor() {
+    super("이미 처리된 요청입니다.");
+    this.name = "RegistrationRequestNotPendingError";
+  }
+}
+
+export class AdminNotActiveError extends Error {
+  code = "FORBIDDEN";
+  constructor() {
+    super("요청을 처리하는 Admin 계정이 유효하지 않습니다.");
+    this.name = "AdminNotActiveError";
+  }
+}
+
+/** 비밀번호/암호문은 repository의 SELECT 컬럼 자체에 포함되지 않으므로 여기서 다시 제거할 것이 없다. */
+export async function listPendingRegistrationRequests(): Promise<RegistrationRequest[]> {
+  return findPendingRegistrationRequests();
+}
+
+/**
+ * requestId가 존재하고 pending 상태인지 먼저 확인해 404/409를 명확히 구분한 뒤,
+ * 실제 승인/거부는 DB RPC가 원자적으로 처리한다(요청 상태 갱신 + users insert 또는
+ * 자격증명 폐기까지 트랜잭션 하나).
+ */
+async function assertPendingRequestExists(requestId: string): Promise<void> {
+  const request = await findRegistrationRequestById(requestId);
+  if (!request) {
+    throw new RegistrationRequestNotFoundError();
+  }
+  if (request.status !== "pending") {
+    throw new RegistrationRequestNotPendingError();
+  }
+}
+
+function mapRpcError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("not found")) {
+    return new RegistrationRequestNotFoundError();
+  }
+  if (message.includes("is not pending") || message.includes("not pending")) {
+    return new RegistrationRequestNotPendingError();
+  }
+  if (message.includes("is not an active admin")) {
+    return new AdminNotActiveError();
+  }
+  return error instanceof Error ? error : new Error(message);
+}
+
+export async function approveRegistrationRequestAsAdmin(
+  requestId: string,
+  adminUserId: string
+): Promise<RegistrationRequest> {
+  await assertPendingRequestExists(requestId);
+
+  try {
+    await approveRegistrationRequestByAdmin(requestId, adminUserId);
+  } catch (error) {
+    throw mapRpcError(error);
+  }
+
+  const updated = await findRegistrationRequestById(requestId);
+  if (!updated) {
+    throw new RegistrationRequestNotFoundError();
+  }
+  return updated;
+}
+
+export async function rejectRegistrationRequestAsAdmin(
+  requestId: string,
+  adminUserId: string
+): Promise<RegistrationRequest> {
+  await assertPendingRequestExists(requestId);
+
+  try {
+    await rejectRegistrationRequest(requestId, adminUserId);
+  } catch (error) {
+    throw mapRpcError(error);
+  }
+
+  const updated = await findRegistrationRequestById(requestId);
+  if (!updated) {
+    throw new RegistrationRequestNotFoundError();
+  }
+  return updated;
+}

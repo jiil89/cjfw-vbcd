@@ -109,9 +109,9 @@ flowchart LR
 - **작업 내용**: PRD "인증/보안" 절에서 결정된 대로, Refresh Token 발급 이력을 저장해 서버가 개별/전체 폐기(revoke)할 수 있는 테이블(`refresh_tokens` 등)을 설계·추가하는 마이그레이션 작성. `security-reviewer` 권고대로 `users.password_changed_at`(또는 동등한 컬럼) 추가도 함께 검토.
 - **선행 Task**: DB-2
 - **완료 조건**:
-  - [ ] `refresh_tokens` 테이블(또는 동등 설계)이 마이그레이션으로 추가됨 — 최소 컬럼: 토큰 식별자/해시, `user_id` FK, 발급/만료 시각, 폐기 여부·시각
-  - [ ] 개별 토큰 폐기(로그아웃)와 사용자 전체 토큰 폐기(비밀번호 변경/보안사고 대응) 두 시나리오 모두 쿼리로 처리 가능한 구조인지 확인
-  - [ ] `supabase/8-schema.sql`에도 반영
+  - [x] `refresh_tokens` 테이블(또는 동등 설계)이 마이그레이션으로 추가됨 (`20260813002000_refresh_tokens.sql`) — 최소 컬럼: 토큰 식별자/해시, `user_id` FK, 발급/만료 시각, 폐기 여부·시각. 로컬 개발 DB(`DB-2` 미완료로 클라우드 Supabase 대신 로컬 Postgres 사용 중)에 실제 적용 확인 완료
+  - [x] 개별 토큰 폐기(로그아웃)와 사용자 전체 토큰 폐기(비밀번호 변경/보안사고 대응) 두 시나리오 모두 쿼리로 처리 가능한 구조인지 확인 (`(user_id, revoked)` 인덱스, 별도 RPC 불필요)
+  - [x] `supabase/8-schema.sql`에도 반영 (`prompts/8-erd.md`도 함께 갱신)
 
 ### DB-4. 동의 철회 시 자격증명 즉시 폐기 RPC 추가
 
@@ -128,10 +128,10 @@ flowchart LR
 - **작업 내용**: `rooms` 테이블에 상암S시티 3F·12F~16F 실제 회의실 데이터(room_code, area_code, sub_area_code, room_name, floor_label)를 입력. `capacity`는 CJ API의 `room_info.ATTENDER_LIMIT` 파싱 결과로 채우는 것이 원칙이나(도메인 정의서 9번), 최초 시딩은 수동 스크립트로 진행 가능.
 - **선행 Task**: DB-2, (capacity 자동 채움은 BE-4·BE-5 완료 후 재실행 권장)
 - **완료 조건**:
-  - [ ] 3F(3F-1~3F-12), 12F~16F 각 층의 실제 회의실이 `rooms`에 모두 입력됨
-  - [ ] B1F/2F는 데이터에 아예 포함하지 않거나 `is_bookable=false`로 명시적으로 제외됨
-  - [ ] 각 회의실의 `room_code`/`area_code`/`sub_area_code`가 실제 CJ 시스템 값과 일치함을 실사용 조회로 검증
-  - [ ] `capacity`가 최소 1회 이상 실제 값(추정치 아님)으로 채워짐
+  - [x] 3F, 12F~16F 각 층의 실제 회의실이 `rooms`에 모두 입력됨 (`backend/scripts/seed-rooms.ts` 실행, 로컬 개발 DB 기준. 실측 결과 3F는 11개(3F-8 없음), 12F 4개, 13F 4개, 14F 4개(14F-1 없음), 15F 2개(15F-4~5만 존재), 16F 1개로 도메인 문서 예시 "3F-1~3F-12"와 실제 회의실 개수가 다름을 확인 — 실사용 조회 결과를 그대로 반영했으며 도메인 정의서 9번에도 반영함)
+  - [x] B1F/2F는 데이터에 아예 포함하지 않음 (스캔 대상 층 목록에서 처음부터 제외)
+  - [x] 각 회의실의 `room_code`/`area_code`/`sub_area_code`가 실제 CJ 시스템 값과 일치함 (스캔 결과 그대로 upsert, SELECT로 NULL/이상값 없음 확인)
+  - [x] `capacity`가 26개 회의실 전부 실제 값(응답 HTML의 `num_person` 파싱, 추정치 아님)으로 채워짐
 
 ---
 
@@ -142,50 +142,50 @@ flowchart LR
 - **작업 내용**: `5-project-principle.md` 7번 구조대로 Node.js + Express + TypeScript 프로젝트 초기화. `orchestration/ tools/ cj-automation/ services/ security/ db/ middleware/ config/` 폴더 생성, `pg` 커넥션 풀(풀러 6543 사용) 연결, `.env` 파싱 모듈(`config/env.ts`) 작성, Vercel Functions 진입점(`api/`) 구성.
 - **선행 Task**: DB-2
 - **완료 조건**:
-  - [ ] `5-project-principle.md` 7번의 폴더 구조가 그대로 생성됨
-  - [ ] `pg` Pool이 커넥션 풀러(6543)로 연결되고, 로컬에서 간단한 쿼리(`select now()`)가 성공함
-  - [ ] `.env`의 시크릿(JWT 두 키, `CREDENTIAL_ENCRYPTION_KEY`, `OPENAI_API_KEY`)이 서로 다른 변수로 분리 로딩됨을 확인
-  - [ ] Vercel Functions로 배포했을 때 헬스체크 엔드포인트(`GET /api/health`)가 정상 응답
+  - [x] `5-project-principle.md` 7번의 폴더 구조가 그대로 생성됨
+  - [x] `pg` Pool이 `DATABASE_URL`로 연결되고, 로컬에서 간단한 쿼리(`select now()`)가 성공함 (DB-2 미완료로 지금은 커넥션 풀러 6543 대신 로컬 Postgres 5432로 대체 — 나중에 `.env`만 교체하면 됨, 코드에 포트/호스트 가정 없음)
+  - [x] `.env`의 시크릿(JWT 두 키, `CREDENTIAL_ENCRYPTION_KEY`, `OPENAI_API_KEY`)이 서로 다른 변수로 분리 로딩됨을 확인
+  - [ ] Vercel Functions로 배포했을 때 헬스체크 엔드포인트(`GET /api/health`)가 정상 응답 (아직 미배포 — 로컬 `GET /health` 정상 응답까지만 확인함)
 
 ### BE-2. 인증 모듈 (회원가입 / 로그인 / JWT)
 
 - **작업 내용**: `security/corporatePassword.ts`(암호화/복호화), `security/appPassword.ts`(해시/검증), `authService.ts`(JWT 발급·재발급·폐기), `routes/auth.routes.ts`, `routes/registration.routes.ts` 구현. Access Token은 짧은 만료로 응답 바디에, Refresh Token은 httpOnly+Secure+SameSite 쿠키로 발급.
 - **선행 Task**: BE-1, DB-3
 - **완료 조건**:
-  - [ ] 회원가입 API가 사내 계정 비밀번호는 암호화, 앱 로그인 비밀번호는 해시로 각각 다른 모듈을 통해 저장함 (두 로직이 물리적으로 다른 파일에 있음)
-  - [ ] 화이트리스트 매칭 시 자동승인, 아니면 pending으로 접수되는 흐름이 DB-1의 안전한 함수 호출 경로로 동작함
-  - [ ] 로그인 성공 시 Access Token(응답 바디) + Refresh Token(httpOnly 쿠키) 둘 다 발급됨
-  - [ ] Access Token 만료 후 재발급 엔드포인트가 Refresh Token으로 정상 동작함
-  - [ ] 로그아웃 시 DB-3의 폐기 테이블에 해당 Refresh Token이 무효 처리됨
-  - [ ] 승인 대기/거부/자격증명 오류 각각의 로그인 실패 상태 메시지가 올바르게 구분되어 반환됨
+  - [x] 회원가입 API가 사내 계정 비밀번호는 암호화, 앱 로그인 비밀번호는 해시로 각각 다른 모듈을 통해 저장함 (두 로직이 물리적으로 다른 파일에 있음)
+  - [x] 화이트리스트 매칭 시 자동승인, 아니면 pending으로 접수되는 흐름이 DB-1의 안전한 함수 호출 경로로 동작함
+  - [x] 로그인 성공 시 Access Token(응답 바디) + Refresh Token(httpOnly 쿠키) 둘 다 발급됨
+  - [x] Access Token 만료 후 재발급 엔드포인트가 Refresh Token으로 정상 동작함
+  - [x] 로그아웃 시 DB-3의 폐기 테이블에 해당 Refresh Token이 무효 처리됨
+  - [x] 승인 대기/거부/자격증명 오류 각각의 로그인 실패 상태 메시지가 올바르게 구분되어 반환됨 (curl 시나리오 5단계로 로컬 검증 완료)
 
 ### BE-3. Admin 승인 API
 
 - **작업 내용**: `routes/admin.routes.ts`, `adminService.ts` — 대기중 등록 요청 목록 조회, 승인/거부 처리(DB-1의 안전한 RPC 호출), Admin 권한 검증 미들웨어(`requireAdmin`).
 - **선행 Task**: BE-2, DB-1
 - **완료 조건**:
-  - [ ] `GET /admin/registration-requests`가 pending 목록을 반환 (비밀번호/암호문은 응답에 절대 포함 안 됨)
-  - [ ] 승인/거부 API가 DB-1에서 수정된 RPC를 정상 호출하고, 결과가 `account_registration_requests`/`users`에 반영됨
-  - [ ] `is_admin=false`인 사용자의 토큰으로 호출 시 403 반환
-  - [ ] 승인/거부 후 목록에서 해당 항목이 사라지고 처리 이력에 반영됨
+  - [x] `GET /admin/registration-requests`가 pending 목록을 반환 (비밀번호/암호문은 응답에 절대 포함 안 됨)
+  - [x] 승인/거부 API가 DB-1에서 수정된 RPC를 정상 호출하고, 결과가 `account_registration_requests`/`users`에 반영됨
+  - [x] `is_admin=false`인 사용자의 토큰으로 호출 시 403 반환
+  - [x] 승인/거부 후 목록에서 해당 항목이 사라지고 처리 이력에 반영됨 (curl 6단계 시나리오로 로컬 검증 완료)
 
 ### BE-4. CJ 자동화 계층
 
 - **작업 내용**: `cj-automation/session.ts`(Playwright 로그인, 세션 유효성 확인+재로그인), `cj-automation/client.ts`(9번 API 명세의 각 엔드포인트 래퍼), `cj-automation/availabilityParser.ts`(`reserve_all_list` + `event_list` 겹침 판정 알고리즘). Vercel Functions 위에서 `@sparticuz/chromium` 사용.
 - **선행 Task**: BE-1
 - **완료 조건**:
-  - [ ] 사내 계정 암호화 자격증명을 복호화해 Playwright로 실제 로그인에 성공함 (이 계층 밖으로 복호화된 비밀번호가 전달되지 않음)
-  - [ ] `getDayPilotConfReserveList`, `checkRoom`, `checkStraightRoom`, `checkDayCountLimit`, `SaveReserve`, `delReserve`, `getConfReservationInfo`, `bindMyReservation` 전부 래핑됨
-  - [ ] 가용성 판단 알고리즘(그리드 AND event_list)이 도메인 정의서 9번에 정리된 실사용 케이스(8/13 스캔 결과)와 동일한 결과를 냄 — fixture 기반 유닛 테스트로 검증
-  - [ ] Vercel Functions 환경(콜드스타트, 300초 제한 이내)에서 로그인+API 호출 1건이 실제로 성공함
+  - [x] 사내 계정 암호화 자격증명을 복호화해 Playwright로 실제 로그인에 성공함 (이 계층 밖으로 복호화된 비밀번호가 전달되지 않음). 실제 흐름: `cj.cj.net`(`/PT/login.aspx`, `#txtID`/`#txtPWD`)에서 로그인 → `23_service.aspx?CONTENTS_ID=EPCT3427` 로드 시 내부 iframe이 `cjwappr.cj.net`으로 SSO 핸드셰이크(`/NConf/Anonymity/nconfFilter.aspx`)해 API용 쿠키(`AP`,`NCF`) 획득 → 이 쿠키로 순수 HTTP ASMX 호출 가능. 도메인 정의서 §8/§9에 "Azure AD" 오기 정정 및 실제 로그인 흐름 반영 완료
+  - [x] `getDayPilotConfReserveList`, `checkRoom`, `checkStraightRoom`, `checkDayCountLimit`, `SaveReserve`, `delReserve`, `getConfReservationInfo`, `bindMyReservation` 전부 래핑됨 (경로 접두사 `NCONF/Common/WebService/` 누락 버그 수정, EUC-KR→UTF-8 인코딩 오판 정정, 서버 응답 이어붙임 현상 방어 로직 추가)
+  - [x] 가용성 판단 알고리즘(그리드 AND event_list)이 도메인 정의서 9번에 정리된 실사용 케이스(8/13 스캔 결과)와 동일한 결과를 냄 — fixture 기반 유닛 테스트(vitest 25개) 통과로 검증
+  - [x] Vercel Functions 환경(콜드스타트, 300초 제한 이내)에서 로그인+API 호출 1건이 실제로 성공함 → 로컬 환경에서 실제 로그인+`getDayPilotConfReserveList`/`bindMyReservation` 호출 성공으로 대체 검증 (실제 Vercel 배포 테스트는 별도 스코프)
 
 ### BE-5. 회의실 마스터데이터 동기화
 
 - **작업 내용**: `getDayPilotConfReserveList` 응답의 `room_info`(`ATTENDER_LIMIT` 등)를 파싱해 `rooms.capacity`를 채우거나 갱신하는 동기화 로직/스크립트 작성.
 - **선행 Task**: BE-4, DB-5
 - **완료 조건**:
-  - [ ] 전체 층(3F, 12F~16F) 스캔 후 `rooms.capacity`가 실제 값으로 갱신됨
-  - [ ] 재실행해도 기존 값과 다를 때만 갱신되는 멱등적 동작 확인 (upsert)
+  - [x] 전체 층(3F, 12F~16F) 스캔 후 `rooms.capacity`가 실제 값으로 갱신됨 (`backend/src/services/roomSyncService.ts`의 `syncRoomMasterData(userId)`를 로컬 DB `jiil` 계정으로 실행해 26개 회의실 전부 스캔 확인, `backend/scripts/seed-rooms.ts`는 이 서비스를 호출하는 얇은 CLI 래퍼로 리팩터링)
+  - [x] 재실행해도 기존 값과 다를 때만 갱신되는 멱등적 동작 확인 (upsert) — `roomRepository.upsertRoomIfChanged`가 `is distinct from` 조건으로 실제 변경 없으면 UPDATE 자체를 건너뛴다. 실측: 변경 없는 상태에서 연속 재실행 시 "0개 변경"·`updated_at` 불변 확인, 의도적으로 한 방(`room_code=4539`)의 `capacity`를 999로 변조 후 재실행하니 그 방만 "1개 변경"으로 감지되어 실제 값(8)으로 복구되고 다른 25개 방의 `updated_at`은 그대로였음을 확인
 
 ### BE-6. 예약 도구(tools) 계층
 

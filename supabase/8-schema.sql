@@ -2,13 +2,13 @@
 -- CJ프레시웨이 회의실 예약 웹 챗봇 Agent — 최종 통합 스키마
 -- =============================================================================
 --
--- 이 파일은 supabase/migrations/ 아래 11개 마이그레이션 파일(2026-08-13 하루 동안
+-- 이 파일은 supabase/migrations/ 아래 12개 마이그레이션 파일(2026-08-13 하루 동안
 -- 이력형으로 누적된 CREATE/ALTER)을 시간순으로 전부 적용한 "최종 결과 상태"를
 -- 처음부터 다시 깔끔하게 작성한 참고용 통합본이다.
 --
 -- 주의:
 --   - 이 파일은 마이그레이션 도구로 실행되는 실제 마이그레이션 파일이 아니다.
---     실제 마이그레이션 이력은 여전히 supabase/migrations/ 의 11개 파일이 정본이며,
+--     실제 마이그레이션 이력은 여전히 supabase/migrations/ 의 12개 파일이 정본이며,
 --     이 파일은 그 이력을 건드리지 않는 별도의 "현재 스키마 스냅샷" 참고 문서다.
 --   - 예: users.app_password_hash는 20260813001100 마이그레이션에서 나중에 추가됐지만,
 --     여기서는 처음부터 완성형 CREATE TABLE에 포함시켜 작성한다.
@@ -369,6 +369,51 @@ create index if not exists alternative_suggestions_request_id_idx
 
 
 -- -----------------------------------------------------------------------------
+-- 6-1. RefreshToken (Refresh Token 발급 이력)
+-- -----------------------------------------------------------------------------
+-- prompts/prd.txt "인증/보안": Access Token(짧은 만료, 응답 바디) + Refresh Token(httpOnly
+-- Secure SameSite 쿠키) 방식. Refresh Token은 서버가 개별/전체 폐기(revoke)할 수 있어야
+-- 하므로 발급 이력을 DB에 남긴다.
+--
+-- 토큰 원문이 아니라 해시값만 저장한다 (평문 비밀정보를 어디에도 남기지 않는다는 원칙과 동일).
+-- 개별 로그아웃은 해당 토큰 한 건만, 비밀번호 변경/보안사고 대응 시 전체 폐기는 해당
+-- user_id의 폐기 안 된(revoked=false) 토큰 전체를 UPDATE 한 번으로 처리한다 (별도 함수 불필요).
+--
+-- 만료 토큰을 주기적으로 정리하는 배치는 이번 스코프가 아니다 (오버엔지니어링 방지, 필요 시 추후 추가).
+
+create table if not exists public.refresh_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  -- Refresh Token 원문이 아니라 해시값만 저장 (예: SHA-256).
+  token_hash text not null unique,
+
+  issued_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+
+  revoked boolean not null default false,
+  revoked_at timestamptz,
+
+  created_at timestamptz not null default now(),
+
+  constraint refresh_tokens_revoked_at_consistency check (
+    (revoked = false and revoked_at is null)
+    or (revoked = true and revoked_at is not null)
+  )
+);
+
+-- 로그인 시점에 "이 사용자의 유효한(폐기 안 된) 토큰"을 조회/전체 폐기하는 쿼리를 위한 인덱스.
+create index if not exists refresh_tokens_user_id_revoked_idx
+  on public.refresh_tokens (user_id, revoked);
+
+comment on table public.refresh_tokens is
+  'Refresh Token 발급 이력. 토큰 원문이 아니라 해시값만 저장한다. 개별 로그아웃 시 해당 행 하나를,
+   비밀번호 변경/보안사고 대응 시 해당 user_id의 폐기 안 된 행 전체를 UPDATE로 폐기 처리한다.';
+comment on column public.refresh_tokens.token_hash is
+  'Refresh Token 원문의 해시값(예: SHA-256). 평문 토큰은 DB에 저장하지 않는다.';
+
+
+-- -----------------------------------------------------------------------------
 -- 7. 계정 등록 요청 승인/거부 함수
 -- -----------------------------------------------------------------------------
 -- [설계 결정] 화이트리스트 대조 로직 자체는 DB 트리거가 아니라 "서버 코드"에서 수행한다. 이유:
@@ -583,6 +628,7 @@ alter table public.user_preferred_rooms enable row level security;
 alter table public.reservation_requests enable row level security;
 alter table public.reservations enable row level security;
 alter table public.alternative_suggestions enable row level security;
+alter table public.refresh_tokens enable row level security;
 
 -- rooms: 회원가입 웹페이지가 "선호 회의실" 선택 UI를 보여주기 위해 예약 가능한 회의실 목록을
 -- anon key로 읽을 수 있어야 한다. 민감정보가 아니므로 공개 조회를 허용한다.
@@ -616,7 +662,7 @@ create policy account_registration_requests_public_insert
 -- 키 분리 + 백엔드 자체의 Admin 인증(JWT + is_admin 검증)으로 보장한다.
 
 -- users, admin_whitelist, user_preferred_rooms, reservation_requests, reservations,
--- alternative_suggestions: anon/authenticated용 정책을 전혀 만들지 않는다.
+-- alternative_suggestions, refresh_tokens: anon/authenticated용 정책을 전혀 만들지 않는다.
 -- RLS가 켜져 있고 정책이 없으면 기본값은 "모두 거부"이므로, 이 테이블들은 anon/authenticated
 -- 키로는 어떤 행도 읽거나 쓸 수 없다. service role key를 쓰는 백엔드만 접근 가능하며,
 -- "사용자는 자기 자신의 데이터만" 원칙은 백엔드가 JWT의 user_id로 매번 WHERE 필터링하는

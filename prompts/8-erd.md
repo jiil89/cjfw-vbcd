@@ -16,6 +16,7 @@ erDiagram
     RESERVATIONS |o--o| RESERVATION_REQUESTS : "reservation_id (편의 컬럼)"
     RESERVATION_REQUESTS ||--o{ ALTERNATIVE_SUGGESTIONS : "reservation_request_id"
     ROOMS ||--o{ ALTERNATIVE_SUGGESTIONS : "room_id"
+    USERS ||--o{ REFRESH_TOKENS : "user_id"
 
     ADMIN_WHITELIST {
         uuid id PK
@@ -114,6 +115,17 @@ erDiagram
         boolean is_selected
         timestamptz created_at
     }
+
+    REFRESH_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        text token_hash UK "토큰 원문 대신 해시값만 저장"
+        timestamptz issued_at
+        timestamptz expires_at
+        boolean revoked
+        timestamptz revoked_at
+        timestamptz created_at
+    }
 ```
 
 ## 테이블별 설명
@@ -126,3 +138,4 @@ erDiagram
 - **reservation_requests**: 챗봇에 입력된 예약 요청 원본 조건(희망 날짜/시간 등)과 처리 상태.
 - **reservations**: 확정된 예약 건. CJ 사내 예약 시스템의 seq(`cj_seq`)를 저장해 변경/취소 API 호출 근거로 사용하며, 동일 회의실·겹치는 시간대 중복 예약은 DB EXCLUDE 제약으로 방지한다.
 - **alternative_suggestions**: 요청 시간대가 충돌할 때 제시하는 대체 회의실/시간대 추천 목록.
+- **refresh_tokens**: JWT 로그인의 Refresh Token 발급 이력. 토큰 원문이 아니라 해시값만 저장하며, 개별 로그아웃(해당 행 하나 폐기) 또는 비밀번호 변경/보안사고 대응 시 전체 폐기(해당 user_id의 미폐기 행 전체 UPDATE) 두 시나리오 모두 지원한다.

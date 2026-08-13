@@ -1,0 +1,60 @@
+{
+  "description": "도메인 정의서 9번 '해결됨' 항목에 서술된 8/13 14:00~15:00 상암S시티 6개 층(16F/15F/14F/13F/12F/3F) 스캔 결과를 재현한 대표 fixture. 실제 API 원본 JSON 응답 바이트를 그대로 캡처한 것은 아니고(도메인 정의서에 원본 페이로드가 남아있지 않음), 문서에 서술된 결과(12F 전체 불가, 15F-4·14F-2 예약됨, 3F는 3F-6만 가능)와 '그리드는 N인데 event_list가 겹치는' GUBUN 케이스를 그대로 재현하도록 구성했다.",
+  "gridStartTime": "07:00",
+  "slotMinutes": 30,
+  "requestStartTime": "14:00",
+  "requestEndTime": "15:00",
+  "reserveAllList": [
+    { "room_code": "16F-1", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" },
+    { "room_code": "16F-2", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" },
+    { "room_code": "15F-1", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" },
+    { "room_code": "15F-2", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" },
+    { "room_code": "15F-3", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" },
+    { "room_code": "15F-4", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "14F-1", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" },
+    { "room_code": "14F-2", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "14F-3", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" },
+    { "room_code": "13F-1", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" },
+    { "room_code": "13F-2", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" },
+    { "room_code": "12F-1", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "12F-2", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "12F-3", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "12F-4", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "3F-1", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "3F-2", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "3F-3", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "3F-4", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "3F-5", "slots": "NNNNNNNNNNNNNNYYNNNNNNNN" },
+    { "room_code": "3F-6", "slots": "NNNNNNNNNNNNNNNNNNNNNNNN" }
+  ],
+  "eventList": [
+    {
+      "resource": "13F-1",
+      "start": "13:30",
+      "end": "15:30"
+    }
+  ],
+  "expectedAvailable": {
+    "16F-1": true,
+    "16F-2": true,
+    "15F-1": true,
+    "15F-2": true,
+    "15F-3": true,
+    "15F-4": false,
+    "14F-1": true,
+    "14F-2": false,
+    "14F-3": true,
+    "13F-1": false,
+    "13F-2": true,
+    "12F-1": false,
+    "12F-2": false,
+    "12F-3": false,
+    "12F-4": false,
+    "3F-1": false,
+    "3F-2": false,
+    "3F-3": false,
+    "3F-4": false,
+    "3F-5": false,
+    "3F-6": true
+  }
+}

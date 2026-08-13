@@ -208,7 +208,7 @@
 - **[신규]** 예약 변경 시 `SaveReserve`가 `reservetype` 값으로 "수정 모드"를 지원하는지, 아니면 `delReserve`(취소) 후 `SaveReserve`(재생성)로 처리해야 하는지 — 실제 변경 흐름으로 라이브 테스트 필요 (2번 "예약 변경" 참고)
 - **[신규]** `checkRoom`/`checkStraightRoom`/`checkDayCountLimit`가 공통으로 받는 `seq` 파라미터가 "이 예약 자신은 충돌/누적시간 계산에서 제외"하는 용도로 추정되나, 신규 생성 흐름에서만 관찰했고 변경 흐름에서는 아직 확인 못함
 - ~~사내 예약 시스템 연동 방식~~ → **확인 완료.** 9번 참고 (공식 API 문서는 없음, 사내 SSO 로그인 후 발급되는 세션 쿠키 기반의 내부 ASMX 웹서비스 호출 방식)
-- ~~사내 계정 연동 방식~~ → **부분 확인.** 사내 SSO(Azure AD) 로그인이며 테스트 시 MFA 없이 통과됨.
+- ~~사내 계정 연동 방식~~ → **확인 완료 (정정).** Azure AD가 아니라 `cj.cj.net`(사내 포털) 자체 로그인 폼이며, 테스트 시 MFA 없이 통과됨. 상세 흐름은 9번 참고.
 - ~~회의실 운영 시간 / 예약 단위~~ → **확인 완료.** 6번 참고
 - ~~Agent의 사내 계정 인증/세션 확보 방식~~ → **결정됨.** 사용자 동의 후 ID/PW를 암호화 저장, 로그인 시점에 복호화하여 세션 확보 (6번 참고). 다만 아래 구현 세부사항은 여전히 확인 필요:
   - **암호화 키 관리**: 앱 코드/DB와 분리된 KMS(예: AWS KMS, Azure Key Vault 등) 사용 필요. 키와 암호문을 같은 DB에 두면 DB 유출 시 사실상 평문 유출과 동일해짐
@@ -228,9 +228,22 @@
 
 ## 9. 외부 연동 API 명세 (확인됨)
 
-Playwright로 실제 사이트(`cjwappr.cj.net`)에 로그인하여 조회→예약→취소 전체 흐름을 실행하며 확인한 내용. 모두 사내 SSO 로그인 세션 쿠키가 있어야 호출 가능 (공식 API 문서 없음, ASP.NET ASMX 웹서비스).
+Playwright로 실제 사이트에 로그인하여 조회→예약→취소 전체 흐름을 실행하며 확인한 내용. 모두 사내 SSO 로그인 세션 쿠키가 있어야 호출 가능 (공식 API 문서 없음, ASP.NET ASMX 웹서비스).
 
-| 목적                                                   | Method / Endpoint                                          | 주요 요청 파라미터                                                                                                                                                                      |
+### 로그인/세션 확보 흐름 [2026-08-13 재검증 — 이전 버전(Azure AD 가정)을 대체함]
+
+- **로그인은 `cjwappr.cj.net`이 아니라 `cj.cj.net`(사내 포털)에서 한다.** `cjwappr.cj.net`에 직접 접근하면 사내망 범용 404로 리다이렉트되고 로그인 폼 자체가 없다.
+- 로그인 폼은 **Azure AD/Microsoft 표준 폼이 아니라 cj.cj.net 자체 로그인 폼**이다(`/PT/login.aspx`). 실측 셀렉터: 아이디 `input#txtID`, 비밀번호 `input#txtPWD`, 로그인 버튼은 `<a class="btn_login" onclick="Login()">` (submit 버튼이 아니라 JS `Login()`을 호출하는 링크 — 비밀번호를 클라이언트에서 인코딩(`EnCode()`)한 뒤 폼을 제출하므로 반드시 Playwright로 실제 클릭을 재현해야 함).
+- 로그인 실패 시 URL이 `/PT/login.aspx`에 그대로 머물고 `#divErrorLogin` 요소가 노출되며 "아이디 또는 비밀번호 오류입니다..." 메시지가 뜬다.
+- 로그인 성공 시 `.cj.net`(상위 도메인 공유) 쿠키(`cAccess_token`, `ck`, `CJW`, `N_CJW`, `m365_id` 등)가 발급된다.
+- `cj.cj.net`과 `cjwappr.cj.net`의 세션 공유 방식: `https://cj.cj.net/NPT/PortalBuilder/23_service.aspx?CONTENTS_ID=EPCT3427` 페이지를 열면 그 안의 **iframe**이 `https://cjwappr.cj.net/NConf/conferenceRoom/reserve_main.aspx`를 로드하고, 이때 `cjwappr.cj.net`이 `/NConf/Anonymity/nconfFilter.aspx`로 302 리다이렉트되어 `.cj.net` 쿠키를 근거로 SSO 핸드셰이크를 수행한 뒤 `cjwappr.cj.net` 도메인 전용 쿠키(`AP`, `NCF`)를 새로 발급한다. **`cj.cj.net` 로그인만으로는 부족하고, 반드시 이 페이지(또는 그 안의 iframe URL)를 한 번 로드해야 `cjwappr.cj.net` API 호출이 가능한 세션이 만들어진다.**
+- 이렇게 얻은 쿠키(`cjwappr.cj.net` 도메인 쿠키 + `.cj.net` 공유 쿠키)만 있으면 **브라우저 없이 순수 HTTP 요청으로 ASMX API를 정상 호출할 수 있음을 실측 확인**했다 — "로그인은 Playwright, API 호출은 가벼운 HTTP 클라이언트" 전략이 그대로 유효하다. `X-Requested-With`/`Referer` 헤더는 없어도 정상 동작한다(실측 확인, 있어도 무방).
+
+### ASMX 엔드포인트 목록
+
+**[정정 — 이전 버전에서 빠져 있었음]** 모든 엔드포인트는 baseUrl(`https://cjwappr.cj.net`) 바로 아래가 아니라 **`NCONF/Common/WebService/` 경로 아래**에 있다. 예: `https://cjwappr.cj.net/NCONF/Common/WebService/WSConferenceReserve.asmx/getDayPilotConfReserveList`. 이 접두사 없이 호출하면 500(런타임 오류 HTML 페이지)이 온다. (IIS 라우팅이 대소문자를 구분하지 않아 실제 페이지가 `Webservice`로 표기된 곳도 `WebService`로 호출하면 정상 동작함을 확인함.)
+
+| 목적                                                   | Method / Endpoint (모두 `NCONF/Common/WebService/` 아래)   | 주요 요청 파라미터                                                                                                                                                                      |
 | ------------------------------------------------------ | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 회의실/층 목록 조회                                    | `POST WSConferenceMain.asmx/listArea`                      | -                                                                                                                                                                                       |
 | 날짜별 예약 현황(가용성) 조회                          | `POST WSConferenceReserve.asmx/getDayPilotConfReserveList` | `areaList`(층 코드), `reservedate`, `email_alias`                                                                                                                                       |
@@ -241,18 +254,22 @@ Playwright로 실제 사이트(`cjwappr.cj.net`)에 로그인하여 조회→예
 | **예약 생성/수정**                                     | `POST WSConfReserveinsmod.asmx/SaveReserve`                | `area_code`(건물), `subarea_code`(층), `room_code`, `room_name`, `reserve_date`, `start_time`, `end_time`, `title`, `contents`, `phone_num`, `is_send_mail`, `reservetype`(`I`=생성) 등 |
 | **예약 취소**                                          | `POST WSINConference.asmx/delReserve`                      | `seq`(예약 고유ID)                                                                                                                                                                      |
 | 예약 상세 조회                                         | `POST WSConferenceReserve.asmx/getConfReservationInfo`     | `seq`                                                                                                                                                                                   |
-| 내 예약 목록 조회                                      | `POST m_WSConfReservelist.asmx/bindMyReservation`          | 날짜 범위 등                                                                                                                                                                            |
+| 내 예약 목록 조회                                      | `POST m_WSConfReservelist.asmx/bindMyReservation`          | `email_alias`, `sdate`, `edate` (실측 확인 — 이전 버전엔 "날짜 범위 등"으로만 적혀 있었음)                                                                                              |
 
 **주의할 점**
 
 - 회의실 위치 식별자가 두 계층으로 쓰이는데 이름이 혼용됨: 건물(`area_code`, 예: 804) / 층(`sub_area_code` 또는 `subarea_code`, 예: 1128) / 회의실(`room_code`). 검증용 API들(`checkRoom` 등)은 층 코드를 `area_code`라는 이름으로 받으므로 구현 시 혼동 주의.
-- 조회 응답 인코딩이 UTF-8이 아닌 것으로 보여, 회의실/층 이름의 한글이 깨져서 온다. 클라이언트에서 인코딩 처리 필요.
+- **[정정 — 이전 결론을 뒤집음]** 조회 응답 인코딩은 **실제로는 항상 UTF-8이다.** 이전 버전은 브라우저(Playwright `response.text()`)로 관찰했을 때 `Content-Type`에 charset이 없는 응답에서 한글이 깨지는 것을 보고 "UTF-8이 아니다"로 결론 내렸으나, 이는 브라우저 쪽 디코딩 방식의 artifact였다. Node.js에서 raw bytes(`response.arrayBuffer()`)를 직접 UTF-8로 디코딩하면 한글이 정상적으로 나옴을 실측 확인했다(예: "하위", "8인" 등). **`Content-Type` 헤더를 신뢰하지 말고 항상 UTF-8로 디코딩할 것** — EUC-KR 디코딩을 시도하면 오히려 깨진다.
 - 저장 전 `checkRoom` → `checkStraightRoom` → `checkDayCountLimit` 3개 검증을 순서대로 통과해야 `SaveReserve` 호출이 의미 있음 (프론트 로직을 그대로 따라야 함).
 - 이 API들은 공식 문서화된 것이 아니라 **실제 브라우저 동작을 관찰하여 역으로 확인한 것**이므로, 사내 IT/인프라팀에 정식 연동 승인 여부를 반드시 확인해야 한다 (8번 Open Questions 참고).
 - **[확인됨]** `getDayPilotConfReserveList` 응답의 `reserve_all_list`는 회의실별 30분 단위 문자열이며, **`Y`=이미 예약됨(불가) / `N`=예약 가능(빈 시간)** 이다 (실제 예약 생성 결과로 교차 검증 완료).
 - **[해결됨]** `reserve_all_list`가 모든 종류의 "사용 불가"를 반영하지는 않는다(`GUBUN` 0/2 같은 장기 프로젝트성 점유가 `N`(가능)으로 잘못 표시되는 케이스 존재). **해결책 검증 완료**: `reserve_all_list`(그리드) 필터링 결과에 `event_list`의 시간 겹침 검사를 추가로 적용하면 실제 가용성과 정확히 일치한다. 8/13 14:00~15:00, 상암S시티 6개 층(16F/15F/14F/13F/12F/3F) 대상 스캔 결과가 실사용자가 알고 있는 실제 예약 현황(12F 전체 불가, 15F-4·14F-2 예약됨, 3F는 3F-6만 가능)과 100% 일치함을 확인했다. **최종 가용성 판단 알고리즘**: 회의실이 사용 가능하려면 (1) `reserve_all_list`의 해당 시간대 슬롯이 모두 `N`이고, **AND** (2) `event_list`에 해당 회의실(`resource`=room_code)과 시간이 겹치는 항목이 없어야 한다. `GUBUN` 값의 정확한 의미는 몰라도 이 방식이면 무관하게 안전하다.
 - **[결정됨]** B1F, 2F 층은 실사용 회의실이 아니므로 회의실 후보 풀에서 항상 제외한다 (1차 범위: 3F, 12F~16F).
 - **[신규 발견]** 로그인 세션 유효시간이 토큰상 예상(~1시간)보다 훨씬 짧게(수 분 단위) 끊기는 것을 여러 차례 실제로 관찰함. Agent는 매 요청 전 세션 유효성을 확인하고 즉시 재로그인하는 로직이 사실상 필수이며, "세션 캐싱 후 재사용" 전략은 기대만큼 효율적이지 않을 수 있다.
+- **[신규 발견 — 2026-08-13]** 로그인 직후 `23_service.aspx` 회의실 페이지에는 대시보드 위젯이 있어 백그라운드로 같은 세션의 `getDayPilotConfReserveList` 등을 자체적으로 폴링하는 것으로 보인다. 이 백그라운드 호출과 우리 쪽 명시적 API 호출이 거의 동시에 같은 세션으로 들어가면, **서버가 두 응답을 이어붙여서(concatenate) 돌려주는 현상**을 재현했다(완전한 JSON 뒤에 `{"d":null}` 같은 바이트가 추가로 붙어 옴 — `Connection: close` 헤더를 줘도 동일하게 재현되어 클라이언트 커넥션 재사용 문제는 아니고 서버 쪽 세션 동시성 이슈로 추정됨). 원인을 우리 쪽에서 고칠 수 없으므로, 클라이언트에서 **첫 번째로 완결되는 JSON 값만 파싱하고 그 이후 바이트는 버리는 방어 로직**을 두는 것으로 대응했다(`client.ts`의 `parseFirstJsonValue`).
+- **[신규 발견 — 2026-08-13, DB-5 회의실 시딩 작업 중]** `cjwappr.cj.net` 세션 확보 시 `AP` 쿠키만 발급되고 `NCF` 쿠키는 발급되지 않는 경우가 실제로 관찰됐다(이전 버전 §9는 "AP, NCF 둘 다 발급됨"으로 서술했으나, `AP` 쿠키 하나만으로도 `getDayPilotConfReserveList` 등 ASMX 호출은 정상 동작함을 확인했다 — `NCF`가 필수는 아닐 수 있음, 계속 관찰 필요). 또한 로그인 직후 회의실 페이지(`23_service.aspx`)로 `goto` 후 `networkidle` 판정이 나도 iframe의 SSO 핸드셰이크가 비동기로 조금 더 걸릴 수 있어, 곧바로 쿠키를 읽으면 `cjwappr.cj.net` 쿠키가 아직 없는 경우가 있었다(로그인 자체는 성공했는데도 "cjwappr.cj.net 세션 쿠키를 확보하지 못했다" 오류가 간헐적으로 발생). `networkidle` 판정 후 5초 정도 명시적으로 대기하는 것으로 안정화했다(`session.ts`).
+- **[신규 발견 — 2026-08-13, DB-5 회의실 시딩 작업 중]** 회의실/층 목록 조회(`WSConferenceMain.asmx/listArea`)는 §9 표에 "주요 요청 파라미터 없음"으로 적혀 있었으나 실제로는 **JSON이 아니라 form-urlencoded 바디**로 `type`(0 또는 1로 보임, 정확한 의미 미확인)과 `areacode`(건물 코드, 예: `804`)를 받는다(`type=0&areacode=804`, `type=1&areacode=804`). JSON 바디로 호출하면 500(`요청을 처리하는 동안 오류가 발생했습니다`)이 온다 — `client.ts`의 `callCjApi`는 JSON 바디만 지원하므로, `listArea`를 실제로 쓰려면 별도의 form-urlencoded 호출 경로가 필요하다(이번 시딩 작업에서는 대신 실측으로 확인한 층 코드를 스크립트에 상수로 박아 넣는 방식을 택함, 아래 참고).
+- **[확인됨 — 2026-08-13, DB-5 회의실 시딩 작업 중]** 상암S시티(`area_code=804`)의 실제 하위 층 코드(`sub_area_code`)는 다음과 같다(네트워크 트레이스로 실측 확인): `1128`=3F, `1111`=12F, `805`=13F, `807`=14F, `808`=15F, `806`=16F. (2F=`809`, B1F=`883`은 도메인 정의서 6번/9번 원칙에 따라 회의실 후보 풀에서 제외.) 각 층의 실제 회의실 개수: 3F 11개(3F-1~3F-7, 3F-9~3F-12, **3F-8은 존재하지 않음**), 12F 4개(12F-1~4), 13F 4개(13F-1~4, 1·2는 Interview Room), 14F 4개(14F-2~5, **14F-1은 존재하지 않음**), 15F 2개(15F-4~5, **15F-1~3은 존재하지 않음**), 16F 1개(`CONFERENCE ROOM`, 정원 30인). `getDayPilotConfReserveList` 응답의 `resources[0].children[].html`에 `<span class="num_person">N인</span>` 형태로 정원이 포함되어 있어 정규식으로 파싱 가능함을 확인했다(`backend/scripts/seed-rooms.ts` 참고).
 
 ## 10. 참고 자료
 
