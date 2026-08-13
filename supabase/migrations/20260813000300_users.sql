@@ -9,7 +9,8 @@ create table if not exists public.users (
   id uuid primary key default gen_random_uuid(),
 
   -- 텔레그램 사용자ID: 딥링크(t.me/봇?start=토큰)로 확보한 위조 불가능한 값만 신뢰한다.
-  telegram_user_id bigint not null unique,
+  -- (텔레그램 채널 추가 시 사용. 현재 1차 채널은 웹이라 이 컬럼은 NULL — 20260813001100 마이그레이션에서 nullable로 변경됨)
+  telegram_user_id bigint unique,
 
   -- 사내 계정 식별자 (email_alias, 예: 사번/아이디)
   email_alias text not null unique,

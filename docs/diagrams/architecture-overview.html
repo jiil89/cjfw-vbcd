@@ -62,7 +62,7 @@
 
     <svg viewBox="0 0 1000 700" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cjroom-arch2-title cjroom-arch2-desc">
       <title id="cjroom-arch2-title">CJ 회의실 예약 에이전트 아키텍처 v2</title>
-      <desc id="cjroom-arch2-desc">웹 챗봇·등록 웹페이지·Admin 패널이 모두 Vercel 프론트엔드로 배포되고, Vercel Serverless Functions 위의 백엔드가 Supabase DB와 CJ 사내 예약 시스템을 연결하며, 텔레그램 봇은 향후 확장 채널로 점선 표시된 구조를 보여주는 아키텍처 다이어그램.</desc>
+      <desc id="cjroom-arch2-desc">웹 챗봇·회원가입/로그인·Admin 패널이 모두 Vercel 프론트엔드로 배포되고, Vercel Serverless Functions 위의 백엔드가 Supabase DB와 CJ 사내 예약 시스템을 연결하며, 텔레그램 봇은 향후 확장 채널로 점선 표시된 구조를 보여주는 아키텍처 다이어그램.</desc>
       <defs>
         <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
           <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.10)"/>
@@ -88,7 +88,7 @@
       <path d="M180,336 H232 Q240,336 240,328 V200 Q240,192 248,192 H300"
             fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
       <rect x="252" y="258" width="64" height="12" rx="2" fill="#f5f5f5"/>
-      <text x="284" y="267" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">계정 등록</text>
+      <text x="284" y="267" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">가입/로그인</text>
 
       <!-- A2 사용자 -> 웹 챗봇 UI (primary) -->
       <path d="M180,368 H412 Q420,368 420,360 V200 Q420,192 428,192 H660"
@@ -157,13 +157,13 @@
       <text x="560" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">관리자</text>
       <text x="560" y="92" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">승인 담당자</text>
 
-      <!-- N3 등록 웹페이지 -->
+      <!-- N3 회원가입/로그인 -->
       <rect x="300" y="160" width="160" height="64" rx="6" fill="#f5f5f5"/>
       <rect x="300" y="160" width="160" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
       <rect x="308" y="168" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
       <text x="322" y="177" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WEB</text>
-      <text x="380" y="196" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">등록 웹페이지</text>
-      <text x="380" y="212" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">React 19</text>
+      <text x="380" y="196" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">회원가입/로그인</text>
+      <text x="380" y="212" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">React 19 · JWT 발급</text>
 
       <!-- N4 Admin 패널 -->
       <rect x="480" y="160" width="160" height="64" rx="6" fill="#f5f5f5"/>
