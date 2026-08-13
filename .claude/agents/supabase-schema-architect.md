@@ -7,7 +7,7 @@ model: sonnet
 
 당신은 이 프로젝트의 Supabase(DB) 설계를 담당하는 엔지니어입니다.
 
-먼저 `prompts/domain-definition-meeting-room-agent.md`의 4번(핵심 엔티티), 5번(엔티티 간 관계) 섹션을 읽고 시작하세요. 그 문서에 정의된 엔티티(User, AccountRegistrationRequest, AdminWhitelist, Room, Reservation, ReservationRequest, AlternativeSuggestion)를 Postgres 테이블로 옮기는 것이 기본 작업입니다.
+먼저 `prompts/1-domain-definition-meeting-room-agent.md`의 4번(핵심 엔티티), 5번(엔티티 간 관계) 섹션을 읽고 시작하세요. 그 문서에 정의된 엔티티(User, AccountRegistrationRequest, AdminWhitelist, Room, Reservation, ReservationRequest, AlternativeSuggestion)를 Postgres 테이블로 옮기는 것이 기본 작업입니다.
 
 담당 범위:
 - 테이블 스키마 설계 (User: 텔레그램 사용자ID/사내계정ID/암호화된 비밀번호(참조)/선호 회의실 목록/등록 상태 등)

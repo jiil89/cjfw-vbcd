@@ -1,0 +1,59 @@
+PRD — 회의실 예약 Agent
+
+(상세 도메인 설계는 prompts/1-domain-definition-meeting-room-agent.md 참고. 이 문서는 그걸 보완하는 비즈니스/기술/프로젝트 관리 정보다.)
+
+## 1. 비즈니스 관련 정보
+
+- 배경: CJ프레시웨이 임직원은 업무 특성상 미팅이 매우 잦고, 인원수/시간대에 맞는 회의실을 그때그때 빠르게 잡아야 한다. 지금은 예약 화면을 열어 층마다 눈으로 비어있는 곳을 확인하고 직접 타이핑해서 저장해야 해서 번거롭고, 이 지연이 실제 업무를 하루이틀 늦추는 경우도 있다.
+- 목표: 챗봇에 자연어 요청("내일 오후 2-3시 8명 회의실")만 하면 Agent가 사내 회의실 예약 시스템을 대신 조회·예약해주는 서비스를 만든다. **1차 채널은 웹 챗봇(React 웹앱)이며, 텔레그램은 추후 확장한다** (기존 계획은 텔레그램 우선이었으나 변경됨).
+- 대상 사용자: CJ프레시웨이 임직원 (1차 범위: 상암S시티 사업장 소속/이용자만)
+- 기대 효과: 회의실 확인·예약에 걸리는 시간을 수 분에서 수십 초로 단축, 규칙(2시간 제한 등)을 몰라서 예약이 실패하는 경우 제거
+- 비용 관점: LLM 호출량이 대화당 수 회 수준으로 많지 않을 것으로 예상 (OpenAI 저비용 모델 사용, 3번 참고)
+
+## 2. 기술 제약사항
+
+### 환경별 인프라
+
+| | Dev (개발) | Prd (운영) |
+| --- | --- | --- |
+| 프론트엔드 | 로컬 PC | **Vercel** |
+| 백엔드 | 로컬 PC | **Vercel** (Serverless Functions) |
+| DB | 로컬 PC | **Supabase** |
+
+- Dev 환경은 프론트/백엔드/DB 전부 로컬 PC에서 구동한다 (로컬 Postgres 또는 로컬에서 Supabase 프로젝트에 직접 연결).
+- Prd(운영) 환경은 프론트엔드·백엔드 모두 **Vercel**, DB는 **Supabase**로 통일한다. 텔레그램 Long Polling 방식은 상시 프로세스가 필요해 Vercel과 맞지 않았으나, **1차 채널이 웹 챗봇으로 바뀌면서 이 제약이 해소**되어 백엔드 전체를 Vercel로 가져갈 수 있게 됨.
+
+### 인프라 제약
+
+- 프론트엔드: **React 19**. 전역 상태관리는 **Zustand** 사용. 백엔드와의 통신은 **TanStack Query**로 처리.
+  - 대상 화면: 계정 등록 웹페이지, Admin 승인 패널, **웹 챗봇 UI**(1차 채널) — 전부 React 19, Vercel 배포
+- 백엔드: **Node.js + Express**, Vercel Serverless Functions 위에서 구동. DB 접근은 Supabase의 자동 생성 REST API가 아니라 **`pg` 라이브러리로 Postgres에 직접 연결**하는 방식을 쓴다.
+  - 참고: DB는 Supabase(Postgres) 그대로 사용하되, RLS 설계상 서버는 service role 수준 권한으로 접근하는 걸 전제로 하고 있어 `pg` 직접 연결 방식과 궁합상 문제없다 (`supabase/migrations/20260813000900_rls.sql` 참고).
+  - 대상: 등록/Admin 승인 API, 웹 챗봇 API, CJ 자동화 모듈 — 전부 이 Express 백엔드(Vercel Functions) 위에서 동작
+- LLM: **OpenAI API**, 가장 저렴한 모델(`gpt-5-nano`, `.env`의 `OPENAI_MODEL` 참고). 도구 호출(tool-calling) 정확도가 부족하면 상위 모델(`gpt-5-mini`)로 교체 가능하도록 모델명을 환경변수로 분리해둠.
+- CJ 사내 예약 시스템 연동: 공식 API 없음, Playwright 기반 로그인 + 비공식 ASMX 웹서비스 호출 (`1-domain-definition-meeting-room-agent.md` 9번 참고). **Vercel Functions 위에서 `@sparticuz/chromium`(서버리스 전용 경량 크로미움) + Playwright로 실행**한다.
+  - Vercel Hobby(무료) 플랜 기준 함수 실행시간 최대 300초, 메모리 2GB(2026-07 기준)로 CJ 로그인+API 호출에는 충분한 여유가 있어, **비용 없이 구현 가능**할 것으로 판단.
+  - 다만 CJ 사내 세션이 원래 수 분 단위로 짧게 끊기는 것을 확인했었고, 서버리스는 요청마다 새로 시작되므로 오히려 "매 요청 재로그인" 전략과 자연스럽게 맞는다.
+  - 리스크: Vercel Hobby 플랜은 원래 개인/비상업 프로젝트 용도로 규정되어 있어, 사내 업무용으로 계속 쓸 경우 트래픽이 늘면 회사 명의 Pro 플랜 전환이 필요할 수 있음 — 사용량 늘어나면 재점검 필요.
+
+### 통합 요구사항 (연동)
+
+- **Google Calendar, Slack 등 외부 서비스 연동은 1차 범위에 포함하지 않는다.** 추후 필요 시 별도로 검토·적용한다.
+- 1차 채널은 **웹 챗봇**이며, **텔레그램 봇 연동은 추후 단계로 미룬다.**
+
+## 3. 프로젝트 관리
+
+- 현재 진행 상태:
+  - 도메인 설계(유스케이스/비즈니스 규칙/API 명세) — 완료, 지속 보완 중
+  - Supabase DB 스키마 — 완료 (`supabase/migrations/`)
+  - 아키텍처 개요 다이어그램 — 완료 (`docs/diagrams/architecture-overview.html`)
+  - 실제 애플리케이션 코드(프론트/백엔드/봇/CJ 자동화) — 미착수
+- 산출물 목록:
+  1. 등록 웹페이지 (React 19, Vercel)
+  2. Admin 승인 패널 (React 19, Vercel)
+  3. 웹 챗봇 UI (React 19, Vercel) — **1차 채널**
+  4. 백엔드 API 서버 (Node.js + Express, Vercel Serverless Functions)
+  5. CJ 자동화 모듈 (Playwright + `@sparticuz/chromium`, Vercel Functions 위에서 실행)
+  6. (추후) 텔레그램 봇 연동 — 이번 범위 제외, 나중에 채널만 추가
+- 일정/담당자/예산: 아직 정해지지 않음 (TBD — 확정되면 이 문서에 반영)
+- 남은 의사결정/리스크: `1-domain-definition-meeting-room-agent.md` 8번 "확인이 필요한 사항" 참고 (암호화 키 관리, 세션 정책, 예약 변경 API 방식 등)
