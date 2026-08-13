@@ -1,0 +1,694 @@
+<!doctype html>
+<title>회의실 예약 챗봇</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #eef2f0;
+    --surface: #ffffff;
+    --surface-2: #e3e9e4;
+    --ink: #1c2622;
+    --muted: #5b6b62;
+    --faint: #8b988f;
+    --border: rgba(28, 38, 34, 0.12);
+    --border-strong: rgba(28, 38, 34, 0.20);
+    --accent: #2f7a5c;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(47, 122, 92, 0.10);
+    --accent-soft-strong: rgba(47, 122, 92, 0.18);
+    --warn: #a9762f;
+    --warn-soft: rgba(169, 118, 47, 0.12);
+    --danger: #a8483c;
+    --danger-soft: rgba(168, 72, 60, 0.10);
+    --shadow: 0 1px 2px rgba(28, 38, 34, 0.06), 0 8px 24px rgba(28, 38, 34, 0.06);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121815;
+      --surface: #1a221e;
+      --surface-2: #222c26;
+      --ink: #e9efeb;
+      --muted: #99a89f;
+      --faint: #6c7b72;
+      --border: rgba(233, 239, 235, 0.10);
+      --border-strong: rgba(233, 239, 235, 0.18);
+      --accent: #55ad8b;
+      --accent-ink: #0d1512;
+      --accent-soft: rgba(85, 173, 139, 0.14);
+      --accent-soft-strong: rgba(85, 173, 139, 0.22);
+      --warn: #d6a15c;
+      --warn-soft: rgba(214, 161, 92, 0.14);
+      --danger: #d9776a;
+      --danger-soft: rgba(217, 119, 106, 0.14);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #121815;
+    --surface: #1a221e;
+    --surface-2: #222c26;
+    --ink: #e9efeb;
+    --muted: #99a89f;
+    --faint: #6c7b72;
+    --border: rgba(233, 239, 235, 0.10);
+    --border-strong: rgba(233, 239, 235, 0.18);
+    --accent: #55ad8b;
+    --accent-ink: #0d1512;
+    --accent-soft: rgba(85, 173, 139, 0.14);
+    --accent-soft-strong: rgba(85, 173, 139, 0.22);
+    --warn: #d6a15c;
+    --warn-soft: rgba(214, 161, 92, 0.14);
+    --danger: #d9776a;
+    --danger-soft: rgba(217, 119, 106, 0.14);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    font-size: 14.5px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .app {
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 56px 1fr;
+  }
+
+  /* ---- Header ---- */
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .brand-mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-ink);
+    font-size: 12px;
+    font-weight: 700;
+    flex: none;
+  }
+
+  .brand-name {
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+  }
+
+  .brand-site {
+    color: var(--faint);
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+  }
+
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px 4px 4px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .user-chip .name {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex: none;
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  /* ---- Layout body ---- */
+
+  .body {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    min-height: 0;
+  }
+
+  @media (max-width: 860px) {
+    .body { grid-template-columns: 1fr; }
+    .rail { display: none; }
+  }
+
+  /* ---- Chat column ---- */
+
+  .chat-col {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    min-height: 0;
+    border-right: 1px solid var(--border);
+  }
+
+  .thread {
+    overflow-y: auto;
+    padding: 24px 24px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .day-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--faint);
+    font-size: 11.5px;
+    margin: 4px 0 6px;
+  }
+
+  .day-divider::before,
+  .day-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .row {
+    display: flex;
+    gap: 8px;
+    max-width: 78%;
+  }
+
+  .row.from-agent { align-self: flex-start; }
+  .row.from-user { align-self: flex-end; flex-direction: row-reverse; }
+
+  .row .avatar { margin-top: 2px; }
+
+  .bubble-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .bubble {
+    padding: 10px 13px;
+    border-radius: var(--radius);
+    font-size: 14px;
+  }
+
+  .from-agent .bubble {
+    background: var(--surface-2);
+    color: var(--ink);
+    border-top-left-radius: 3px;
+  }
+
+  .from-user .bubble {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-top-right-radius: 3px;
+  }
+
+  .timestamp {
+    font-size: 10.5px;
+    color: var(--faint);
+    padding: 0 3px;
+  }
+
+  .from-user .timestamp { text-align: right; }
+
+  /* room suggestion card */
+
+  .room-card {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    box-shadow: var(--shadow);
+    width: 260px;
+  }
+
+  .room-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .room-name {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .room-time {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .room-tags {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .tag {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+  }
+
+  .tag.ok { background: var(--accent-soft); color: var(--accent); }
+
+  .card-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    appearance: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 7px 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    flex: 1;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border-strong);
+  }
+
+  /* multi-room grid */
+
+  .room-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    width: 340px;
+  }
+
+  .room-pick {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 9px 8px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+
+  .room-pick .room-name { font-size: 12.5px; display: block; }
+  .room-pick .tag { margin-top: 6px; display: inline-block; }
+
+  /* confirmed status */
+
+  .status-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 4px 9px 4px 7px;
+    border-radius: 999px;
+    margin-top: 8px;
+  }
+
+  .status-line .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  }
+
+  /* ---- Composer ---- */
+
+  .composer {
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding: 12px 20px 16px;
+  }
+
+  .quick-chips {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+    overflow-x: auto;
+  }
+
+  .chip {
+    flex: none;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 6px 6px 6px 16px;
+    background: var(--bg);
+  }
+
+  .input-row input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--ink);
+    outline: none;
+  }
+
+  .input-row input::placeholder { color: var(--faint); }
+
+  .send-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    cursor: pointer;
+  }
+
+  .send-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---- Right rail ---- */
+
+  .rail {
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    background: var(--surface);
+  }
+
+  .rail-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 10px;
+  }
+
+  .today-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    background: var(--bg);
+  }
+
+  .today-card .title {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .today-card .meta {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+  }
+
+  .pref-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .pref-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    padding: 7px 9px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+
+  .rank {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+
+  .rank.top { background: var(--accent-soft); color: var(--accent); }
+
+  .pref-list .cap {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--faint);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+  }
+
+  .rule-note {
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--warn-soft);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 9px 10px;
+  }
+
+  .rule-note b { color: var(--warn); }
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">회</span>
+      <span class="brand-name">회의실 예약</span>
+      <span class="brand-site mono">상암S시티</span>
+    </div>
+    <div class="user-chip">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span class="avatar">정</span>
+      <span class="name">정지일</span>
+    </div>
+  </header>
+
+  <div class="body">
+    <section class="chat-col">
+      <div class="thread">
+        <div class="day-divider">오늘 · 8월 13일 목요일</div>
+
+        <div class="row from-agent">
+          <span class="avatar">A</span>
+          <div class="bubble-stack">
+            <div class="bubble">안녕하세요! 회의실 예약을 도와드릴게요. 날짜·시간·인원만 말씀해 주시면 바로 확인해 드립니다.</div>
+            <span class="timestamp">오전 9:02</span>
+          </div>
+        </div>
+
+        <div class="row from-user">
+          <span class="avatar">정</span>
+          <div class="bubble-stack">
+            <div class="bubble">내일 오후 2-3시에 회의실 잡아줘</div>
+            <span class="timestamp">오전 9:03</span>
+          </div>
+        </div>
+
+        <div class="row from-agent">
+          <span class="avatar">A</span>
+          <div class="bubble-stack">
+            <div class="bubble">선호하시는 <b>14F-2</b>가 비어있어요. 이 조건으로 예약할까요?</div>
+            <div class="room-card">
+              <div class="room-card-head">
+                <span class="room-name">14F-2</span>
+                <span class="room-time mono">14:00–15:00</span>
+              </div>
+              <div class="room-tags">
+                <span class="tag ok">예약가능</span>
+                <span class="tag">8인</span>
+                <span class="tag">선호 1순위</span>
+              </div>
+              <div class="card-actions">
+                <button class="btn btn-primary">이 회의실로 확정</button>
+                <button class="btn btn-ghost">다른 곳 보기</button>
+              </div>
+            </div>
+            <span class="timestamp">오전 9:03</span>
+          </div>
+        </div>
+
+        <div class="row from-user">
+          <span class="avatar">정</span>
+          <div class="bubble-stack">
+            <div class="bubble">응 좋아</div>
+            <span class="timestamp">오전 9:04</span>
+          </div>
+        </div>
+
+        <div class="row from-agent">
+          <span class="avatar">A</span>
+          <div class="bubble-stack">
+            <div class="bubble">
+              14F-2, 내일 14:00–15:00으로 예약 완료했습니다.
+              <div class="status-line"><span class="dot"></span>예약 확정</div>
+            </div>
+            <span class="timestamp">오전 9:04</span>
+          </div>
+        </div>
+
+        <div class="row from-user">
+          <span class="avatar">정</span>
+          <div class="bubble-stack">
+            <div class="bubble">오후 3-4시에 8명 이상 가능한 곳 있어?</div>
+            <span class="timestamp">오전 9:07</span>
+          </div>
+        </div>
+
+        <div class="row from-agent">
+          <span class="avatar">A</span>
+          <div class="bubble-stack">
+            <div class="bubble">15:00–16:00 기준, 8명 이상 가능한 회의실이 3곳 있어요. 하나 골라주세요.</div>
+            <div class="room-grid">
+              <div class="room-pick">
+                <span class="room-name">3F-6</span>
+                <span class="tag ok">12인</span>
+              </div>
+              <div class="room-pick">
+                <span class="room-name">15F-4</span>
+                <span class="tag ok">8인</span>
+              </div>
+              <div class="room-pick">
+                <span class="room-name">15F-5</span>
+                <span class="tag ok">8인</span>
+              </div>
+            </div>
+            <span class="timestamp">오전 9:07</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="quick-chips">
+          <button class="chip">오늘 내 예약 조회</button>
+          <button class="chip">자주 쓰는 회의실로 예약</button>
+          <button class="chip">예약 취소</button>
+        </div>
+        <div class="input-row">
+          <input type="text" placeholder="메시지를 입력하세요 (예: 내일 오전 10시 회의실 잡아줘)" />
+          <button class="send-btn" aria-label="보내기">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13" /><path d="M22 2 15 22 11 13 2 9z" /></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="rail">
+      <div>
+        <div class="rail-title">오늘 예약</div>
+        <div class="today-card">
+          <div class="title">데이터 아키텍처</div>
+          <div class="meta"><span>14F-2</span><span>14:00–15:00</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="rail-title">선호 회의실</div>
+        <ul class="pref-list">
+          <li><span class="rank top">1</span>14F-2<span class="cap">8인</span></li>
+          <li><span class="rank">2</span>14F-3<span class="cap">6인</span></li>
+          <li><span class="rank">3</span>3F-6<span class="cap">12인</span></li>
+        </ul>
+      </div>
+
+      <div class="rule-note">
+        같은 회의실은 하루 <b>최대 2시간</b>까지만 예약할 수 있어요. 더 필요하면 다른 회의실로 이어서 잡아드려요.
+      </div>
+    </aside>
+  </div>
+</div>
