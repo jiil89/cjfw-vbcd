@@ -1,8 +1,6 @@
 ---
 name: backend-resolver
 description: 단계별 백엔드 개발을 위한 Skill
-model: claude-sonnet-4-6
-argument-hint: [TASK_NUMBER]
 arguments: TASK_NUMBER
 disable-model-invocation: true
 ---
@@ -11,11 +9,13 @@ disable-model-invocation: true
 
 ### 작업 내용
 
-- docs/1-prd.md, docs/6-execution-plan.md, docs/3-api-spec.yaml 문서의 ${TASK_NUMBER}의 내용을 읽어와 분석한다.
+- 9-plan.md 문서의 ${TASK_NUMBER}의 내용을 읽어와 분석한다.
 - 기존 코드 분석 : 코드베이스(backend 디렉토리)의 코드를 분석한다.
 - 계획 수립 : 독립적인 서브에이전트를 활용해 기존 코드와 문서를 분석한 결과를 바탕으로 문제를 어떻게 해결해나갈지 계획을 수립한다.
 - 테스트 작성 : 적절한 서브에이전트를 이용해 수립된 계획을 바탕으로 커버리지 80% 이상의 테스트 케이스를 작성한다.
 - 문제 해결 : 적절한 서브에이전트를 이용해 수립된 계획을 바탕으로 백엔드 개발 문제를 해결한다.
 - 테스트 수행 : 적절한 서브에이전트를 적용해 미리 작성한 테스트를 수행한다.
-- 테스트가 완료되면 실행 계획 문서의 ${TASK_NUMBER}의 완료조건을 체크한다.
+- 테스트가 실패했다면 문제 해결과정을 다시 수행한다.
+- 테스트 작성과 문제 해결은 서브에이전트를 사용해 병렬로 실행한다.
+- 테스트가 완료되면 실행 계획 문서의 ${TASK_NUMBER}의 완료조건을 체크박스에 체크표시한다.
 - 모든 로깅 코드는 콘솔기반 로그를 사용하도록 개발한다.
