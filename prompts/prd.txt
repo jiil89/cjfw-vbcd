@@ -27,6 +27,7 @@ PRD — 회의실 예약 Agent
 
 - 프론트엔드: **React 19**. 전역 상태관리는 **Zustand** 사용. 백엔드와의 통신은 **TanStack Query**로 처리.
   - 대상 화면: 계정 등록 웹페이지, Admin 승인 패널, **웹 챗봇 UI**(1차 채널) — 전부 React 19, Vercel 배포
+  - **[결정됨] 4개 화면 모두 반응형(모바일/태블릿 포함)으로 설계한다.** 사내 직원이 PC뿐 아니라 휴대폰으로도 접근할 수 있어야 하므로, 고정폭 데스크톱 전용 레이아웃으로 만들지 않는다 (`prompts/7-wireframes.md` 참고).
 - 백엔드: **Node.js + Express**, Vercel Serverless Functions 위에서 구동. DB 접근은 Supabase의 자동 생성 REST API가 아니라 **`pg` 라이브러리로 Postgres에 직접 연결**하는 방식을 쓴다.
   - 참고: DB는 Supabase(Postgres) 그대로 사용하되, RLS 설계상 서버는 service role 수준 권한으로 접근하는 걸 전제로 하고 있어 `pg` 직접 연결 방식과 궁합상 문제없다 (`supabase/migrations/20260813000900_rls.sql` 참고).
   - 대상: 등록/Admin 승인 API, 웹 챗봇 API, CJ 자동화 모듈 — 전부 이 Express 백엔드(Vercel Functions) 위에서 동작
