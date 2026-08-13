@@ -57,7 +57,7 @@
 "동일 사용자+동일 회의실" 하루 합계 2시간 제한(6번 참고) 때문에, 한 회의실에서 2시간 넘게 연속으로 예약할 수 없다. 3시간처럼 2시간을 넘는 연속 시간대를 요청하면 **서로 다른 회의실 여러 개로 나눠서, 시간이 이어지도록 예약**하는 방식으로만 가능하다.
 
 1. 요청한 시간대 길이가 120분을 초과하면 분할 대상으로 판단
-2. 필요한 회의실 개수 계산: 세그먼트 수 = ceil(요청 분 / 120), 각 세그먼트는 30분 단위를 유지하며 가능한 균등하게 분배 (예: 3시간=180분 → 90분+90분, 5시간=300분 → 120분+120분+60분)
+2. 필요한 회의실 개수 계산: 세그먼트 수 = ceil(요청 분 / 120), 30분 단위를 유지하며 **앞쪽 세그먼트부터 최대 120분씩 채우고 남는 시간을 마지막 세그먼트에 배정** (예: 3시간=180분 → 120분+60분, 5시간=300분 → 120분+120분+60분)
 3. 각 세그먼트마다 별도로 가용 회의실을 탐색 — **선호 회의실 우선순위**는 그대로 적용하되, 같은 회의실이 두 세그먼트에 배정되지 않도록 하고(이미 그날 그 사용자가 일부 사용한 회의실이면 남은 한도만큼만 후보로 고려), 이동 편의를 위해 가능하면 같은 층/인접 층을 우선한다
 4. 확정 전, 전체 계획("14F-2 14:00~15:30 + 14F-3 15:30~17:00, 총 2개 회의실")을 사용자에게 보여주고 **한 번에 확인**받는다 (세그먼트마다 따로 묻지 않음)
 5. 확인되면 세그먼트별로 `checkRoom → checkStraightRoom → checkDayCountLimit → SaveReserve`를 순차 실행해 각각 별도의 확정 예약(Reservation)을 생성한다
@@ -230,13 +230,13 @@
 
 Playwright로 실제 사이트에 로그인하여 조회→예약→취소 전체 흐름을 실행하며 확인한 내용. 모두 사내 SSO 로그인 세션 쿠키가 있어야 호출 가능 (공식 API 문서 없음, ASP.NET ASMX 웹서비스).
 
-### 로그인/세션 확보 흐름 [2026-08-13 재검증 — 이전 버전(Azure AD 가정)을 대체함]
+### 로그인/세션 확보 흐름 [2026-08-13 재검증, 이후 BE-7 라이브 테스트 중 한 번 더 재검증 — 이전 버전(Azure AD 가정, 이후 iframe 직접 URL 가정)을 대체함]
 
 - **로그인은 `cjwappr.cj.net`이 아니라 `cj.cj.net`(사내 포털)에서 한다.** `cjwappr.cj.net`에 직접 접근하면 사내망 범용 404로 리다이렉트되고 로그인 폼 자체가 없다.
 - 로그인 폼은 **Azure AD/Microsoft 표준 폼이 아니라 cj.cj.net 자체 로그인 폼**이다(`/PT/login.aspx`). 실측 셀렉터: 아이디 `input#txtID`, 비밀번호 `input#txtPWD`, 로그인 버튼은 `<a class="btn_login" onclick="Login()">` (submit 버튼이 아니라 JS `Login()`을 호출하는 링크 — 비밀번호를 클라이언트에서 인코딩(`EnCode()`)한 뒤 폼을 제출하므로 반드시 Playwright로 실제 클릭을 재현해야 함).
 - 로그인 실패 시 URL이 `/PT/login.aspx`에 그대로 머물고 `#divErrorLogin` 요소가 노출되며 "아이디 또는 비밀번호 오류입니다..." 메시지가 뜬다.
-- 로그인 성공 시 `.cj.net`(상위 도메인 공유) 쿠키(`cAccess_token`, `ck`, `CJW`, `N_CJW`, `m365_id` 등)가 발급된다.
-- `cj.cj.net`과 `cjwappr.cj.net`의 세션 공유 방식: `https://cj.cj.net/NPT/PortalBuilder/23_service.aspx?CONTENTS_ID=EPCT3427` 페이지를 열면 그 안의 **iframe**이 `https://cjwappr.cj.net/NConf/conferenceRoom/reserve_main.aspx`를 로드하고, 이때 `cjwappr.cj.net`이 `/NConf/Anonymity/nconfFilter.aspx`로 302 리다이렉트되어 `.cj.net` 쿠키를 근거로 SSO 핸드셰이크를 수행한 뒤 `cjwappr.cj.net` 도메인 전용 쿠키(`AP`, `NCF`)를 새로 발급한다. **`cj.cj.net` 로그인만으로는 부족하고, 반드시 이 페이지(또는 그 안의 iframe URL)를 한 번 로드해야 `cjwappr.cj.net` API 호출이 가능한 세션이 만들어진다.**
+- 로그인 성공 시 URL은 바로 바뀌지 않고, 내부적으로 포털 메인 대시보드 `https://cj.cj.net/NPT/PortalBuilder/23_main.aspx`로 이동한다. `.cj.net`(상위 도메인 공유) 쿠키(`cAccess_token`, `ck`, `CJW`, `N_CJW`, `m365_id` 등)가 이때 발급된다.
+- **[2026-08-13 재정정] `cj.cj.net`과 `cjwappr.cj.net`의 세션 공유는 URL 직접 이동으로 되지 않는다.** `https://cj.cj.net/NPT/PortalBuilder/23_service.aspx?CONTENTS_ID=EPCT3427`는 실서버 페이지가 아니라, 포털 메인(`23_main.aspx`) 안의 JS 함수 `select_menu('EPCT3427','LSB')`가 클라이언트 사이드로 콘텐츠를 스왑하는 방식이다 — 이 URL로 직접 `page.goto`하면 `net::ERR_ABORTED`로 실패한다. **반드시 `23_main.aspx`를 먼저 로드한 뒤, 그 안의 회의실예약 버튼(`button#bntConf`, `onclick="select_menu('EPCT3427','LSB')"`)을 실제로 클릭해야 한다.** 이 클릭이 `cjwappr.cj.net`으로의 SSO 핸드셰이크(`/NConf/Anonymity/nconfFilter.aspx` 리다이렉트, `.cj.net` 쿠키 근거)를 트리거하고, `cjwappr.cj.net` 도메인 전용 쿠키 `AP`를 클릭 후 1초 내에 발급한다(실측 확인). **`cj.cj.net` 로그인만으로는 부족하고, 반드시 이 버튼을 눌러야 `cjwappr.cj.net` API 호출이 가능한 세션이 만들어진다.**
 - 이렇게 얻은 쿠키(`cjwappr.cj.net` 도메인 쿠키 + `.cj.net` 공유 쿠키)만 있으면 **브라우저 없이 순수 HTTP 요청으로 ASMX API를 정상 호출할 수 있음을 실측 확인**했다 — "로그인은 Playwright, API 호출은 가벼운 HTTP 클라이언트" 전략이 그대로 유효하다. `X-Requested-With`/`Referer` 헤더는 없어도 정상 동작한다(실측 확인, 있어도 무방).
 
 ### ASMX 엔드포인트 목록
@@ -263,6 +263,7 @@ Playwright로 실제 사이트에 로그인하여 조회→예약→취소 전�
 - 저장 전 `checkRoom` → `checkStraightRoom` → `checkDayCountLimit` 3개 검증을 순서대로 통과해야 `SaveReserve` 호출이 의미 있음 (프론트 로직을 그대로 따라야 함).
 - 이 API들은 공식 문서화된 것이 아니라 **실제 브라우저 동작을 관찰하여 역으로 확인한 것**이므로, 사내 IT/인프라팀에 정식 연동 승인 여부를 반드시 확인해야 한다 (8번 Open Questions 참고).
 - **[확인됨]** `getDayPilotConfReserveList` 응답의 `reserve_all_list`는 회의실별 30분 단위 문자열이며, **`Y`=이미 예약됨(불가) / `N`=예약 가능(빈 시간)** 이다 (실제 예약 생성 결과로 교차 검증 완료).
+- **[신규 발견 — 2026-08-13, BE-7 라이브 검증 중]** `reserve_all_list`의 실제 바이트 형태는 회의실별 문자열들의 배열이 아니라, **`"룸코드:슬롯문자열|룸코드:슬롯문자열|..."` 형태로 전체 층의 모든 회의실을 파이프(`|`)로 이어붙인 단일 문자열**이다(예: `"4502:NNNYYYYYYYNNYYYYYYYYNNNNNN|4503:NNNNYYYYYYNNNNYYYYYYNNNNNN|"`). 이걸 JSON 배열로 잘못 가정하면 항상 빈 배열로 파싱되어 **모든 회의실이 상시 "불가"로 오판되는 치명적 버그**가 된다 — 실제로 BE-4/BE-6 구현 당시 fixture(서술을 재구성한 것, 실측 원본 아님)로는 이 문제가 드러나지 않다가 BE-7 라이브 테스트에서 발견/수정됨(`backend/src/tools/availability.tool.ts`의 `parseReserveAllList`). 또한 `event_list`의 `start`/`end`는 `"HH:mm"`이 아니라 전체 ISO 타임스탬프(`"2026-08-13T08:30:00"`)이므로 시간 비교 전에 `HH:mm`으로 변환해야 한다(`isoTimestampToHHmm`).
 - **[해결됨]** `reserve_all_list`가 모든 종류의 "사용 불가"를 반영하지는 않는다(`GUBUN` 0/2 같은 장기 프로젝트성 점유가 `N`(가능)으로 잘못 표시되는 케이스 존재). **해결책 검증 완료**: `reserve_all_list`(그리드) 필터링 결과에 `event_list`의 시간 겹침 검사를 추가로 적용하면 실제 가용성과 정확히 일치한다. 8/13 14:00~15:00, 상암S시티 6개 층(16F/15F/14F/13F/12F/3F) 대상 스캔 결과가 실사용자가 알고 있는 실제 예약 현황(12F 전체 불가, 15F-4·14F-2 예약됨, 3F는 3F-6만 가능)과 100% 일치함을 확인했다. **최종 가용성 판단 알고리즘**: 회의실이 사용 가능하려면 (1) `reserve_all_list`의 해당 시간대 슬롯이 모두 `N`이고, **AND** (2) `event_list`에 해당 회의실(`resource`=room_code)과 시간이 겹치는 항목이 없어야 한다. `GUBUN` 값의 정확한 의미는 몰라도 이 방식이면 무관하게 안전하다.
 - **[결정됨]** B1F, 2F 층은 실사용 회의실이 아니므로 회의실 후보 풀에서 항상 제외한다 (1차 범위: 3F, 12F~16F).
 - **[신규 발견]** 로그인 세션 유효시간이 토큰상 예상(~1시간)보다 훨씬 짧게(수 분 단위) 끊기는 것을 여러 차례 실제로 관찰함. Agent는 매 요청 전 세션 유효성을 확인하고 즉시 재로그인하는 로직이 사실상 필수이며, "세션 캐싱 후 재사용" 전략은 기대만큼 효율적이지 않을 수 있다.

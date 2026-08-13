@@ -7,6 +7,7 @@ import { config } from "./config/env";
 import { pool } from "./db/pool";
 import { adminRouter } from "./routes/admin.routes";
 import { authRouter } from "./routes/auth.routes";
+import { chatRouter } from "./routes/chat.routes";
 import { registrationRouter } from "./routes/registration.routes";
 
 export function createApp(): Express {
@@ -41,6 +42,9 @@ export function createApp(): Express {
 
   // BE-3: Admin 승인 API
   app.use("/admin", adminRouter);
+
+  // BE-8: 웹 챗봇 API
+  app.use("/chat", chatRouter);
 
   return app;
 }

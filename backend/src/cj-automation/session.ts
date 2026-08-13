@@ -16,15 +16,26 @@
 //   POST를 보내는 방식은 불가능하다.
 // - 로그인 실패 시 URL은 그대로 `/PT/login.aspx`에 머무르고, `#divErrorLogin` 요소가
 //   보이며 "아이디 또는 비밀번호 오류입니다..." 메시지가 뜬다(실측 확인).
+// - 로그인 성공 시 URL은 즉시 바뀌지 않고(클릭 직후에도 `/PT/login.aspx`), 내부적으로
+//   `https://cj.cj.net/NPT/PortalBuilder/23_main.aspx`(포털 메인 대시보드)로 이동한다 —
+//   `page.waitForURL("**/23_main.aspx**")`로 대기해야 한다.
+// - **`23_service.aspx?CONTENTS_ID=EPCT3427`로 직접 `page.goto`하면 `net::ERR_ABORTED`로
+//   실패한다(2026-08-13 재검증)** — 이 URL은 실제 서버 페이지가 아니라, 포털 메인
+//   대시보드(`23_main.aspx`) 안의 JS 함수 `select_menu('EPCT3427','LSB')`가 클라이언트
+//   사이드에서 콘텐츠를 스왑하는 방식이다. 따라서 반드시 `23_main.aspx`를 로드한 뒤 그
+//   안의 회의실예약 버튼(`button#bntConf`, `onclick="select_menu('EPCT3427','LSB')"`)을
+//   실제로 클릭해야 한다.
+// - `#bntConf` 클릭 시 `cjwappr.cj.net`으로의 SSO 핸드셰이크가 즉시(1초 내) 일어나
+//   `cjwappr.cj.net` 도메인 쿠키 `AP`(그리고 있으면 `NCF`)가 발급됨을 실측 확인했다.
+//   과거 버전은 직접 URL 이동 후 고정 5초 대기로 판정했는데, 이는 URL 이동 자체가
+//   ERR_ABORTED로 실패하면서 우연히 다른 위젯(결재함 등)의 SSO가 걸려 간헐적으로만
+//   통과하던 것이었다 — 안정적인 방법이 아니었음.
 // - cj.cj.net ↔ cjwappr.cj.net 세션 공유 방식: 로그인 성공 시 `.cj.net`(상위 도메인, 예:
-//   `cAccess_token`, `ck`, `CJW`, `N_CJW`, `m365_id`) 쿠키가 발급된다. 이후
-//   `https://cj.cj.net/NPT/PortalBuilder/23_service.aspx?CONTENTS_ID=EPCT3427` 페이지를 열면
-//   그 안의 iframe이 `https://cjwappr.cj.net/NConf/conferenceRoom/reserve_main.aspx`를
-//   로드하는데, 이때 `cjwappr.cj.net`이 `/NConf/Anonymity/nconfFilter.aspx`로 302 리다이렉트해
-//   `.cj.net` 쿠키를 근거로 SSO 핸드셰이크를 수행하고, `cjwappr.cj.net` 도메인 전용 쿠키
-//   `AP`, `NCF`를 새로 발급한다. 이후 ASMX API 호출에는 `.cj.net` 쿠키 + `cjwappr.cj.net`
-//   쿠키(`AP`, `NCF`)를 함께 보내야 한다 — cj.cj.net 로그인만으로는 부족하고, 반드시 이
-//   iframe 페이지를 한 번 로드해서 cjwappr.cj.net 세션까지 확보해야 한다.
+//   `cAccess_token`, `ck`, `CJW`, `N_CJW`, `m365_id`) 쿠키가 발급된다. 이후 위 방식대로
+//   회의실예약 버튼을 클릭하면 `cjwappr.cj.net`이 `/NConf/Anonymity/nconfFilter.aspx`로
+//   리다이렉트해 `.cj.net` 쿠키를 근거로 SSO 핸드셰이크를 수행하고, `cjwappr.cj.net`
+//   도메인 전용 쿠키 `AP`를 새로 발급한다. 이후 ASMX API 호출에는 `.cj.net` 쿠키 +
+//   `cjwappr.cj.net` 쿠키(`AP`)를 함께 보내야 한다.
 // - 이렇게 얻은 쿠키만 실어서 브라우저 없이 순수 HTTP로 ASMX를 호출해도 정상 동작함을
 //   실측 확인했다 (client.ts 참고) — "로그인은 브라우저, API 호출은 가벼운 HTTP 클라이언트"
 //   전략이 그대로 유효하다.
@@ -46,11 +57,6 @@ import { findUserById } from "../db/repositories/userRepository";
 import { decryptCorporatePassword } from "../security/corporatePassword";
 
 const LOGIN_NAV_TIMEOUT_MS = 30_000;
-
-// 로그인 성공 후 cjwappr.cj.net 세션까지 확보하기 위해 여는 회의실 예약 페이지.
-// (사용자 제공 경로 — 이 안의 iframe이 cjwappr.cj.net/NConf/conferenceRoom/reserve_main.aspx를
-// 로드하면서 nconfFilter.aspx SSO 핸드셰이크가 일어난다.)
-const MEETING_ROOM_PAGE_PATH = "/NPT/PortalBuilder/23_service.aspx?CONTENTS_ID=EPCT3427";
 
 // cjwappr.cj.net API 호출에 필요한 쿠키만 골라낸다: cjwappr.cj.net 전용 쿠키(AP, NCF 등)와
 // 여러 cj.net 서브도메인이 공유하는 상위 도메인 쿠키(.cj.net, 예: cAccess_token, CJW).
@@ -101,8 +107,8 @@ export class CjLoginError extends Error {
  *
  * 로그인 흐름 (2026-08-13 실사용 검증 완료, 파일 상단 주석 참고):
  * 1. cj.cj.net(사내 포털)의 자체 로그인 폼(#txtID/#txtPWD/.btn_login)으로 로그인
- * 2. 회의실 예약 페이지(23_service.aspx)를 열어 iframe이 cjwappr.cj.net 세션(AP/NCF 쿠키)을
- *    확보하도록 함
+ * 2. 포털 메인 대시보드(23_main.aspx) 로딩을 기다린 뒤 회의실예약 버튼(#bntConf)을 클릭해
+ *    cjwappr.cj.net 세션(AP 쿠키)을 확보함
  * 3. cjwappr.cj.net 호출에 필요한 쿠키만 추출해 반환 — 이후 API 호출은 브라우저 없이
  *    가벼운 HTTP 클라이언트(client.ts)로 수행
  */
@@ -145,24 +151,27 @@ export async function loginWithCredentials(
       );
     }
 
-    // 2. 회의실 예약 페이지를 열어 cjwappr.cj.net 세션(AP/NCF 쿠키)까지 확보한다.
-    //    (이 페이지 안의 iframe이 nconfFilter.aspx SSO 핸드셰이크를 트리거함 — 파일 상단 주석 참고)
-    const meetingRoomPageUrl = new URL(MEETING_ROOM_PAGE_PATH, config.cjPortalBaseUrl).toString();
-    await page
-      .goto(meetingRoomPageUrl, { waitUntil: "networkidle", timeout: LOGIN_NAV_TIMEOUT_MS })
-      .catch(() => {
-        // networkidle 타임아웃은 흔히 발생할 수 있으므로(광고 배너 등 지속적 폴링), 아래에서
-        // cjwappr.cj.net 쿠키가 실제로 확보됐는지로 성공 여부를 판정한다.
-      });
+    // 2. 포털 메인 대시보드(23_main.aspx)로 이동을 기다린 뒤, 회의실예약 버튼(#bntConf)을
+    //    실제로 클릭한다 — CONTENTS_ID=EPCT3427 URL로 직접 page.goto하면 net::ERR_ABORTED로
+    //    실패한다(파일 상단 주석 참고). 이 버튼 클릭이 cjwappr.cj.net SSO 핸드셰이크를 트리거한다.
+    await page.waitForURL("**/23_main.aspx**", { timeout: LOGIN_NAV_TIMEOUT_MS });
+    await page.click("#bntConf");
 
-    // iframe의 SSO 핸드셰이크(nconfFilter.aspx)가 networkidle 판정 이후에도 비동기로 조금 더
-    // 걸릴 수 있음을 실측으로 확인 — 쿠키 확인 전에 짧게 여유를 둔다.
-    await page.waitForTimeout(5_000);
+    // 클릭 직후(실측: 1초 내) cjwappr.cj.net의 AP 쿠키가 발급된다. 사내망 지연을 감안해
+    // 최대 20초간 1초 간격으로 폴링한다 — 쿠키가 빨리 잡히면 그만큼 빨리 반환된다.
+    const COOKIE_POLL_INTERVAL_MS = 1_000;
+    const COOKIE_POLL_MAX_ATTEMPTS = 20;
 
-    const cookies = await context.cookies();
-    const cjwapprCookies = cookies.filter((cookie) => isRelevantCookieForCjwappr(cookie.domain));
+    let cjwapprCookies: Awaited<ReturnType<typeof context.cookies>> = [];
+    let hasCjwapprAuthCookie = false;
+    for (let attempt = 0; attempt < COOKIE_POLL_MAX_ATTEMPTS; attempt += 1) {
+      const cookies = await context.cookies();
+      cjwapprCookies = cookies.filter((cookie) => isRelevantCookieForCjwappr(cookie.domain));
+      hasCjwapprAuthCookie = cjwapprCookies.some((cookie) => cookie.domain === "cjwappr.cj.net" && cookie.name === "AP");
+      if (hasCjwapprAuthCookie) break;
+      await page.waitForTimeout(COOKIE_POLL_INTERVAL_MS);
+    }
 
-    const hasCjwapprAuthCookie = cjwapprCookies.some((cookie) => cookie.domain === "cjwappr.cj.net");
     if (!hasCjwapprAuthCookie) {
       throw new CjLoginError(
         "[cj-automation/session] cj.cj.net 로그인은 성공했지만 cjwappr.cj.net(예약 API) 세션 쿠키를 확보하지 못했습니다."

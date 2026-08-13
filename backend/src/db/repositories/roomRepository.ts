@@ -60,6 +60,43 @@ export async function findAllRooms(): Promise<Room[]> {
   return result.rows.map(toRoom);
 }
 
+/** BE-6: 예약 가능한(is_bookable=true) 회의실만 조회한다 — 가용성 조회/예약 생성 후보 풀. */
+export async function findBookableRooms(): Promise<Room[]> {
+  const result = await pool.query<RoomRow>(
+    `select ${ROOM_COLUMNS} from public.rooms where is_bookable = true order by floor_label, room_name`
+  );
+  return result.rows.map(toRoom);
+}
+
+/** BE-6: 이력 기반 추천(get_user_frequent_rooms)에서 얻은 room_id 목록으로 Room 상세를 조회한다.
+ * 입력 순서를 그대로 보존해서 반환한다(추천 우선순위 유지). */
+export async function findRoomsByIds(roomIds: string[]): Promise<Room[]> {
+  if (roomIds.length === 0) {
+    return [];
+  }
+  const result = await pool.query<RoomRow>(
+    `select ${ROOM_COLUMNS} from public.rooms where id = any($1::uuid[])`,
+    [roomIds]
+  );
+  const byId = new Map(result.rows.map((row) => [row.id, toRoom(row)]));
+  return roomIds.map((id) => byId.get(id)).filter((room): room is Room => Boolean(room));
+}
+
+export async function findRoomById(roomId: string): Promise<Room | null> {
+  const result = await pool.query<RoomRow>(`select ${ROOM_COLUMNS} from public.rooms where id = $1`, [
+    roomId,
+  ]);
+  return result.rows[0] ? toRoom(result.rows[0]) : null;
+}
+
+export async function findRoomByRoomCode(roomCode: string): Promise<Room | null> {
+  const result = await pool.query<RoomRow>(
+    `select ${ROOM_COLUMNS} from public.rooms where room_code = $1`,
+    [roomCode]
+  );
+  return result.rows[0] ? toRoom(result.rows[0]) : null;
+}
+
 export interface UpsertRoomParams {
   site: string;
   areaCode: string;
