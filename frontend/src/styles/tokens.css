@@ -1,0 +1,201 @@
+/*
+  디자인 토큰 — DESIGN.md(Intercom 기반, 프로젝트 루트) front-matter를 CSS 커스텀
+  프로퍼티로 옮긴 것. 여기 없는 값은 임의로 만들지 않는다 — 새 토큰이 필요하면
+  "PROPOSED" 주석과 함께 추가하고, 최종 보고서에서 별도로 알린다.
+
+  다크 테마 스위칭 패턴은 이미 이 프로젝트에 있는 참고 구현
+  (docs/design/chatbot-shell.html)을 그대로 따른다:
+    - 기본은 OS 설정(prefers-color-scheme: dark)을 따르되
+    - data-theme="light" | "dark" 속성으로 사용자가 명시적으로 오버라이드 가능
+*/
+
+:root {
+  /* ---- Colors — DESIGN.md `colors` (라이트, 기본값) ---- */
+  --color-ink: #111111;
+  --color-on-primary: #ffffff;
+  --color-ink-muted: #626260;
+  --color-ink-subtle: #7b7b78;
+  --color-ink-tertiary: #9c9fa5;
+  --color-canvas: #f5f1ec;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #ebe7e1;
+  --color-inverse-canvas: #000000;
+  --color-inverse-surface-1: #313130;
+  --color-inverse-ink: #ffffff;
+  --color-inverse-ink-muted: #9c9fa5;
+  --color-hairline: #d3cec6;
+  --color-hairline-soft: #ebe7e1;
+  --color-fin-orange: #ff5600;
+  --color-semantic-error: #c41c1c;
+  --color-semantic-success: #0bdf50;
+
+  /* PROPOSED — semantic 색의 "soft"(배경용, 저채도) 변형은 DESIGN.md에 없음.
+     text-on-canvas 대비를 해치지 않는 low-alpha 버전을 파생시켜 badge/tag
+     배경에 사용한다. 순수 신규 hex가 아니라 기존 승인 토큰의 alpha 파생값. */
+  --color-semantic-success-soft: rgba(11, 223, 80, 0.12);
+  --color-semantic-error-soft: rgba(196, 28, 28, 0.1);
+
+  /* 현재 테마에서 실제로 쓰는 alias — 컴포넌트는 이 alias만 참조한다.
+     라이트 기본값이며, 다크 블록에서 재정의된다. */
+  --canvas: var(--color-canvas);
+  --surface-1: var(--color-surface-1);
+  --surface-2: var(--color-surface-2);
+  --ink: var(--color-ink);
+  --ink-muted: var(--color-ink-muted);
+  --ink-subtle: var(--color-ink-subtle);
+  --ink-tertiary: var(--color-ink-tertiary);
+  --hairline: var(--color-hairline);
+  --hairline-soft: var(--color-hairline-soft);
+  --fin-orange: var(--color-fin-orange);
+  --primary-bg: var(--color-ink);
+  --primary-fg: var(--color-on-primary);
+  --semantic-error: var(--color-semantic-error);
+  --semantic-success: var(--color-semantic-success);
+  --semantic-success-soft: var(--color-semantic-success-soft);
+  --semantic-error-soft: var(--color-semantic-error-soft);
+
+  /* ---- Typography — DESIGN.md `typography` ----
+     Saans/SaansMono는 사내 배포 불가한 proprietary 폰트이므로
+     DESIGN.md "Note on Font Substitutes"가 명시한 무료 대체재로 교체한다:
+     Saans -> Inter, SaansMono -> JetBrains Mono. 한글은 두 폰트 모두
+     글리프가 없으므로 OS 기본 한글 폰트로 자연스럽게 폴백된다. */
+  --font-sans: "Inter", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR",
+    system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas,
+    "Liberation Mono", monospace;
+
+  --fs-display-xl: 72px; --fw-display-xl: 500; --lh-display-xl: 1.05; --ls-display-xl: -2px;
+  --fs-display-lg: 56px; --fw-display-lg: 500; --lh-display-lg: 1.10; --ls-display-lg: -1.4px;
+  --fs-display-md: 40px; --fw-display-md: 500; --lh-display-md: 1.15; --ls-display-md: -0.8px;
+  --fs-headline:   28px; --fw-headline:   500; --lh-headline:   1.20; --ls-headline:   -0.5px;
+  --fs-card-title: 22px; --fw-card-title: 500; --lh-card-title: 1.25; --ls-card-title: -0.3px;
+  --fs-subhead:    20px; --fw-subhead:    400; --lh-subhead:    1.40; --ls-subhead:    -0.2px;
+  --fs-body-lg:    18px; --fw-body-lg:    400; --lh-body-lg:    1.50; --ls-body-lg:    -0.1px;
+  --fs-body:       16px; --fw-body:       400; --lh-body:       1.50; --ls-body:       0;
+  --fs-body-sm:    14px; --fw-body-sm:    400; --lh-body-sm:    1.50; --ls-body-sm:    0;
+  --fs-caption:    12px; --fw-caption:    400; --lh-caption:    1.40; --ls-caption:    0;
+  --fs-button:     15px; --fw-button:     500; --lh-button:     1.20; --ls-button:     0;
+  --fs-eyebrow:    14px; --fw-eyebrow:    500; --lh-eyebrow:    1.30; --ls-eyebrow:    0;
+  --fs-mono:       13px; --fw-mono:       400; --lh-mono:       1.50; --ls-mono:       0;
+
+  /* ---- Radius — DESIGN.md `rounded` ---- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-xxl: 24px;
+  --radius-pill: 9999px;
+  --radius-full: 9999px;
+
+  /* ---- Spacing — DESIGN.md `spacing` (base unit 8px) ---- */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+  --space-section: 96px;
+
+  /* 이 앱의 유일한 브레이크포인트(prompts/7-wireframes.md 상단):
+     860px 초과 = 데스크톱, 860px 이하 = 모바일. DESIGN.md의 5단계
+     반응형 표(1440/1280/1024/768/480)는 마케팅 사이트 역분석 값이라
+     이 앱에는 적용하지 않는다. */
+  --breakpoint-mobile: 860px;
+}
+
+/*
+  ---- 다크 테마 ----
+  DESIGN.md의 "Known Gaps"에 다크 테마는 공식 문서화되지 않았다고 명시되어
+  있다. 대신 이미 정의되어 있는 inverse-* 토큰(inverse-canvas #000000 /
+  inverse-surface-1 #313130 / inverse-ink #ffffff / inverse-ink-muted #9c9fa5)을
+  각각 다크 테마의 canvas / surface-1 / ink / ink-muted 역할로 재사용한다.
+
+  PROPOSED (DESIGN.md에 없는 값 — 이 프로젝트에서 새로 제안하는 다크 전용 토큰):
+    --color-inverse-surface-2   : inverse-surface-1보다 한 단계 밝은 카드 표면.
+                                   신규 hex를 지어내지 않고 inverse-surface-1을
+                                   inverse-ink 방향으로 살짝 섞어(color-mix) 파생.
+    --color-inverse-ink-subtle  : DESIGN.md 라이트 테마의 ink-subtle(#7b7b78)과
+                                   동일한 중립 회색 값을 재사용 (신규 hex 아님).
+    --color-inverse-ink-tertiary: DESIGN.md 라이트 테마의 ink-muted(#626260)와
+                                   동일한 중립 회색 값을 재사용 (신규 hex 아님).
+    --color-inverse-hairline / -soft : inverse-ink(#ffffff)의 저알파 버전.
+                                   라이트 테마의 "hairline = ink 계열의 얇은
+                                   경계선" 원칙을 다크에도 동일 비율(14%/8%)로
+                                   적용한 값 — docs/design/chatbot-shell.html의
+                                   기존 다크 hairline 알파값(0.14/0.08)과 동일.
+  이 5개 토큰은 DESIGN.md 확정 전까지 이 파일에서만 쓰는 임시 확장이며,
+  DESIGN.md 반영 여부는 별도 검토가 필요하다 (작업 지시자 확인 대상).
+*/
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-inverse-surface-2: color-mix(in srgb, var(--color-inverse-surface-1) 85%, var(--color-inverse-ink) 15%);
+    --color-inverse-ink-subtle: #7b7b78;
+    --color-inverse-ink-tertiary: #626260;
+    --color-inverse-hairline: rgba(255, 255, 255, 0.14);
+    --color-inverse-hairline-soft: rgba(255, 255, 255, 0.08);
+
+    --canvas: var(--color-inverse-canvas);
+    --surface-1: var(--color-inverse-surface-1);
+    --surface-2: var(--color-inverse-surface-2);
+    --ink: var(--color-inverse-ink);
+    --ink-muted: var(--color-inverse-ink-muted);
+    --ink-subtle: var(--color-inverse-ink-subtle);
+    --ink-tertiary: var(--color-inverse-ink-tertiary);
+    --hairline: var(--color-inverse-hairline);
+    --hairline-soft: var(--color-inverse-hairline-soft);
+    --primary-bg: var(--color-inverse-ink);
+    --primary-fg: var(--color-inverse-canvas);
+
+    /* fin-orange/semantic 색은 DESIGN.md가 다크 변형을 정의하지 않았고,
+       배지/버튼의 배경색(칠 영역)으로만 쓰여 검정 캔버스 위에서도 충분한
+       대비를 내므로 라이트와 동일 값을 그대로 쓴다 — 임의 변형 없음. */
+  }
+}
+
+/* data-theme="dark"로 명시적으로 오버라이드한 경우 — OS 설정과 무관하게 항상 적용 */
+:root[data-theme="dark"] {
+  --color-inverse-surface-2: color-mix(in srgb, var(--color-inverse-surface-1) 85%, var(--color-inverse-ink) 15%);
+  --color-inverse-ink-subtle: #7b7b78;
+  --color-inverse-ink-tertiary: #626260;
+  --color-inverse-hairline: rgba(255, 255, 255, 0.14);
+  --color-inverse-hairline-soft: rgba(255, 255, 255, 0.08);
+
+  --canvas: var(--color-inverse-canvas);
+  --surface-1: var(--color-inverse-surface-1);
+  --surface-2: var(--color-inverse-surface-2);
+  --ink: var(--color-inverse-ink);
+  --ink-muted: var(--color-inverse-ink-muted);
+  --ink-subtle: var(--color-inverse-ink-subtle);
+  --ink-tertiary: var(--color-inverse-ink-tertiary);
+  --hairline: var(--color-inverse-hairline);
+  --hairline-soft: var(--color-inverse-hairline-soft);
+  --primary-bg: var(--color-inverse-ink);
+  --primary-fg: var(--color-inverse-canvas);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

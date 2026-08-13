@@ -248,10 +248,12 @@ flowchart LR
 - **작업 내용**: `5-project-principle.md` 6번 구조대로 React 19 + Zustand + TanStack Query 프로젝트 초기화. `DESIGN.md`(Intercom 기반) 토큰을 CSS 변수/테마 시스템으로 정리하고, 공용 `components/`(버튼, 인풋, 카드, 칩 등)를 `docs/design/chatbot-shell.html`에서 구현된 스타일 그대로 컴포넌트화.
 - **선행 Task**: 없음 (백엔드와 병행 가능)
 - **완료 조건**:
-  - [ ] `5-project-principle.md` 6번의 폴더 구조(`pages/ components/ stores/ queries/ api/ routes/ types/`)가 그대로 생성됨
-  - [ ] `DESIGN.md`의 색상/타이포/radius/spacing 토큰이 CSS 변수로 정의되고 라이트/다크 테마 모두 지원됨
-  - [ ] 버튼(primary/ghost), 입력창, 카드, 칩, 뱃지 공용 컴포넌트가 `docs/design/chatbot-shell.html`과 시각적으로 동일하게 구현됨
-  - [ ] `httpClient.ts`가 Access Token 첨부 + 401 시 재발급 흐름을 처리함
+  - [x] `5-project-principle.md` 6번의 폴더 구조(`pages/ components/ stores/ queries/ api/ routes/ types/`)가 그대로 생성됨 (`frontend/src/`, React 19 + Zustand + TanStack Query + React Router 설치 확인)
+  - [x] `DESIGN.md`의 색상/타이포/radius/spacing 토큰이 CSS 변수로 정의되고 라이트/다크 테마 모두 지원됨 (`frontend/src/styles/tokens.css`, Playwright 스크린샷으로 라이트/다크 렌더링 확인). 다크 테마는 `DESIGN.md`가 공식 문서화하지 않았던 부분이라 기존 `inverse-*` 토큰을 재사용해 구성했고, 파생된 신규 토큰 5개(`inverse-surface-2`, `inverse-ink-subtle`, `inverse-ink-tertiary`, `inverse-hairline`(-soft), `semantic-*-soft`)는 검토 후 `DESIGN.md`에 정식 반영함(`## Dark Theme` 절 추가)
+  - [x] 버튼(primary/ghost), 입력창, 카드, 칩, 뱃지 공용 컴포넌트가 `docs/design/chatbot-shell.html`과 시각적으로 동일하게 구현됨 (`frontend/src/components/{Button,TextInput,Card,Chip,Badge}`, 8-state 전부 Playwright로 렌더링 검증)
+  - [x] `httpClient.ts`가 Access Token 첨부 + 401 시 재발급 흐름을 처리함 (`frontend/src/api/httpClient.ts`) — 유닛 테스트 4개 통과 + 실제 로컬 백엔드로 로그인→만료 토큰→401→refresh→재시도→실제 챗봇 응답까지 end-to-end 라이브 검증 완료
+
+  **참고**: Vite dev 프록시는 백엔드 라우트(`/auth`,`/admin`,`/chat`)를 리네이밍하지 않고 개별 경로로 매핑(BE-9에서 남겨둔 결정사항 해소). `queries/`, `stores/`의 화면별 파일(`authQueries.ts` 등)은 FE-2~5에서 해당 화면 작업 시 추가 예정(오버엔지니어링 방지로 이번엔 빈 스텁 생성 안 함).
 
 ### FE-2. 회원가입 페이지
 

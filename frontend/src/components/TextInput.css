@@ -1,0 +1,129 @@
+.text-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+  width: 100%;
+}
+
+.text-input-label {
+  font-size: var(--fs-body-sm);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.text-input-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* ---- DESIGN.md text-input ---- */
+.text-input {
+  width: 100%;
+  background: var(--surface-1);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  min-height: 44px; /* 터치 타깃 DESIGN.md 규칙: form input >= 44px */
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.text-input::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.text-input:hover:not(:disabled) {
+  border-color: var(--ink-tertiary);
+}
+
+/* DESIGN.md text-input-focused */
+.text-input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.text-input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.text-input:active:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.text-input:disabled {
+  cursor: not-allowed;
+  background: var(--surface-2);
+  color: var(--ink-tertiary);
+}
+
+.text-input-wrap-disabled .text-input-label {
+  color: var(--ink-tertiary);
+}
+
+/* ---- error ---- */
+.text-input-wrap-error .text-input {
+  border-color: var(--semantic-error);
+}
+
+.text-input-wrap-error .text-input:focus {
+  border-color: var(--semantic-error);
+}
+
+.text-input-error-text {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--semantic-error);
+}
+
+/* ---- success ---- */
+.text-input-wrap-success .text-input {
+  border-color: var(--semantic-success);
+}
+
+.text-input-success-icon {
+  position: absolute;
+  right: 12px;
+  color: var(--semantic-success);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.text-input-help-text {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--ink-muted);
+}
+
+/* ---- loading ---- */
+.text-input-spinner {
+  position: absolute;
+  right: 12px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--ink-tertiary);
+  border-top-color: var(--ink);
+  animation: text-input-spin 700ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-input-spinner {
+    animation: text-input-spin-fade 900ms ease-in-out infinite;
+  }
+}
+
+@keyframes text-input-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes text-input-spin-fade {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}

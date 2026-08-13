@@ -29,6 +29,13 @@ colors:
   brand-blue: "#0007cb"
   semantic-error: "#c41c1c"
   semantic-success: "#0bdf50"
+  semantic-error-soft: "rgba(196, 28, 28, 0.1)"
+  semantic-success-soft: "rgba(11, 223, 80, 0.12)"
+  inverse-surface-2: "color-mix(in srgb, {colors.inverse-surface-1} 85%, {colors.inverse-ink} 15%)"
+  inverse-ink-subtle: "#7b7b78"
+  inverse-ink-tertiary: "#626260"
+  inverse-hairline: "rgba(255, 255, 255, 0.14)"
+  inverse-hairline-soft: "rgba(255, 255, 255, 0.08)"
 
 typography:
   display-xl:
@@ -309,6 +316,17 @@ The page rhythm is heavy on **product mockups**: every section's payload is a hi
 
 The report palette appears INSIDE product UI mockups — these are Intercom's in-product chart colors, not marketing surface colors.
 
+### Dark Theme [2026-08-14, 회의실 예약 챗봇 FE-1에서 추가 — 마케팅 사이트 분석 당시엔 다크 테마가 없어 아래는 이 앱을 위해 파생한 값]
+
+The dark theme reuses the already-defined `inverse-*` roles rather than inventing a new palette — `{colors.inverse-canvas}` becomes the dark canvas, `{colors.inverse-surface-1}` the dark card surface, `{colors.inverse-ink}` / `{colors.inverse-ink-muted}` the dark text roles. Five tokens were added to complete the set, all derived from existing values (no new hex invented):
+
+- **`{colors.inverse-surface-2}`**: one step lighter than `{colors.inverse-surface-1}`, mixed 85/15 toward `{colors.inverse-ink}`. Dark-mode counterpart to `{colors.surface-2}`.
+- **`{colors.inverse-ink-subtle}`** (#7b7b78) / **`{colors.inverse-ink-tertiary}`** (#626260): reuse the light theme's `{colors.ink-subtle}` / `{colors.ink-muted}` values as neutral mid-grays that read correctly on a dark ground.
+- **`{colors.inverse-hairline}`** / **`{colors.inverse-hairline-soft}`**: `{colors.inverse-ink}` (white) at 14%/8% alpha — same "hairline = ink at low alpha" principle the light theme uses, applied to the inverse ink.
+- **`{colors.semantic-error-soft}`** / **`{colors.semantic-success-soft}`**: low-alpha (10–12%) tints of the existing semantic colors, for badge/tag backgrounds — used identically in both themes.
+
+`{colors.fin-orange}` and the semantic colors (`{colors.semantic-error}`, `{colors.semantic-success}`) are unchanged between themes — they're fill colors with enough contrast on both a cream and a black canvas.
+
 ## Typography
 
 ### Font Family
@@ -499,7 +517,9 @@ Intercom resists drop shadows. Depth is communicated by the white-on-cream surfa
 
 ## Responsive Behavior
 
-### Breakpoints
+**[2026-08-14 참고 — 회의실 예약 챗봇 앱]** 아래 5단계 표는 Intercom 마케팅 사이트를 역분석한 값이다. 이 프로젝트(회의실 예약 챗봇)의 실제 브레이크포인트는 `prompts/7-wireframes.md`가 정의하는 **860px 단일 기준**(초과=데스크톱, 이하=모바일)이며 이 표를 따르지 않는다 — 색상/타이포/spacing/radius 토큰만 이 문서를 따르고, 반응형 레이아웃은 와이어프레임 문서가 source of truth다.
+
+### Breakpoints (Intercom 마케팅 사이트 원본 분석값 — 이 앱에는 미적용)
 
 | Name | Width | Key Changes |
 |---|---|---|
@@ -541,6 +561,6 @@ Intercom resists drop shadows. Depth is communicated by the white-on-cream surfa
 
 - The **report palette** lives in product analytics dashboards rendered inside marketing mockups; they are documented for completeness but are not brand surface colors.
 - Form-field error and validation styling is not visible on the inspected pages.
-- Dark mode is not documented because the marketing site does not ship a dark theme.
+- Dark mode was not documented from the marketing-site analysis (the site itself doesn't ship one) — see `## Dark Theme` under Colors for the app-specific dark palette added in FE-1.
 - The helpdesk / inbox product surfaces show in-product UI states that aren't formal marketing chrome.
 - Saans and SaansMono are proprietary; an open-source substitute (Inter, Söhne, Geist) is acceptable.
