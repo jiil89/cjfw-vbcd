@@ -2,83 +2,88 @@
 <title>회의실 예약 챗봇</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
+  /* Tokens derived from /DESIGN.md (Intercom design-system analysis).
+     Fin Orange is reserved for the AI-agent badge only (mirrors Intercom's
+     "Fin CTA / Fin badge only" rule) — it is never used as a button color,
+     so it never competes with the charcoal primary button in one viewport. */
   :root {
-    --bg: #eef2f0;
-    --surface: #ffffff;
-    --surface-2: #e3e9e4;
-    --ink: #1c2622;
-    --muted: #5b6b62;
-    --faint: #8b988f;
-    --border: rgba(28, 38, 34, 0.12);
-    --border-strong: rgba(28, 38, 34, 0.20);
-    --accent: #2f7a5c;
-    --accent-ink: #ffffff;
-    --accent-soft: rgba(47, 122, 92, 0.10);
-    --accent-soft-strong: rgba(47, 122, 92, 0.18);
-    --warn: #a9762f;
-    --warn-soft: rgba(169, 118, 47, 0.12);
-    --danger: #a8483c;
-    --danger-soft: rgba(168, 72, 60, 0.10);
-    --shadow: 0 1px 2px rgba(28, 38, 34, 0.06), 0 8px 24px rgba(28, 38, 34, 0.06);
-    --radius: 10px;
-    --radius-sm: 6px;
+    --canvas: #f5f1ec;
+    --surface-1: #ffffff;
+    --surface-2: #ebe7e1;
+    --ink: #111111;
+    --ink-muted: #626260;
+    --ink-subtle: #7b7b78;
+    --ink-tertiary: #9c9fa5;
+    --hairline: #d3cec6;
+    --hairline-soft: #ebe7e1;
+    --fin-orange: #ff5600;
+    --primary-bg: #111111;
+    --primary-fg: #ffffff;
+    --success: #0bdf50;
+    --success-soft: rgba(11, 223, 80, 0.12);
+    --warn: #9a6b12;
+    --warn-soft: rgba(154, 107, 18, 0.10);
+
+    --rounded-xs: 4px;
+    --rounded-sm: 6px;
+    --rounded-md: 8px;
+    --rounded-lg: 12px;
+    --rounded-xl: 16px;
+    --rounded-full: 9999px;
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #121815;
-      --surface: #1a221e;
-      --surface-2: #222c26;
-      --ink: #e9efeb;
-      --muted: #99a89f;
-      --faint: #6c7b72;
-      --border: rgba(233, 239, 235, 0.10);
-      --border-strong: rgba(233, 239, 235, 0.18);
-      --accent: #55ad8b;
-      --accent-ink: #0d1512;
-      --accent-soft: rgba(85, 173, 139, 0.14);
-      --accent-soft-strong: rgba(85, 173, 139, 0.22);
+      --canvas: #17171a;
+      --surface-1: #232326;
+      --surface-2: #2c2c2f;
+      --ink: #f5f1ec;
+      --ink-muted: #a3a09b;
+      --ink-subtle: #8a8783;
+      --ink-tertiary: #6b6966;
+      --hairline: rgba(245, 241, 236, 0.14);
+      --hairline-soft: rgba(245, 241, 236, 0.08);
+      --fin-orange: #ff7a3d;
+      --primary-bg: #f5f1ec;
+      --primary-fg: #111111;
+      --success: #33e879;
+      --success-soft: rgba(51, 232, 121, 0.14);
       --warn: #d6a15c;
       --warn-soft: rgba(214, 161, 92, 0.14);
-      --danger: #d9776a;
-      --danger-soft: rgba(217, 119, 106, 0.14);
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
     }
   }
 
   :root[data-theme="dark"] {
-    --bg: #121815;
-    --surface: #1a221e;
-    --surface-2: #222c26;
-    --ink: #e9efeb;
-    --muted: #99a89f;
-    --faint: #6c7b72;
-    --border: rgba(233, 239, 235, 0.10);
-    --border-strong: rgba(233, 239, 235, 0.18);
-    --accent: #55ad8b;
-    --accent-ink: #0d1512;
-    --accent-soft: rgba(85, 173, 139, 0.14);
-    --accent-soft-strong: rgba(85, 173, 139, 0.22);
+    --canvas: #17171a;
+    --surface-1: #232326;
+    --surface-2: #2c2c2f;
+    --ink: #f5f1ec;
+    --ink-muted: #a3a09b;
+    --ink-subtle: #8a8783;
+    --ink-tertiary: #6b6966;
+    --hairline: rgba(245, 241, 236, 0.14);
+    --hairline-soft: rgba(245, 241, 236, 0.08);
+    --fin-orange: #ff7a3d;
+    --primary-bg: #f5f1ec;
+    --primary-fg: #111111;
+    --success: #33e879;
+    --success-soft: rgba(51, 232, 121, 0.14);
     --warn: #d6a15c;
     --warn-soft: rgba(214, 161, 92, 0.14);
-    --danger: #d9776a;
-    --danger-soft: rgba(217, 119, 106, 0.14);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
   }
 
   * { box-sizing: border-box; }
-
-  html, body {
-    height: 100%;
-  }
+  html, body { height: 100%; }
 
   body {
     margin: 0;
-    background: var(--bg);
+    background: var(--canvas);
     color: var(--ink);
+    /* Saans is proprietary; system-ui/-apple-system is the closest available
+       stack here, with Korean handled by the CJK companions each OS ships. */
     font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
-    font-size: 14.5px;
-    line-height: 1.55;
+    font-size: 16px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -87,21 +92,27 @@
     font-variant-numeric: tabular-nums;
   }
 
+  button { -webkit-tap-highlight-color: transparent; font-family: inherit; }
+  button:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
   .app {
     height: 100vh;
     display: grid;
     grid-template-rows: 56px 1fr;
   }
 
-  /* ---- Header ---- */
+  /* ---- Header: top-nav — cream, quiet, not chromatic ---- */
 
   .topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 20px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--canvas);
+    border-bottom: 1px solid var(--hairline);
   }
 
   .brand {
@@ -113,27 +124,26 @@
   .brand-mark {
     width: 22px;
     height: 22px;
-    border-radius: 6px;
-    background: var(--accent);
+    border-radius: var(--rounded-sm);
+    background: var(--ink);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: var(--accent-ink);
+    color: var(--primary-fg);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 500;
     flex: none;
   }
 
   .brand-name {
-    font-weight: 600;
+    font-weight: 500;
     font-size: 15px;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.2px;
   }
 
   .brand-site {
-    color: var(--faint);
+    color: var(--ink-subtle);
     font-size: 12px;
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
   }
 
   .user-chip {
@@ -141,36 +151,41 @@
     align-items: center;
     gap: 8px;
     padding: 4px 10px 4px 4px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    background: var(--surface);
+    border-radius: var(--rounded-full);
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
   }
 
   .avatar {
     width: 26px;
     height: 26px;
-    border-radius: 50%;
+    border-radius: var(--rounded-full);
     background: var(--surface-2);
-    color: var(--muted);
+    color: var(--ink-muted);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 500;
+  }
+
+  /* Agent avatar carries the one Fin-Orange accent — this app's "AI badge" */
+  .row.from-agent .avatar {
+    background: var(--fin-orange);
+    color: #ffffff;
   }
 
   .user-chip .name {
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 400;
   }
 
   .status-dot {
     width: 7px;
     height: 7px;
-    border-radius: 50%;
-    background: var(--accent);
+    border-radius: var(--rounded-full);
+    background: var(--success);
     flex: none;
-    box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
   /* ---- Layout body ---- */
@@ -179,6 +194,7 @@
     display: grid;
     grid-template-columns: 1fr 300px;
     min-height: 0;
+    background: var(--canvas);
   }
 
   @media (max-width: 860px) {
@@ -186,13 +202,14 @@
     .rail { display: none; }
   }
 
-  /* ---- Chat column ---- */
+  /* ---- Chat column: lifted onto surface-1, per "lift onto white" hierarchy ---- */
 
   .chat-col {
     display: grid;
     grid-template-rows: 1fr auto;
     min-height: 0;
-    border-right: 1px solid var(--border);
+    background: var(--surface-1);
+    border-right: 1px solid var(--hairline);
   }
 
   .thread {
@@ -200,15 +217,15 @@
     padding: 24px 24px 12px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
   }
 
   .day-divider {
     display: flex;
     align-items: center;
     gap: 10px;
-    color: var(--faint);
-    font-size: 11.5px;
+    color: var(--ink-tertiary);
+    font-size: 12px;
     margin: 4px 0 6px;
   }
 
@@ -217,7 +234,7 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--border);
+    background: var(--hairline-soft);
   }
 
   .row {
@@ -238,41 +255,41 @@
     min-width: 0;
   }
 
+  /* No drop shadows anywhere — Intercom resists them; depth = surface change only */
   .bubble {
-    padding: 10px 13px;
-    border-radius: var(--radius);
-    font-size: 14px;
+    padding: 10px 14px;
+    border-radius: var(--rounded-lg);
+    font-size: 14.5px;
   }
 
   .from-agent .bubble {
     background: var(--surface-2);
     color: var(--ink);
-    border-top-left-radius: 3px;
+    border-top-left-radius: var(--rounded-xs);
   }
 
   .from-user .bubble {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-top-right-radius: 3px;
+    background: var(--primary-bg);
+    color: var(--primary-fg);
+    border-top-right-radius: var(--rounded-xs);
   }
 
   .timestamp {
-    font-size: 10.5px;
-    color: var(--faint);
+    font-size: 11px;
+    color: var(--ink-tertiary);
     padding: 0 3px;
   }
 
   .from-user .timestamp { text-align: right; }
 
-  /* room suggestion card */
+  /* room suggestion card — product-mockup-card pattern: white, hairline, xl radius */
 
   .room-card {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    padding: 12px 14px;
-    box-shadow: var(--shadow);
-    width: 260px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--rounded-xl);
+    padding: 14px 16px;
+    width: 264px;
   }
 
   .room-card-head {
@@ -283,13 +300,13 @@
   }
 
   .room-name {
-    font-weight: 600;
+    font-weight: 500;
     font-size: 14px;
   }
 
   .room-time {
     font-size: 12px;
-    color: var(--muted);
+    color: var(--ink-muted);
   }
 
   .room-tags {
@@ -301,45 +318,41 @@
   .tag {
     font-size: 11px;
     padding: 2px 7px;
-    border-radius: 999px;
-    background: var(--surface-2);
-    color: var(--muted);
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    border-radius: var(--rounded-xs);
+    background: var(--hairline-soft);
+    color: var(--ink-muted);
   }
 
-  .tag.ok { background: var(--accent-soft); color: var(--accent); }
+  .tag.ok { background: var(--success-soft); color: #0a8a34; }
+  :root[data-theme="dark"] .tag.ok { color: var(--success); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tag.ok { color: var(--success); } }
 
   .card-actions {
     display: flex;
     gap: 8px;
   }
 
+  /* Buttons never pill-round here — Intercom reserves pill for tab toggles only */
   .btn {
     appearance: none;
     border: none;
-    border-radius: var(--radius-sm);
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 7px 12px;
+    border-radius: var(--rounded-md);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 14px;
     cursor: pointer;
-    font-family: inherit;
-  }
-
-  .btn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
 
   .btn-primary {
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--primary-bg);
+    color: var(--primary-fg);
     flex: 1;
   }
 
   .btn-ghost {
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border-strong);
+    background: var(--surface-1);
+    color: var(--ink);
+    border: 1px solid var(--hairline);
   }
 
   /* multi-room grid */
@@ -352,42 +365,46 @@
   }
 
   .room-pick {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--rounded-md);
     padding: 9px 8px;
     text-align: center;
-    box-shadow: var(--shadow);
     cursor: pointer;
   }
+
+  .room-pick:hover { border-color: var(--ink-tertiary); }
 
   .room-pick .room-name { font-size: 12.5px; display: block; }
   .room-pick .tag { margin-top: 6px; display: inline-block; }
 
-  /* confirmed status */
+  /* confirmed status — small badge, rounded-xs per "small chips, badges" */
 
   .status-line {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    font-weight: 600;
-    color: var(--accent);
-    background: var(--accent-soft);
+    font-weight: 500;
+    color: #0a8a34;
+    background: var(--success-soft);
     padding: 4px 9px 4px 7px;
-    border-radius: 999px;
+    border-radius: var(--rounded-xs);
     margin-top: 8px;
   }
 
+  :root[data-theme="dark"] .status-line { color: var(--success); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .status-line { color: var(--success); } }
+
   .status-line .dot {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    width: 6px; height: 6px; border-radius: var(--rounded-full); background: currentColor;
   }
 
-  /* ---- Composer ---- */
+  /* ---- Composer: flat, cream, no blur — matches footer/top-nav quietness ---- */
 
   .composer {
-    border-top: 1px solid var(--border);
-    background: var(--surface);
+    border-top: 1px solid var(--hairline);
+    background: var(--canvas);
     padding: 12px 20px 16px;
   }
 
@@ -402,44 +419,44 @@
     flex: none;
     font-size: 12px;
     padding: 6px 12px;
-    border-radius: 999px;
-    border: 1px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--muted);
+    border-radius: var(--rounded-md);
+    border: 1px solid var(--hairline);
+    background: var(--surface-1);
+    color: var(--ink-muted);
     cursor: pointer;
     white-space: nowrap;
   }
 
-  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip:hover { border-color: var(--ink-tertiary); color: var(--ink); }
 
   .input-row {
     display: flex;
     gap: 8px;
     align-items: center;
-    border: 1px solid var(--border-strong);
-    border-radius: 999px;
-    padding: 6px 6px 6px 16px;
-    background: var(--bg);
+    border: 1px solid var(--hairline);
+    border-radius: var(--rounded-md);
+    padding: 6px 6px 6px 14px;
+    background: var(--surface-1);
   }
 
   .input-row input {
     flex: 1;
     border: none;
     background: transparent;
-    font-size: 14px;
+    font-size: 14.5px;
     font-family: inherit;
     color: var(--ink);
     outline: none;
   }
 
-  .input-row input::placeholder { color: var(--faint); }
+  .input-row input::placeholder { color: var(--ink-tertiary); }
 
   .send-btn {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: var(--accent-ink);
+    width: 32px;
+    height: 32px;
+    border-radius: var(--rounded-full);
+    background: var(--primary-bg);
+    color: var(--primary-fg);
     border: none;
     display: inline-flex;
     align-items: center;
@@ -447,8 +464,6 @@
     flex: none;
     cursor: pointer;
   }
-
-  .send-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* ---- Right rail ---- */
 
@@ -458,37 +473,36 @@
     display: flex;
     flex-direction: column;
     gap: 18px;
-    background: var(--surface);
+    background: var(--canvas);
   }
 
   .rail-title {
     font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
+    font-weight: 500;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: var(--faint);
+    color: var(--ink-tertiary);
     margin-bottom: 10px;
   }
 
   .today-card {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border: 1px solid var(--hairline);
+    border-radius: var(--rounded-lg);
     padding: 12px;
-    background: var(--bg);
+    background: var(--surface-1);
   }
 
   .today-card .title {
     font-size: 13.5px;
-    font-weight: 600;
+    font-weight: 500;
     margin-bottom: 4px;
   }
 
   .today-card .meta {
     font-size: 12px;
-    color: var(--muted);
+    color: var(--ink-muted);
     display: flex;
     justify-content: space-between;
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
   }
 
   .pref-list {
@@ -506,39 +520,38 @@
     gap: 8px;
     font-size: 13px;
     padding: 7px 9px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
+    border-radius: var(--rounded-md);
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
   }
 
   .rank {
     width: 18px;
     height: 18px;
-    border-radius: 5px;
-    background: var(--surface-2);
-    color: var(--muted);
+    border-radius: var(--rounded-xs);
+    background: var(--hairline-soft);
+    color: var(--ink-muted);
     font-size: 10.5px;
-    font-weight: 700;
+    font-weight: 500;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex: none;
   }
 
-  .rank.top { background: var(--accent-soft); color: var(--accent); }
+  .rank.top { background: var(--fin-orange); color: #ffffff; }
 
   .pref-list .cap {
     margin-left: auto;
     font-size: 11px;
-    color: var(--faint);
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    color: var(--ink-tertiary);
   }
 
   .rule-note {
     font-size: 12px;
-    color: var(--muted);
+    color: var(--ink-muted);
     background: var(--warn-soft);
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
+    border-radius: var(--rounded-md);
     padding: 9px 10px;
   }
 
@@ -662,7 +675,7 @@
         <div class="input-row">
           <input type="text" placeholder="메시지를 입력하세요 (예: 내일 오전 10시 회의실 잡아줘)" />
           <button class="send-btn" aria-label="보내기">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13" /><path d="M22 2 15 22 11 13 2 9z" /></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13" /><path d="M22 2 15 22 11 13 2 9z" /></svg>
           </button>
         </div>
       </div>
@@ -673,16 +686,16 @@
         <div class="rail-title">오늘 예약</div>
         <div class="today-card">
           <div class="title">데이터 아키텍처</div>
-          <div class="meta"><span>14F-2</span><span>14:00–15:00</span></div>
+          <div class="meta"><span>14F-2</span><span class="mono">14:00–15:00</span></div>
         </div>
       </div>
 
       <div>
         <div class="rail-title">선호 회의실</div>
         <ul class="pref-list">
-          <li><span class="rank top">1</span>14F-2<span class="cap">8인</span></li>
-          <li><span class="rank">2</span>14F-3<span class="cap">6인</span></li>
-          <li><span class="rank">3</span>3F-6<span class="cap">12인</span></li>
+          <li><span class="rank top">1</span>14F-2<span class="cap mono">8인</span></li>
+          <li><span class="rank">2</span>14F-3<span class="cap mono">6인</span></li>
+          <li><span class="rank">3</span>3F-6<span class="cap mono">12인</span></li>
         </ul>
       </div>
 
