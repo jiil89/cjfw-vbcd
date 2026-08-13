@@ -56,8 +56,8 @@
 
 - **`.env`는 Dev/Prd 모두 클라우드 Supabase를 가리킨다** (PRD 2번: "Dev/Prd가 항상 같은 Postgres를 쓰게 해서 환경 차이 문제를 줄인다"). `.env`에는 최소한 다음이 구분되어 존재해야 한다 — 절대 하나로 합치지 않는다:
   - `DATABASE_URL` (Supabase 커넥션 풀러, 6543 포트, transaction 모드/Supavisor — 5432 직접 연결은 쓰지 않는다. PRD 2번 "[리스크/결정 필요]" 항목의 결론)
-  - `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` (access/refresh 서명 키 — 용도가 다르므로 같은 값을 쓰지 않는다)
-  - `CORPORATE_PASSWORD_ENCRYPTION_KEY` (CJ 계정 비밀번호 암호화 키 — JWT 시크릿과 완전히 다른 키. 도메인 정의서 8번 Open Question대로, 이 키를 DB나 코드 저장소에 두지 않고 Vercel 환경변수로만 관리한다. KMS 도입 여부는 아직 미결정이지만, "암호문과 키를 같은 곳에 두지 않는다"는 원칙만은 지금부터 지킨다)
+  - `JWT_ACCESS_TOKEN_SECRET`, `JWT_REFRESH_TOKEN_SECRET` (access/refresh 서명 키 — 용도가 다르므로 같은 값을 쓰지 않는다)
+  - `CREDENTIAL_ENCRYPTION_KEY` (CJ 계정 비밀번호 암호화 키 — JWT 시크릿과 완전히 다른 키. 도메인 정의서 8번 Open Question대로, 이 키를 DB나 코드 저장소에 두지 않고 Vercel 환경변수로만 관리한다. KMS 도입 여부는 아직 미결정이지만, "암호문과 키를 같은 곳에 두지 않는다"는 원칙만은 지금부터 지킨다)
   - `OPENAI_API_KEY`, `OPENAI_MODEL` (기본값 `gpt-5-nano`, 도구 호출 정확도가 부족하면 `gpt-5-mini`로 교체 가능하도록 반드시 환경변수로 분리 — 코드에 모델명을 하드코딩하지 않는다)
 - **비밀 관리 원칙: JWT 시크릿, CJ 암호화 키, OpenAI 키를 서로 다른 환경변수로 완전히 분리한다.** 하나가 유출되어도 나머지 비밀의 안전에 영향을 주지 않아야 한다.
 - **Refresh Token은 폐기 가능해야 하므로 DB에 발급 이력을 남긴다.** 이 테이블(`refresh_tokens` 등)은 PRD 3번에 "아직 미착수 — 백엔드 인증 구현 시작할 때 함께 설계"로 명시되어 있다 — 지금 임의로 스키마를 먼저 만들지 않는다.
@@ -73,7 +73,7 @@
 - **CORS는 허용 origin을 환경변수로 명시하고, 절대 와일드카드(`*`)를 쓰지 않는다.** Refresh Token을 httpOnly 쿠키로 주고받으므로(4개 화면 전부 브라우저 fetch로 백엔드 API를 호출) `credentials: true`가 필요한데, 이 옵션은 CORS 스펙상 origin이 `*`이면 애초에 동작하지 않는다 — 반드시 구체적인 origin 목록이어야 한다.
   - Dev: 로컬 프론트(`http://localhost:5173` 등) origin만 허용.
   - Prd: 실제 Vercel 배포 도메인만 허용. 프론트/백엔드를 같은 Vercel 프로젝트(같은 origin)로 묶으면 CORS 자체가 불필요해지지만, 별도 프로젝트로 나눌 경우를 대비해 `ALLOWED_ORIGINS` 같은 환경변수로 목록을 관리하고 코드에 도메인을 하드코딩하지 않는다.
-  - 회원가입 웹페이지의 `POST /registration`처럼 로그인 전 공개 엔드포인트도 origin 화이트리스트 밖의 임의 사이트에서 직접 호출되지 않도록 동일한 CORS 정책을 적용한다 (RLS가 `anon` key 남용을 막아주지 못하는 것과 같은 이유).
+  - 회원가입 웹페이지의 `POST /auth/register`처럼 로그인 전 공개 엔드포인트도 origin 화이트리스트 밖의 임의 사이트에서 직접 호출되지 않도록 동일한 CORS 정책을 적용한다 (RLS가 `anon` key 남용을 막아주지 못하는 것과 같은 이유).
 
 ## 6. 프론트엔드 디렉토리 구조
 
@@ -128,9 +128,9 @@ backend/
 ├─ src/
 │  ├─ routes/                     # Express 라우트 — 얇게, 인증 미들웨어 + 컨트롤러 호출만
 │  │  ├─ auth.routes.ts           # POST /auth/login, /auth/refresh, /auth/logout
-│  │  ├─ registration.routes.ts   # POST /registration (공개, anon)
-│  │  ├─ admin.routes.ts          # GET/POST /admin/requests/:id/approve|reject
-│  │  └─ chat.routes.ts           # POST /chat/message (웹 챗봇 UI가 호출)
+│  │  ├─ registration.routes.ts   # POST /auth/register (공개, anon)
+│  │  ├─ admin.routes.ts          # GET /admin/registration-requests, POST /admin/registration-requests/:id/approve|reject
+│  │  └─ chat.routes.ts           # POST /chat/messages (웹 챗봇 UI가 호출)
 │  ├─ orchestration/              # [레이어 1] LLM 오케스트레이션 — 도구 계층만 의존
 │  │  ├─ orchestrator.ts          # 발화 → 도구 호출 결정, 대화 루프
 │  │  ├─ toolSchemas.ts           # OpenAI tool-calling 스키마 정의

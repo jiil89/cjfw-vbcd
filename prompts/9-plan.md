@@ -144,7 +144,7 @@ flowchart LR
 - **완료 조건**:
   - [ ] `5-project-principle.md` 7번의 폴더 구조가 그대로 생성됨
   - [ ] `pg` Pool이 커넥션 풀러(6543)로 연결되고, 로컬에서 간단한 쿼리(`select now()`)가 성공함
-  - [ ] `.env`의 시크릿(JWT 두 키, `CORPORATE_PASSWORD_ENCRYPTION_KEY`, `OPENAI_API_KEY`)이 서로 다른 변수로 분리 로딩됨을 확인
+  - [ ] `.env`의 시크릿(JWT 두 키, `CREDENTIAL_ENCRYPTION_KEY`, `OPENAI_API_KEY`)이 서로 다른 변수로 분리 로딩됨을 확인
   - [ ] Vercel Functions로 배포했을 때 헬스체크 엔드포인트(`GET /api/health`)가 정상 응답
 
 ### BE-2. 인증 모듈 (회원가입 / 로그인 / JWT)
@@ -164,7 +164,7 @@ flowchart LR
 - **작업 내용**: `routes/admin.routes.ts`, `adminService.ts` — 대기중 등록 요청 목록 조회, 승인/거부 처리(DB-1의 안전한 RPC 호출), Admin 권한 검증 미들웨어(`requireAdmin`).
 - **선행 Task**: BE-2, DB-1
 - **완료 조건**:
-  - [ ] `GET /admin/requests`가 pending 목록을 반환 (비밀번호/암호문은 응답에 절대 포함 안 됨)
+  - [ ] `GET /admin/registration-requests`가 pending 목록을 반환 (비밀번호/암호문은 응답에 절대 포함 안 됨)
   - [ ] 승인/거부 API가 DB-1에서 수정된 RPC를 정상 호출하고, 결과가 `account_registration_requests`/`users`에 반영됨
   - [ ] `is_admin=false`인 사용자의 토큰으로 호출 시 403 반환
   - [ ] 승인/거부 후 목록에서 해당 항목이 사라지고 처리 이력에 반영됨
@@ -211,7 +211,7 @@ flowchart LR
 
 ### BE-8. 챗봇 API 엔드포인트
 
-- **작업 내용**: `routes/chat.routes.ts` — `POST /chat/message`, 로그인 세션(Access Token) 검증, BE-7 오케스트레이터 호출, 응답 반환.
+- **작업 내용**: `routes/chat.routes.ts` — `POST /chat/messages`, 로그인 세션(Access Token) 검증, BE-7 오케스트레이터 호출, 응답 반환.
 - **선행 Task**: BE-7, BE-2
 - **완료 조건**:
   - [ ] 미로그인 요청은 401로 거부됨
