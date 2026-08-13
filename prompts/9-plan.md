@@ -4,6 +4,78 @@
 
 **전체 진행 순서 요약**: `DB-1`(보안 결함 수정)이 다른 모든 인증 관련 작업의 전제 조건이므로 최우선. 그다음 `DB-2`(실제 Supabase 프로젝트 생성)가 백엔드/프론트 개발 착수의 공통 전제. 이후 DB→백엔드→프론트 순으로 대체로 진행되지만, 화면(프론트) 스캐폴딩과 디자인 토큰 반영(`FE-1`)은 백엔드와 병행 가능하다.
 
+## 전체 Task 의존관계
+
+색이 칠해진 노드(진한 테두리)는 크리티컬 패스(가장 긴 연쇄, 전체 일정을 좌우하는 경로)다.
+
+```mermaid
+flowchart LR
+    subgraph DB["데이터베이스"]
+        DB1["DB-1<br/>보안 결함 수정"]
+        DB2["DB-2<br/>Supabase 프로젝트"]
+        DB3["DB-3<br/>Refresh Token"]
+        DB4["DB-4<br/>동의철회 RPC"]
+        DB5["DB-5<br/>회의실 시딩"]
+    end
+
+    subgraph BE["백엔드"]
+        BE1["BE-1<br/>스캐폴딩"]
+        BE2["BE-2<br/>인증"]
+        BE3["BE-3<br/>Admin API"]
+        BE4["BE-4<br/>CJ 자동화"]
+        BE5["BE-5<br/>회의실 동기화"]
+        BE6["BE-6<br/>예약 도구 계층"]
+        BE7["BE-7<br/>LLM 오케스트레이션"]
+        BE8["BE-8<br/>챗봇 API"]
+        BE9["BE-9<br/>CORS/배포"]
+    end
+
+    subgraph FE["프론트엔드"]
+        FE1["FE-1<br/>스캐폴딩+디자인토큰"]
+        FE2["FE-2<br/>회원가입"]
+        FE3["FE-3<br/>로그인"]
+        FE4["FE-4<br/>Admin 패널"]
+        FE5["FE-5<br/>챗봇 UI"]
+        FE6["FE-6<br/>반응형 QA"]
+    end
+
+    DB1 --> DB2
+    DB2 --> DB3
+    DB2 --> DB4
+    DB2 --> DB5
+    DB2 --> BE1
+
+    BE1 --> BE2
+    DB3 --> BE2
+    BE2 --> BE3
+    DB1 --> BE3
+    BE1 --> BE4
+    BE4 --> BE5
+    DB5 --> BE5
+    BE4 --> BE6
+    DB2 --> BE6
+    BE6 --> BE7
+    BE7 --> BE8
+    BE2 --> BE8
+    BE1 --> BE9
+
+    FE1 --> FE2
+    BE2 --> FE2
+    FE1 --> FE3
+    BE2 --> FE3
+    FE1 --> FE4
+    BE3 --> FE4
+    FE1 --> FE5
+    BE8 --> FE5
+    FE2 --> FE6
+    FE3 --> FE6
+    FE4 --> FE6
+    FE5 --> FE6
+
+    classDef critical stroke:#ff5600,stroke-width:3px;
+    class DB1,DB2,BE1,BE4,BE6,BE7,BE8,FE5,FE6 critical;
+```
+
 ---
 
 ## 데이터베이스 (DB)
