@@ -151,8 +151,8 @@ export const toolSchemas: OpenAiToolDefinition[] = [
         type: "object",
         properties: {
           title: { type: "string", description: "회의명" },
-          contents: { type: "string", description: "회의 내용/목적" },
-          phoneNum: { type: "string", description: "연락처 (사용자가 알려주지 않았다면 빈 문자열)" },
+          contents: { type: "string", description: "회의 내용/목적. 사용자가 title과 별개로 알려주지 않았다면 title과 같은 값을 그대로 써도 된다(따로 캐묻지 말 것)." },
+          phoneNum: { type: "string", description: "연락처. 선택 항목이라 사용자가 먼저 알려주지 않는 한 절대 묻지 말고 빈 문자열로 둘 것." },
           date: DATE_PROP,
           startTime: TIME_PROP,
           endTime: TIME_PROP,
@@ -189,8 +189,8 @@ export const toolSchemas: OpenAiToolDefinition[] = [
         type: "object",
         properties: {
           title: { type: "string" },
-          contents: { type: "string" },
-          phoneNum: { type: "string" },
+          contents: { type: "string", description: "회의 내용/목적. title과 별개로 없으면 title을 그대로 써도 된다." },
+          phoneNum: { type: "string", description: "연락처. 사용자가 먼저 알려주지 않는 한 절대 묻지 말고 빈 문자열로 둘 것." },
           date: DATE_PROP,
           plan: {
             type: "array",

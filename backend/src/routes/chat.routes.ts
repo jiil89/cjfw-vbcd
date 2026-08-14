@@ -18,32 +18,13 @@
 import { Router, type Response } from "express";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/requireAuth";
 import { handleUserMessage } from "../orchestration/orchestrator";
+import { withTimeout, TimeoutError } from "../lib/withTimeout";
 
 export const chatRouter = Router();
 
 // Vercel Hobby 함수 실행시간 한도(300초)보다 충분히 짧게 잡되, CJ 자동화 로그인+API
 // 호출이 여러 번 겹칠 수 있는 긴 회의 분할 시나리오까지 감안해 120초로 설정한다.
 const CHAT_MESSAGE_TIMEOUT_MS = 120_000;
-
-class ChatMessageTimeoutError extends Error {}
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new ChatMessageTimeoutError(`처리 시간이 ${Math.round(timeoutMs / 1000)}초를 초과했습니다.`));
-    }, timeoutMs);
-
-    promise
-      .then((value) => {
-        clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-  });
-}
 
 chatRouter.post("/messages", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const { message } = req.body ?? {};
@@ -66,7 +47,7 @@ chatRouter.post("/messages", requireAuth, async (req: AuthenticatedRequest, res:
       elapsed_ms: Date.now() - startedAt,
     });
   } catch (error) {
-    if (error instanceof ChatMessageTimeoutError) {
+    if (error instanceof TimeoutError) {
       res.status(504).json({
         error: { code: "CHAT_TIMEOUT", message: error.message },
         elapsed_ms: Date.now() - startedAt,

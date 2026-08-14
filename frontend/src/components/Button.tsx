@@ -1,12 +1,13 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import "./Button.css";
 
-export type ButtonVariant = "primary" | "ghost";
+export type ButtonVariant = "primary" | "ghost" | "danger";
 export type ButtonSize = "md" | "sm";
 export type ButtonStatus = "idle" | "success" | "error";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** primary = DESIGN.md button-primary(잉크 배경), ghost = button-secondary(흰 배경+헤어라인) */
+  /** primary = DESIGN.md button-primary(잉크 배경), ghost = button-secondary(흰 배경+헤어라인),
+   * danger = 되돌리기 어려운 파괴적 행동(예약 취소) 전용 — semantic-error 톤의 ghost 변형. */
   variant?: ButtonVariant;
   /** md = DESIGN.md 표준(10px 18px/15px), sm = 챗봇 카드 액션 버튼 크기(docs/design/chatbot-shell.html .btn) */
   size?: ButtonSize;

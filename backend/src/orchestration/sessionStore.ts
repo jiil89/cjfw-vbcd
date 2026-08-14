@@ -104,7 +104,19 @@ export function resetSession(userId: string): OrchestrationSession {
 export function appendMessage(session: OrchestrationSession, message: StoredChatMessage): void {
   session.messages.push(message);
   if (session.messages.length > MAX_HISTORY_MESSAGES) {
-    session.messages.splice(0, session.messages.length - MAX_HISTORY_MESSAGES);
+    let cutIndex = session.messages.length - MAX_HISTORY_MESSAGES;
+    // [2026-08-14 실사용 검증에서 발견] "tool" 역할 메시지는 반드시 그 직전의
+    // tool_calls를 포함한 assistant 메시지와 붙어있어야 OpenAI API가 허용한다
+    // ("messages with role 'tool' must be a response to a preceeding message with
+    // 'tool_calls'"). 단순 개수 기준으로 자르면 이 자름 지점이 tool 메시지 한가운데
+    // 걸려서 그 assistant 메시지는 잘려나가고 tool 응답만 배열 맨 앞에 고아로
+    // 남는 경우가 실제로 재현됐다(대화가 길어질 때마다 이후 모든 턴이 400으로
+    // 계속 실패하는 심각한 버그였음) — 자름 지점이 tool 메시지를 가리키면 그
+    // 그룹 전체를 건너뛴다.
+    while (cutIndex < session.messages.length && session.messages[cutIndex].role === "tool") {
+      cutIndex += 1;
+    }
+    session.messages.splice(0, cutIndex);
   }
   session.lastActivityAt = Date.now();
 }

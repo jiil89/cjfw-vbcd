@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./LoginPage.css";
-import { Button, Card, TextInput } from "../../components";
+import { Button, CatLoader, Card, TextInput } from "../../components";
 import { HttpError } from "../../api/httpClient";
 import { useLoginMutation } from "../../queries/authQueries";
 import { useAuthStore } from "../../stores/authStore";
@@ -17,6 +17,7 @@ export function LoginPage() {
 
   const [emailAlias, setEmailAlias] = useState("");
   const [appPassword, setAppPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,43 +36,68 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
-      <Card radius="xl" className="login-card">
-        <h1 className="login-title">회의실 예약 — 로그인</h1>
+      <div className="login-column">
+        <div className="login-brand">
+          <div className="login-logo" aria-hidden="true">
+            회
+          </div>
+          <div className="login-brand-text">
+            <h1 className="login-title">회의실 예약</h1>
+            <p className="login-subtitle">사내 계정으로 로그인하세요</p>
+          </div>
+        </div>
 
-        <form className="login-form" onSubmit={handleSubmit} noValidate>
-          <TextInput
-            label="사내 계정 ID"
-            name="email_alias"
-            autoComplete="username"
-            required
-            value={emailAlias}
-            onChange={(event) => setEmailAlias(event.target.value)}
-          />
-          <TextInput
-            label="앱 로그인 비밀번호"
-            name="app_password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={appPassword}
-            onChange={(event) => setAppPassword(event.target.value)}
-          />
+        <Card radius="xl" bordered className="login-card">
+          <form className="login-form" onSubmit={handleSubmit} noValidate>
+            <TextInput
+              label="사내 계정 ID"
+              name="email_alias"
+              autoComplete="username"
+              required
+              value={emailAlias}
+              onChange={(event) => setEmailAlias(event.target.value)}
+            />
+            <TextInput
+              label="앱 로그인 비밀번호"
+              name="app_password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              value={appPassword}
+              onChange={(event) => setAppPassword(event.target.value)}
+              labelAction={
+                <button
+                  type="button"
+                  className="text-input-label-action"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? "숨기기" : "표시"}
+                </button>
+              }
+            />
 
-          {statusMessage && (
-            <p className="login-status-banner" role="alert">
-              {statusMessage}
-            </p>
-          )}
+            {statusMessage && (
+              <p className="login-status-banner" role="alert">
+                {statusMessage}
+              </p>
+            )}
 
-          <Button type="submit" className="login-submit" loading={loginMutation.isPending}>
-            로그인
-          </Button>
-        </form>
+            {loginMutation.isPending && (
+              <div className="login-info-banner">
+                <CatLoader label="회의실 예약 시스템에 연결하는 중이에요. 조금 걸릴 수 있어요…" />
+              </div>
+            )}
+
+            <Button type="submit" className="login-submit" loading={loginMutation.isPending}>
+              로그인
+            </Button>
+          </form>
+        </Card>
 
         <p className="login-register-link">
           아직 등록하지 않으셨나요? <Link to="/register">회원가입 신청하러 가기</Link>
         </p>
-      </Card>
+      </div>
     </main>
   );
 }
@@ -92,6 +118,11 @@ function getStatusMessage(error: unknown): string | null {
       return "등록이 거부되었습니다.";
     case "INVALID_CREDENTIALS":
       return "계정 ID 또는 비밀번호를 확인해주세요.";
+    case "CJ_LOGIN_FAILED":
+      // [2026-08-14] 앱 로그인(app_password)은 통과했지만 실제 CJ 사내 계정 인증에 실패한
+      // 경우 — 백엔드가 로그인 시점에 CJ 세션을 확인해 거부한다(가짜/틀린 CJ 계정으로도
+      // 앱에 들어와지던 문제 수정, auth.routes.ts 참고).
+      return error.message;
     default:
       return error.message;
   }

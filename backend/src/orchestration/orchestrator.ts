@@ -275,10 +275,16 @@ async function executeTool(
         const floorLabel = typeof args.floorLabel === "string" ? args.floorLabel : undefined;
         try {
           const result = await findAvailableRooms(userId, { date, startTime, endTime, minCapacity, floorLabel });
+          // date/startTime/endTime을 결과에도 그대로 실어준다 — FE-5 카드가 "8월 17일(월)
+          // 10:00-11:00"처럼 조건을 다시 보여줄 때, reply 텍스트를 파싱하지 않고 이 값을
+          // 그대로 쓴다(propose_create_reservation과 동일한 패턴).
           return {
             content: {
               preferred: result.preferred.map(toRoomSummary),
               others: result.others.map(toRoomSummary),
+              date,
+              startTime,
+              endTime,
             },
           };
         } catch (err) {
@@ -691,6 +697,14 @@ export interface OrchestratorReply {
   proposal: ChatProposal | null;
 }
 
+// LLM이 같은 문장을 줄바꿈으로 두 번 반복하는 경우가 관찰되어(systemPrompt로 금지했지만
+// 모델이 가끔 무시함) 연속으로 붙은 동일한 줄은 하나만 남긴다.
+function collapseDuplicateLines(text: string): string {
+  const lines = text.split("\n");
+  const deduped = lines.filter((line, index) => index === 0 || line.trim() !== lines[index - 1].trim());
+  return deduped.join("\n");
+}
+
 /**
  * 사용자 메시지 1건을 처리한다. 세션 상태(userId 기준)는 sessionStore가 관리하며,
  * 이 함수는 그 상태를 읽고 갱신할 뿐 자체적으로 전역 상태를 만들지 않는다.
@@ -785,6 +799,8 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
   if (finalReply === null) {
     finalReply = "요청을 처리하는 데 시간이 걸리고 있습니다. 조금 더 구체적으로 다시 말씀해 주시겠어요?";
     console.warn(`[orchestration/orchestrator] 도구 호출 루프가 ${MAX_TOOL_ITERATIONS}회를 넘어 강제 종료됨 (userId=${userId})`);
+  } else {
+    finalReply = collapseDuplicateLines(finalReply);
   }
 
   if (resetAfterReply) {

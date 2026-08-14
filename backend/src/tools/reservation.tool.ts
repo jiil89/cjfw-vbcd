@@ -16,7 +16,9 @@ import {
   checkRoom,
   checkStraightRoom,
   delReserve,
+  getEmptyRoomInfo,
   saveReserve,
+  type GetEmptyRoomInfoResponse,
 } from "../cj-automation/client";
 import { getValidSession, type CjSession } from "../cj-automation/session";
 import {
@@ -127,6 +129,62 @@ function extractCjSeq(raw: unknown): string {
   throw new Error("[tools/reservation] SaveReserve 응답에서 예약 고유번호(seq)를 확인하지 못했습니다.");
 }
 
+export interface RoomOptionInfo {
+  gubun: 0 | 1;
+  isSendAlarm: "True" | "False";
+  adminAlias: string;
+  adminLang: string;
+}
+
+const FALLBACK_ROOM_OPTION_INFO: RoomOptionInfo = { gubun: 0, isSendAlarm: "False", adminAlias: "", adminLang: "" };
+
+/**
+ * getEmptyRoomInfo 응답(reserve_insmod.js의 getRoomOptionInfo와 동일 필드)에서 SaveReserve가
+ * 필요로 하는 gubun/is_send_alarm/admin_alias/admin_lang을 뽑아낸다. 실제 UI의 조립 방식
+ * 그대로 admin_alias/admin_lang은 각 항목 뒤에 ";"를 붙여 이어붙인다(trim은 공백만 제거하고
+ * 끝의 ";"는 남긴다 — 실제 UI와 동일한 형태를 유지해야 서버가 같은 포맷으로 파싱한다).
+ */
+function extractRoomOptionInfo(raw: GetEmptyRoomInfoResponse | string): RoomOptionInfo {
+  if (typeof raw === "string" || !raw) return FALLBACK_ROOM_OPTION_INFO;
+
+  const info = raw.Table1?.[0];
+  if (!info) return FALLBACK_ROOM_OPTION_INFO;
+
+  const gubun: 0 | 1 = String(info.REQUIRED_APPROVAL) === "1" ? 1 : 0;
+  const isSendAlarm: "True" | "False" = info.PRE_MAIL_ALARM_YN === "True" ? "True" : "False";
+
+  let adminAlias = "";
+  let adminLang = "";
+  if (gubun === 1 && Array.isArray(raw.Table3)) {
+    for (const admin of raw.Table3) {
+      if (admin.EMAIL_ALIAS) adminAlias += `${admin.EMAIL_ALIAS};`;
+      adminLang += `_${admin.DEFAULT_LANGUAGE_TYPE ?? ""};`;
+    }
+  }
+
+  return { gubun, isSendAlarm, adminAlias, adminLang };
+}
+
+export async function fetchRoomOptionInfo(
+  session: CjSession,
+  params: { roomCode: string; date: string; startTime: string; endTime: string }
+): Promise<RoomOptionInfo> {
+  try {
+    const raw = await getEmptyRoomInfo(session, {
+      roomCode: params.roomCode,
+      startDate: params.date,
+      startTime: params.startTime,
+      endTime: params.endTime,
+    });
+    return extractRoomOptionInfo(raw);
+  } catch (err) {
+    // 이 조회 자체가 실패해도(네트워크 오류 등) 예약 시도 자체를 막지 않는다 — 승인 불필요
+    // 회의실(대다수)에 대해서는 fallback 값이 그대로 정답이므로 SaveReserve 시도는 계속한다.
+    console.error("[tools/reservation] getEmptyRoomInfo 조회 실패, 기본값(gubun=0)으로 진행", err);
+    return FALLBACK_ROOM_OPTION_INFO;
+  }
+}
+
 export class ReservationConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -182,6 +240,13 @@ async function saveOneSegmentToCj(params: SaveOneSegmentParams): Promise<string>
     throw new ReservationConflictError("일일 예약 가능 건수 제한을 초과했습니다.");
   }
 
+  const roomOption = await fetchRoomOptionInfo(session, {
+    roomCode: room.roomCode,
+    date: params.date,
+    startTime: params.startTime,
+    endTime: params.endTime,
+  });
+
   let saveResult: unknown;
   try {
     saveResult = await saveReserve(session, {
@@ -197,12 +262,12 @@ async function saveOneSegmentToCj(params: SaveOneSegmentParams): Promise<string>
       phoneNum: params.phoneNum,
       isSendMail: "0",
       attendeeCount: "",
-      gubun: 0,
+      gubun: roomOption.gubun,
       reqList: "",
       optList: "",
-      isSendAlarm: "False",
-      adminAlias: "",
-      adminLang: "",
+      isSendAlarm: roomOption.isSendAlarm,
+      adminAlias: roomOption.adminAlias,
+      adminLang: roomOption.adminLang,
       reserveType: "I",
     });
   } catch (err) {

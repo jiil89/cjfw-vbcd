@@ -223,9 +223,44 @@ flowchart LR
 
   **[2026-08-14, FE-5 실사용 피드백 반영]** 사용자가 실제 채팅을 써보고 4가지를 지적함:
   1. "응답이 너무 장황하다" — `systemPrompt.ts` §5 "응답 스타일"을 대폭 강화: 전체 답변 1~3문장 제한, check_availability/propose_* 결과를 텍스트로 다시 나열 금지(카드가 이미 보여주므로), confirmationToken 노출 금지, 재시도 시 이전 내용 반복 설명 금지 등 구체적 규칙 추가.
-  2. "속도가 여전히 느리다" — "매 요청마다 CJ 재로그인" 아키텍처 자체의 비용이라 프롬프트 튜닝으로 해결되지 않음. 세션 캐싱 도입 여부는 별도 논의 필요(위험도 있는 아키텍처 결정이라 임의로 진행하지 않음) — 다음 세션 검토 대상.
+  2. "속도가 여전히 느리다" — "매 요청마다 CJ 재로그인" 아키텍처 자체의 비용이라 프롬프트 튜닝으로 해결되지 않음. 세션 캐싱 도입은 위험도 있는 아키텍처 결정이라 처음엔 보류했으나, 사용자가 "로그인 시점에 CJ까지 로그인해두고, 그동안 사용자에게 알려주자"는 구체적 방향을 지시해서 그대로 구현함:
+     - `cj-automation/sessionCache.ts` 신규 — userId별 CJ 세션을 짧은 TTL(2분, 관찰된 "수 분" 수명보다 보수적으로 짧게)로 메모리에 캐싱. `session.ts`의 `getValidSession`이 이 캐시를 우선 확인하도록 수정.
+     - `POST /auth/login`이 JWT 발급 전에 `getValidSession`을 먼저 호출해 CJ 세션을 예열·캐싱함(최대 45초 타임아웃, 실패해도 로그인 자체는 계속 진행 — CJ 예열은 최적화일 뿐 필수 조건이 아님). `POST /auth/logout`은 캐시를 비움.
+     - 프론트 `LoginPage.tsx`에 로그인 처리 중(`loginMutation.isPending`) "회의실 예약 시스템에 연결하는 중이에요" 안내 배너 추가 — 로그인 자체가 느려진 이유를 사용자에게 알려주기 위함.
+     - **알려진 한계** (코드 주석에도 남김): (1) 메모리 캐시라 나중에 Vercel Functions(서버리스)로 배포하면 프로세스가 요청마다 달라질 수 있어 캐시가 사실상 안 먹힐 수 있음(DB-2 이후 재검증 필요, 그때 Redis 등 외부 캐시로 교체 검토). (2) TTL 안에서도 CJ가 실제로 세션을 먼저 끊을 수 있는데, 이 경우 자동 무효화/재시도는 아직 구현 안 됨 — 실패하면 사용자가 다시 시도해서 TTL 만료를 기다리거나 서버 재시작이 필요할 수 있음(범위 밖, 다음 세션 검토 대상). (3) 로그인 시점에 CJ 로그인을 미리 하므로, 로그인은 하지만 채팅은 안 쓰는 사용자(예: Admin)도 매번 이 지연을 그대로 겪음 — 트레이드오프로 감수하기로 함.
+     - `chat.routes.ts`의 타임아웃 헬퍼를 `backend/src/lib/withTimeout.ts`로 공용화(로그인 예열도 같은 패턴이 필요해서).
   3. "다른 회의실 제안이 이전과 동일하다" — 실제로는 카드 없이 텍스트로만 답하며 이전 턴 정보를 재활용하고 있었음(check_availability를 다시 호출 안 함). `systemPrompt.ts`에 §3-7 신설: "다른 곳 보여줘" 류 요청에는 반드시 check_availability를 재호출해 새 카드로 응답하도록 명시.
   4. "선호 회의실을 가입 후에도 채팅에서 추가/제거할 수 있어야 한다" — 신규 기능 추가: `db/repositories/userPreferredRoomRepository.ts`에 `addPreferredRoom`/`removePreferredRoomByRoomId`(삭제 후 우선순위 1..N 재정렬, 음수 경유 2단계 UPDATE로 unique 제약 충돌 방지), `tools/preferredRooms.tool.ts` 신규(회의실명으로 조회 후 추가/제거), `orchestrator.ts`/`toolSchemas.ts`에 `add_preferred_room`/`remove_preferred_room` 도구 추가(CJ 쓰기가 아니라 되돌리기 쉬운 로컬 설정이라 propose/confirm 2단계 생략, 즉시 실행). 프론트는 이 두 도구 실행 후 사이드바 "선호 회의실"을 자동 재조회하도록 `ChatPage.tsx`에 연결. `AdminPanelPage.tsx`/`ChatPage.tsx`에는 서로 오가는 네비게이션 버튼도 추가(세션이 메모리에만 있어 풀 페이지 이동 시 로그아웃되는 문제 — react-router `Link`로 클라이언트 사이드 이동하게 함).
+
+  **[2026-08-14, 실제 대화록 리뷰로 발견 — 세션 히스토리 트리밍 버그, 심각도 높음]** 사용자가 공유한 실사용 대화록에서 평범한 잡담("배고파"/"졸려")에 "메시지 처리 중 오류가 발생했습니다"가 뜬 걸 보고 `.dev-server.log`를 뒤져 실제 원인을 찾음: `sessionStore.ts`의 `appendMessage`가 히스토리 상한(20개)을 넘으면 오래된 메시지부터 개수 기준으로만 잘라냈는데, 자름 지점이 "assistant(tool_calls) + 그 tool 응답들" 묶음 한가운데 걸리면 **tool 응답만 배열 맨 앞에 고아로 남아** OpenAI가 `messages with role 'tool' must be a response to a preceeding message with 'tool_calls'`로 그 요청을 거부했다(대화가 길어질 때마다 반복 재현됨, 상한을 넘기는 새 메시지가 쌓일 때마다 계속 실패하다가 나중에 그 고아 메시지 자체가 밀려나야 정상화됨). `appendMessage`를 "자름 지점이 tool 메시지를 가리키면 그 다음 non-tool 메시지까지 통째로 건너뛴다"로 수정하고, `sessionStore.test.ts`에 정확히 이 시나리오(3개씩 묶인 assistant+tool×2 그룹을 반복 추가)를 재현하는 회귀 테스트 추가 — 수정 전 코드로는 이 테스트가 실패함을 확인.
+
+  **[2026-08-14, 같은 대화록에서 발견 — UX 개선]** 예약에 필요한 정보(회의명/내용/인원)를 title→content→인원 순으로 턴마다 따로따로 캐물어서 사용자가 "인원수, 제목, 내용만 있으면 되는데 왜 이렇게 여러 번 물어보냐"고 지적함(전화번호까지 매번 물어봄). `systemPrompt.ts`에 §3-4b 신설 + `toolSchemas.ts`의 `contents`/`phoneNum` 설명 보강: (1) 부족한 정보는 한 번에 몰아서 질문, (2) 전화번호는 사용자가 먼저 안 주면 절대 먼저 묻지 않고 빈 문자열로 처리, (3) content를 따로 안 주면 title을 그대로 재사용(캐묻지 않음).
+
+  **[2026-08-14, 같은 대화록에서 발견 — 날짜 암산 오류]** "다음주 목요일"(오늘부터 6일 뒤, 범위 안)을 모델이 스스로 "7일 범위를 벗어났다"고 잘못 판단해 거절했다가 사용자 정정 후에야 바로잡음 — `assertValidReservationWindow`(백엔드 검증)는 정상이라 순수 모델 암산 실수였음. `systemPrompt.ts` §2에 오늘 날짜의 요일을 서버가 직접 계산해서 함께 주입(`todayWeekdayKo`)하고, "암산에 자신 없으면 스스로 거절하지 말고 일단 도구를 호출해 서버 판정에 맡기라"는 지침 추가.
+
+  **[2026-08-14, 챗봇 카드 UI 리디자인]** 사용자가 외부 디자인 제안 문서(`frontend/design_recom/README.md` + `meeting-room-chat-ui.dc.html`, Claude가 생성)를 근거로 카드 UI 개선을 요청. `.dc.html`은 프로토타입 전용 포맷이라 그대로 이식하지 않고, README 지침대로 이 프로젝트의 기존 `DESIGN.md`/`tokens.css` 토큰에 맞춰 시각적 결과만 재구현함. AskUserQuestion으로 범위를 백엔드가 이미 지원하는 4개 시나리오로 한정(원안 6개 중 "취소완료·되돌리기"는 취소 되돌리기 API가 없어서, "대안제시"는 대안 시간/축소 인원 탐색 로직이 없어서 제외):
+  1. **추천 우선형** — `check_availability`(선호 회의실 있을 때)와 `propose_create_reservation`이 공용으로 쓰는 `RoomRecommendationCard`: 큰 카드 하나(회의실명 + "추천" 배지 + 날짜/시간 + 정원/비고 태그) + 하단 "다른 후보 N곳" 칩 목록.
+  2. **전체 가용 목록** — `check_availability`가 선호 회의실이 없을 때(`preferred.length === 0`) 쓰는 `FloorGroupedRoomsCard`: 층별로 묶은 칩 목록에서 하나를 고르면 하단 확정 바가 활성화.
+  3. **내 예약 조회 리스트** — 신규 `case "get_my_reservations"`(이전엔 카드 없이 텍스트로만 응답했음) → `MyReservationsListCard`: 헤더(건수) + 세그먼트별 행(색 레일로 "다음 일정" 강조, 종료 항목은 흐리게) + 하단 "시간 변경"/"예약 취소" 액션 바.
+  4. **취소/변경 대상 되묻기** — 신규 `case "find_reservation_candidates"`(`status === "ambiguous"`일 때, 이전엔 카드 없음) → `ReservationPickerCard`: 라디오 형태 후보 목록 + 하단 "선택" 버튼. 원안은 이 카드에서 바로 danger 톤 "취소하기"를 눌렀지만, 이 프로젝트는 대상 특정과 실제 취소/변경 확정이 별도 도구 호출(2단계 확인)이라 여기서는 파괴적 행동이 아직 아님 — danger 톤은 대상이 특정된 뒤 뜨는 `propose_cancel_reservation` 확인 카드로 옮기고(버튼을 `variant="danger"`, 라벨 "취소하기"로 변경), 이 카드는 중립 톤 유지.
+  - 새 공용 컴포넌트: `Button`에 `variant="danger"`(되돌리기 어려운 행동 전용, `semantic-error` 톤), `Badge`에 `tone="warn"`(앰버, "추천" 배지용) 추가. "다음 일정" 배지는 이 카드에만 쓰는 좁은 용도라 공용 `Badge`를 확장하지 않고 `ChatPage.css`에 `--fin-orange` 기반 로컬 클래스로 처리.
+  - 백엔드는 `check_availability` 도구 결과에 `date`/`startTime`/`endTime`을 추가해 프론트가 reply 텍스트를 파싱하지 않고 카드에 바로 바인딩하게 함(`propose_create_reservation`과 동일 패턴).
+  - `frontend/src/types/chat.ts`에 `GetMyReservationsData`/`ReservationCandidate`/`FindReservationCandidatesData` 신규.
+  - 검증: 프론트 `tsc --noEmit` + `npm run build` 통과(빌드 산출물 정상). Playwright MCP 연결이 이 세션 중간부터 끊겨 브라우저 실측은 못 함 — 사용자에게 실제 브라우저 확인 요청 필요.
+
+  **[2026-08-14, 재차 실사용 피드백 — 회의 제목 안 물어봄 + 같은 질문 중복 표시]** 사용자가 새 대화록을 공유: "다음주 월요일 오전 9시 1시간, 4명" 요청에 인원수만 한 번 물은 뒤(그마저 같은 문장이 줄바꿈으로 두 번 표시됨) 회의실을 고르자마자 title 없이 바로 propose_create_reservation을 호출함.
+  - **title 미수집 원인**: `systemPrompt.ts` §3-4b가 "필요한 정보를 한 번에 몰아서 물어라"고만 지시했을 뿐, "check_availability에 필요한 인원수만 물으면 title은 생략해도 된다"는 오판을 막는 명시적 방지 문구가 없었음 — 모델이 인원수 질문 하나로 "필요한 정보 다 물었다"고 잘못 판단해 title 없이(또는 지어내서) propose를 호출한 것으로 추정. §3-4b에 "title은 반드시 사용자에게 실제로 물어 받은 값만 쓰고, 지어내거나 placeholder를 채우지 마라. check_availability로 회의실을 이미 보여줬어도 title을 못 받았으면 propose 호출 전에 반드시 먼저 물어라" 문구 추가.
+  - **중복 문장 표시 원인**: `handleUserMessage`는 도구 호출 없는 최종 응답을 `assistantMessage.content` 그대로 한 번만 `finalReply`로 쓰므로(오케스트레이션 루프 자체가 텍스트를 중복 조립하지 않음), 모델이 자기 응답 안에서 같은 문장을 줄바꿈으로 두 번 낸 것 — LLM 쪽 반복 아티팩트. `systemPrompt.ts` §5에 "같은 질문/문장을 줄바꿈으로 두 번 반복하지 마라" 문구 추가 + `orchestrator.ts`에 `collapseDuplicateLines()` 방어 로직 신설(최종 응답에서 연속으로 붙은 동일한 줄을 하나로 합침, 프롬프트만으로는 100% 막을 수 없는 LLM 반복 실패 모드에 대한 안전망).
+  - 검증: 백엔드 `tsc --noEmit` + `vitest run`(94/94) 통과. 프롬프트 튜닝의 효과는 실제 대화로 재현해봐야 확인되는데, Playwright가 끊겨 있어 이번 세션엔 실측 못 함 — 다음 실사용 때 재확인 필요.
+
+  (예약 확정 마지막 단계에서 "CJ 시스템에서 거부됐어요"가 뜨는 건 위에서 이미 추적 중인 SaveReserve Result:0 미해결 이슈와 동일 — 새 버그 아님. 이번 대화록에서도 동일 증상(13F-4, 2026-08-17 09:00~10:00)이 재현됨. 다음 세션에서 이전에 정리한 우선순위(Playwright 네트워크 캡처로 실제 성공 요청과 diff)로 계속 조사할 것.)
+
+  **[2026-08-14, "실제로 예약/취소가 되도록 고쳐라" — SaveReserve Result:0 재조사, 실질적 진전 + 새 미해결 발견]** 사용자가 명확히 요구해서 SaveReserve 실패를 다시 파고듦. `reserve_insmod.js`를 재확보해 `getReservationInfo()`/`getRoomOptionInfo()`를 다시 읽어보니, **실제 CJ 웹 UI는 신규 예약 폼을 열 때마다 `getEmptyRoomInfo`를 먼저 호출해서 그 회의실의 `REQUIRED_APPROVAL`(gubun)/`PRE_MAIL_ALARM_YN`(is_send_alarm)/승인자 목록(Table3 → admin_alias/admin_lang)을 동적으로 가져와 SaveReserve에 그대로 실어 보낸다는 게 확인됐다 — 우리는 이 호출 자체를 아예 안 하고 gubun=0/isSendAlarm="False"/adminAlias=""/adminLang=""을 항상 고정값으로 보내고 있었다.**
+  - **고침**: `client.ts`에 `GetEmptyRoomInfoResponse` 타입 추가(`.d`가 `"nodata"` 문자열로 오는 경우까지 포함). `reservation.tool.ts`에 `fetchRoomOptionInfo()`(+ `extractRoomOptionInfo()`) 신설 — `saveOneSegmentToCj`가 SaveReserve 호출 직전에 이 회의실+시간대 기준으로 `getEmptyRoomInfo`를 실제로 호출해서 gubun/isSendAlarm/adminAlias/adminLang을 동적으로 채운다(admin_alias/admin_lang은 실제 UI와 동일하게 각 항목 뒤에 `;`를 붙여 이어붙임). 조회 자체가 실패해도(네트워크 오류 등) 예약 시도를 막지 않고 fallback(gubun=0)으로 계속 진행한다. `modifyReservation.tool.ts`의 두 SaveReserve 호출부(신규 저장 + 실패 시 원래 회의실 복구)도 동일한 헬퍼(`fetchRoomOptionInfo` 재사용, `saveReserveChecked()`로 통합)로 맞추고, 원래 빠져있던 SaveReserve `Result` 필드 명시적 확인도 여기에 처음 추가함(기존엔 `extractSeq`가 우연히 뭔가 뽑아내면 성공으로 오판할 여지가 있었음). `reservation.tool.test.ts`에 회귀 테스트 3개 추가(승인불필요/승인필요+승인자/조회실패 시 fallback).
+  - **실사용 재검증 결과 — 아직 미해결, 그러나 새로운 단서 확보**: jiil 실 계정으로 `getEmptyRoomInfo`를 실제 호출해보니, **샘플로 조회한 회의실(3F-6, 3F-1) 전부 `REQUIRED_APPROVAL: "1"`(승인 필요)로 나오는데 승인자 목록(Table3)은 비어있었고, 심지어 신청자 본인 정보(Table2, 휴대폰번호)까지 비어있었다** — `AVAILABLE_TIME`도 전부 "0" 뿐인 이상한 값. 이 상태로 SaveReserve를 호출하면(gubun=1, admin_alias="") 여전히 `{"Result":0,"MailResult":0,"Seq":null}`로 거부됨을 재확인했다. 즉 우리 요청 필드 자체는 이제 실제 UI와 동일한 값을 실어 보내고 있는데도 서버가 거부하고 있어서, **문제가 우리 페이로드가 아니라 (a) 이 계정/회의실 조합에 대한 CJ 서버 쪽 데이터(승인자 미배정 등) 문제이거나, (b) getEmptyRoomInfo 자체가 이 세션/계정에 대해 정상적으로 데이터를 못 찾고 있는(그래서 본인 정보까지 비는) 상황일 가능성이 높다.**
+  - Playwright로 실제 브라우저에서 `reserve_main.aspx`의 진짜 더블클릭 흐름을 그대로 재현(`modalFrame()` 직접 호출)해서 실제 성공 요청을 네트워크 캡처로 확보하려 시도했으나, 모달 iframe(`#popupFrame`)이 DOM에 아직 안 만들어진 상태라 실패함(초기 로드 후 몇 초 대기로는 부족한 것으로 보임 — 정확한 초기화 완료 시점을 못 찾음). 이 접근은 여기서 중단.
+  - **다음 세션 우선순위(가장 빠르고 확실한 다음 한 걸음)**: jiil 본인이 실제 CJ 웹 브라우저(`https://cjwappr.cj.net/NConf/conferenceRoom/reserve_main.aspx`)에서 3F-1이나 3F-6 같은 평범한 회의실을 **직접 클릭해서 예약을 시도**해보고 성공하는지 확인. (1) 실제 UI에서도 안 되면 → CJ 서버/계정 쪽 데이터 문제(승인자 미배정 등)로 확정, CJ IT 담당자에게 문의해야 하는 범위. (2) 실제 UI에서는 되면 → 우리 getEmptyRoomInfo 호출 자체가 이 계정에 대해 실패하고 있다는 뜻이므로, 세션 쿠키(브라우저 로그인 vs 우리 세션 확보 방식의 차이) 쪽을 다시 파야 함. 이 결과에 따라 다음 조사 방향이 완전히 갈리므로, 이 확인이 안 되면 더 파도 헛수고일 수 있다.
+  - 검증: 백엔드 `tsc --noEmit` + `vitest run`(97/97) 통과. 진단용으로 만든 임시 스크립트(`backend/scripts/tmp-*.ts`)와 `reserve_insmod.js`/`confReserve_main.js`/`reserveCommon.js` 원본은 확인 후 전부 삭제함(리포에 남기지 않음).
   - `tools/availability.tool.ts`: CJ의 `reserve_all_list`가 JSON 배열이 아니라 `"룸코드:슬롯|룸코드:슬롯|..."` 파이프 구분 문자열이었는데 `Array.isArray` 체크로 항상 빈 배열 처리되어 **모든 회의실이 상시 "불가"로 판정되는 치명적 버그**였음. `event_list`의 `start`/`end`도 `"HH:mm"`이 아니라 전체 ISO 타임스탬프였음. 둘 다 파싱 함수 추가로 수정, `availability.tool.test.ts` 신규 추가(6개 테스트)로 회귀 방지
 
 ### BE-8. 챗봇 API 엔드포인트
@@ -279,6 +314,24 @@ flowchart LR
   - [x] 제출 실패(중복 ID 등) 시 에러 메시지가 명확히 표시됨 — 동일 ID로 재제출 시 "이미 등록되었거나 처리 대기 중인 사내 계정 ID입니다." alert 표시를 실제 브라우저로 확인
 
   **참고**: 이 과정에서 회원가입/`GET /rooms` 백엔드 보강(BE-2 절 참고)도 함께 실사용 검증됨. 테스트 계정(`fe2.playwright.test`)은 검증 후 DB에서 삭제, 띄운 백엔드/프론트 dev 서버 모두 종료함.
+
+  **[2026-08-14, 인증 화면 리디자인]** 챗봇 카드와 같은 외부 디자인 문서(`frontend/design_recom/auth-login-signup.dc.html` + `README-auth.md`)를 근거로 회원가입/로그인 화면도 함께 개선. `PreferredRoomPicker`를 기존 "행별 select + 맨 뒤 추가/삭제 버튼" 방식에서 **챗봇 카드와 동일한 `Chip` 컴포넌트 기반 다중선택(누른 순서 = 우선순위, 선택된 칩에 주황 순번 배지, 재클릭 시 해제)**으로 교체 — 원안의 `[+ 추가]`/`[- 삭제]` 버튼 쌍은 요구사항대로 제거. 폼을 번호 붙은 3개 섹션(①사내 계정 ②선호 회의실(선택) ③앱 로그인 비밀번호)으로 나누고, 비밀번호/비밀번호 확인을 데스크톱에서 2열로 배치(모바일 ≤860px에서는 1열로 접힘). 로그인 화면에는 비밀번호 표시/숨기기 토글을 추가(`TextInput`에 `labelAction` prop 신설 — 라벨 행 우측에 보조 액션을 넣는 범용 확장, 로그인/회원가입 양쪽에서 재사용 가능).
+  - **원안 대비 의도적으로 뺀 것**: "로그인 상태 유지" 체크박스와 "비밀번호 찾기" 링크는 이 프로젝트에 대응하는 실제 기능(영속 세션/비밀번호 재설정)이 없어서 넣지 않음 — 눌러도 아무 일도 안 하는 가짜 컨트롤을 두지 않기 위함(Hallmark 원칙). 실제 기능이 생기면 그때 추가.
+  - 색상은 원안의 hex 값 대신 프로젝트 기존 토큰으로 치환(`README-auth.md` Fidelity 절 지침대로) — 페이지 배경 `--canvas`, 폼 카드 `--surface-1`+`--hairline`, 순번 배지 원 `--surface-2`/`--ink-muted`, 선호 회의실 칩 순서 배지만 `--fin-orange`(브랜드 오렌지, 원안의 `#E8552A`와 대응).
+  - 검증: `tsc --noEmit`, `npm run build`, `npm run lint`(oxlint) 모두 통과. Playwright 브라우저 도구가 이 세션 내내 끊긴 상태라 실제 화면은 확인 못 함 — 사용자에게 브라우저 확인 요청.
+
+  **[2026-08-14, 실제 CJ 계정이 아닌 ID로도 가입/로그인이 되는 문제]** 사용자가 실제 CJ에 존재하지 않는 `test001` 계정으로 가입 신청 → (자동/수동) 승인 → 로그인까지 전부 성공하는 걸 발견. 원인을 확인해보니 **버그가 아니라 원래 설계대로 동작한 것**이었음:
+  - `registrationService.ts`의 `registerAccount`는 `corporate_password`를 CJ에 실제로 로그인 시도해서 검증하지 않고 암호화해서 저장만 함(가입 API가 매 요청마다 CJ에 실제 로그인을 시도하면 승인 전에도 CJ 계정을 반복 두드리게 되어 위험 — 의도적으로 뺀 부분).
+  - 로그인(`POST /auth/login`)은 `app_password`(이 앱 전용, CJ와 별개 비밀번호)만 검증하므로 CJ 계정이 가짜여도 앱 로그인 자체는 항상 성공함. CJ 세션 예열(`warmCjSessionOnLogin`)은 실패해도 로그인을 막지 않도록 이미 의도적으로 설계되어 있었음(20260814 세션 캐싱 도입 시 결정 — 예열은 최적화일 뿐 필수 조건 아님).
+  - 즉 "가짜 CJ 계정으로도 앱에 들어와지는 것" 자체는 의도된 동작이고, 실제 CJ 로그인 검증을 가입/승인 시점에 넣는 건 이번엔 하지 않기로 함(과설계 방지 — 사용자 결정). 대신 **경고 문구만** 추가: `RegisterPage.tsx` 섹션1("사내 계정") 상단에 "실제로 존재하는 CJ 사내 계정인지는 별도로 확인하지 않아요. 잘못된 ID·비밀번호를 입력하면 승인되어도 회의실 예약 기능이 동작하지 않습니다." 경고 배너 추가(`--semantic-warn`/`--semantic-warn-soft` 토큰, `Badge tone="warn"`과 같은 톤 재사용).
+  - 검증: `tsc --noEmit`/`npm run build`/`npm run lint` 통과.
+
+  **[2026-08-14, 곧바로 재수정 — 경고 문구만으론 부족, 로그인 자체를 막기로 결정]** 위 경고 문구를 추가한 직후, 사용자가 `test001`(가짜 CJ 계정)로 실제 로그인이 되고 챗봇 화면까지 들어가지는 걸 재확인하고 "로그인 과정에서 사실은 실패해야 하는거다"라고 명확히 요구함 — 경고만으론 부족하고 **가짜 CJ 계정은 앱 로그인 자체가 안 되게** 바꾸기로 결정.
+  - `auth.routes.ts`의 CJ 세션 예열 로직을 뒤집음: 기존엔 `warmCjSessionOnLogin`이 CJ 로그인 실패를 전부 삼키고 앱 로그인은 그대로 성공시켰는데(20260814 세션 캐싱 도입 시의 원래 결정), 이제 `requireCjSessionOnLogin`으로 이름을 바꾸고 **CJ 로그인이 실패하면 앱 로그인 자체를 `401 CJ_LOGIN_FAILED`로 거부**한다. 이유: 이 앱은 CJ 세션 없이는 예약 조회/생성 등 모든 기능이 안 되므로, "가짜 계정으로 앱에는 들어와지지만 아무것도 못 하는" 상태보다 "가짜 계정은 로그인부터 막힌다"가 사용자에게 훨씬 명확함. Admin 계정(jiil)도 예외 없이 동일하게 적용(실제 CJ 직원 계정이라 문제 없음, 특수 케이스를 늘리지 않는 게 목적).
+  - CJ 로그인 확인에 걸리는 시간(타임아웃 상한 45초)은 그대로 유지 — CJ가 느릴 뿐 실제로 성공하는 계정까지 잘못 막지 않기 위함.
+  - `frontend/src/pages/login/LoginPage.tsx`의 `getStatusMessage`에 `CJ_LOGIN_FAILED` 케이스 명시적으로 추가(백엔드 메시지 그대로 노출 — 기존 default 분기와 동작은 같지만 이 파일의 "코드별로 명확히 구분" 관례를 따름).
+  - `docs/swagger.json`의 `/auth/login` 설명·401 응답 설명을 이 새 동작에 맞게 정정.
+  - 검증: 백엔드 `tsc --noEmit` + `vitest run`(94/94), 프론트 `tsc --noEmit` + `npm run lint` 모두 통과. `test001`로 실제 재로그인 시도해서 401이 뜨는지는 Playwright가 끊긴 상태라 실측 못 함 — 사용자가 브라우저에서 직접 재확인 필요(기존 `test001` row는 사용자 지시대로 그대로 둠).
 
 ### FE-3. 로그인 페이지
 

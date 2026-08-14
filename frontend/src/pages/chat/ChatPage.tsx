@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./ChatPage.css";
-import { Badge, Button, Card, CardButton, Chip } from "../../components";
+import { Badge, Button, Card, Chip } from "../../components";
 import { HttpError } from "../../api/httpClient";
 import { useAuthStore } from "../../stores/authStore";
 import { useLogoutMutation } from "../../queries/authQueries";
@@ -14,12 +14,19 @@ import type {
   CheckAvailabilityData,
   ChatProposal,
   ConfirmedResultData,
+  FindReservationCandidatesData,
   GenericProposalData,
+  GetMyReservationsData,
   MyReservationGroup,
   ProposeCreateReservationData,
   ProposeSplitReservationData,
+  ReservationCandidate,
 } from "../../types/chat";
 import type { Room } from "../../types/room";
+
+/** 이 앱에서 지원하는 6개 층의 정렬 순서 — 시스템 프롬프트(systemPrompt.ts)의
+ * floorOrder와 동일한 기준을 프론트에도 맞춘다. */
+const FLOOR_ORDER = ["3F", "12F", "13F", "14F", "15F", "16F"];
 
 interface ChatUiMessage {
   id: string;
@@ -59,6 +66,32 @@ function hhmm(iso: string): string {
 
 function capacityLabel(capacity: number | null): string {
   return capacity === null ? "인원 미상" : `${capacity}인`;
+}
+
+/** "2026-08-17" -> "8월 17일 (월)" — 타임존 영향 없이 달력 날짜 그대로 파싱한다. */
+function formatDateWithWeekday(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return `${month}월 ${day}일 (${WEEKDAY_LABELS[date.getUTCDay()]})`;
+}
+
+function floorSortIndex(floorLabel: string | null): number {
+  const index = FLOOR_ORDER.indexOf(floorLabel ?? "");
+  return index === -1 ? FLOOR_ORDER.length : index;
+}
+
+/** roomList를 floorLabel 기준으로 묶고, 지원 층 순서(FLOOR_ORDER)로 정렬한다. */
+function groupRoomsByFloor(rooms: Room[]): Array<{ floorLabel: string; rooms: Room[] }> {
+  const byFloor = new Map<string, Room[]>();
+  for (const room of rooms) {
+    const floor = room.floorLabel ?? "(층 미상)";
+    const list = byFloor.get(floor) ?? [];
+    list.push(room);
+    byFloor.set(floor, list);
+  }
+  return [...byFloor.entries()]
+    .sort((a, b) => floorSortIndex(a[0]) - floorSortIndex(b[0]))
+    .map(([floorLabel, floorRooms]) => ({ floorLabel, rooms: floorRooms }));
 }
 
 export function ChatPage() {
@@ -255,55 +288,63 @@ function ChatMessageRow({
 }
 
 function ProposalCard({ proposal, onAction }: { proposal: ChatProposal; onAction: (text: string) => void }): ReactNode {
+  // 도구 호출이 실패하면 orchestrator.ts의 errorResult()가 { error: string } 형태로
+  // proposal.data에 그대로 실린다(어떤 tool이든 동일). 이 경우 각 case가 기대하는 성공
+  // 응답 모양(room/segments/preferred 등)이 없어 그대로 destructure하면 크래시한다 —
+  // 실패는 이미 reply 텍스트로 안내되므로 카드는 그냥 안 그린다.
+  if (proposal.data && typeof proposal.data === "object" && "error" in proposal.data) {
+    return null;
+  }
+
   switch (proposal.tool) {
     case "check_availability": {
       const data = proposal.data as CheckAvailabilityData;
       const rooms = [...data.preferred, ...data.others];
       if (rooms.length === 0) return null;
-      const preferredIds = new Set(data.preferred.map((room) => room.id));
-      return (
-        <div className="chat-room-grid">
-          {rooms.map((room) => (
-            <CardButton
-              key={room.id}
-              radius="lg"
-              className="chat-room-pick"
-              onClick={() => onAction(`${room.roomName}으로 할래요`)}
-            >
-              <span className="chat-room-pick-name">{room.roomName}</span>
-              <span className="chat-room-pick-tags">
-                <Badge tone="success">{capacityLabel(room.capacity)}</Badge>
-                {preferredIds.has(room.id) && <Badge tone="neutral">선호</Badge>}
-              </span>
-            </CardButton>
-          ))}
-        </div>
-      );
+
+      if (data.preferred.length > 0) {
+        // 선호 회의실 중 비어있는 곳이 있으면 1순위를 추천 카드로 크게, 나머지는 칩으로.
+        const recommended = data.preferred[0];
+        const others = rooms.filter((room) => room.id !== recommended.id);
+        return (
+          <RoomRecommendationCard
+            room={recommended}
+            badgeLabel="추천"
+            noteTag="선호 회의실"
+            date={data.date}
+            startTime={data.startTime}
+            endTime={data.endTime}
+            primaryLabel="이 회의실로 확정"
+            onPrimary={() => onAction(`${recommended.roomName}으로 할래요`)}
+          >
+            {others.length > 0 && (
+              <div className="chat-chip-section">
+                <div className="chat-chip-section-label">다른 후보 {others.length}곳</div>
+                <RoomChipGroup rooms={others} onSelect={(room) => onAction(`${room.roomName}으로 할래요`)} />
+              </div>
+            )}
+          </RoomRecommendationCard>
+        );
+      }
+
+      // 선호 회의실이 없거나 다 찼으면, 후보 전체를 층별로 묶어서 골라 담게 한다.
+      return <FloorGroupedRoomsCard rooms={rooms} onConfirm={(room) => onAction(`${room.roomName}으로 할래요`)} />;
     }
 
     case "propose_create_reservation": {
       const data = proposal.data as ProposeCreateReservationData;
       return (
-        <Card radius="xl" className="chat-room-card">
-          <div className="chat-room-card-head">
-            <span className="chat-room-card-name">{data.room.roomName}</span>
-            <span className="chat-room-card-time mono">
-              {data.startTime}~{data.endTime}
-            </span>
-          </div>
-          <div className="chat-room-card-tags">
-            <Badge tone="success">예약가능</Badge>
-            <Badge tone="neutral">{capacityLabel(data.room.capacity)}</Badge>
-          </div>
-          <div className="chat-card-actions">
-            <Button size="sm" onClick={() => onAction("네, 이 회의실로 확정해주세요")}>
-              이 회의실로 확정
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => onAction("다른 회의실도 보여줘")}>
-              다른 곳 보기
-            </Button>
-          </div>
-        </Card>
+        <RoomRecommendationCard
+          room={data.room}
+          noteTag="예약가능"
+          date={data.date}
+          startTime={data.startTime}
+          endTime={data.endTime}
+          primaryLabel="이 회의실로 확정"
+          onPrimary={() => onAction("네, 이 회의실로 확정해주세요")}
+          secondaryLabel="다른 곳 보기"
+          onSecondary={() => onAction("다른 회의실도 보여줘")}
+        />
       );
     }
 
@@ -337,12 +378,18 @@ function ProposalCard({ proposal, onAction }: { proposal: ChatProposal; onAction
     case "propose_cancel_reservation": {
       const data = proposal.data as GenericProposalData;
       if (!data.requiresUserConfirmation) return null;
+      const isCancel = proposal.tool === "propose_cancel_reservation";
       return (
         <Card radius="xl" className="chat-room-card">
           <p className="chat-generic-summary">{data.summary}</p>
           <div className="chat-card-actions">
-            <Button size="sm" onClick={() => onAction("네, 진행해주세요")}>
-              확정
+            {/* 취소는 되돌리기 어려운 행동이라 danger 톤으로 구분한다(design_recom 핸드오프 문서 원칙). */}
+            <Button
+              size="sm"
+              variant={isCancel ? "danger" : "primary"}
+              onClick={() => onAction("네, 진행해주세요")}
+            >
+              {isCancel ? "취소하기" : "확정"}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => onAction("아니요, 하지 마세요")}>
               그만둘게요
@@ -350,6 +397,18 @@ function ProposalCard({ proposal, onAction }: { proposal: ChatProposal; onAction
           </div>
         </Card>
       );
+    }
+
+    case "get_my_reservations": {
+      const data = proposal.data as GetMyReservationsData;
+      if (data.groups.length === 0) return null;
+      return <MyReservationsListCard groups={data.groups} onAction={onAction} />;
+    }
+
+    case "find_reservation_candidates": {
+      const data = proposal.data as FindReservationCandidatesData;
+      if (data.status !== "ambiguous" || !data.candidates || data.candidates.length === 0) return null;
+      return <ReservationPickerCard candidates={data.candidates} onAction={onAction} />;
     }
 
     case "confirm_create_reservation":
@@ -374,6 +433,236 @@ function ProposalCard({ proposal, onAction }: { proposal: ChatProposal; onAction
     default:
       return null;
   }
+}
+
+interface RoomRecommendationCardProps {
+  room: Room;
+  date?: string;
+  startTime: string;
+  endTime: string;
+  badgeLabel?: string;
+  noteTag?: string;
+  primaryLabel: string;
+  onPrimary: () => void;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  children?: ReactNode;
+}
+
+// "추천 우선형" 카드 — design_recom 핸드오프 문서의 큰 추천 카드 패턴.
+// check_availability(선호 회의실 있음)와 propose_create_reservation 둘 다 이걸 쓴다.
+function RoomRecommendationCard({
+  room,
+  date,
+  startTime,
+  endTime,
+  badgeLabel,
+  noteTag,
+  primaryLabel,
+  onPrimary,
+  secondaryLabel,
+  onSecondary,
+  children,
+}: RoomRecommendationCardProps) {
+  return (
+    <Card radius="xl" bordered className="chat-reco-card">
+      <div className="chat-reco-head">
+        <div className="chat-reco-head-left">
+          <span className="chat-reco-name">{room.roomName}</span>
+          {badgeLabel && <Badge tone="warn">{badgeLabel}</Badge>}
+        </div>
+        <div className="chat-reco-head-right">
+          {date && <span className="mono">{formatDateWithWeekday(date)}</span>}
+          <span className="mono">
+            {startTime}~{endTime}
+          </span>
+        </div>
+      </div>
+      <div className="chat-reco-tags">
+        <Badge tone="success">{capacityLabel(room.capacity)}</Badge>
+        {noteTag && <Badge tone="neutral">{noteTag}</Badge>}
+      </div>
+      <div className="chat-card-actions">
+        <Button size="sm" onClick={onPrimary}>
+          {primaryLabel}
+        </Button>
+      </div>
+      {secondaryLabel && onSecondary && (
+        <button type="button" className="chat-reco-secondary" onClick={onSecondary}>
+          {secondaryLabel}
+        </button>
+      )}
+      {children}
+    </Card>
+  );
+}
+
+function RoomChipGroup({ rooms, onSelect }: { rooms: Room[]; onSelect: (room: Room) => void }) {
+  return (
+    <div className="chat-chip-group">
+      {rooms.map((room) => (
+        <Chip key={room.id} onClick={() => onSelect(room)}>
+          {room.roomName} · {capacityLabel(room.capacity)}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+// "전체 가용 목록" 카드 — 선호 회의실이 없을 때 층별로 묶어 하나를 고르게 한다.
+function FloorGroupedRoomsCard({ rooms, onConfirm }: { rooms: Room[]; onConfirm: (room: Room) => void }) {
+  const floorGroups = useMemo(() => groupRoomsByFloor(rooms), [rooms]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = rooms.find((room) => room.id === selectedId) ?? null;
+
+  return (
+    <Card radius="xl" bordered className="chat-floorlist-card">
+      {floorGroups.map((group) => (
+        <div key={group.floorLabel} className="chat-floorlist-group">
+          <div className="chat-floorlist-floor-label">{group.floorLabel}</div>
+          <div className="chat-chip-group">
+            {group.rooms.map((room) => (
+              <Chip
+                key={room.id}
+                selected={room.id === selectedId}
+                onClick={() => setSelectedId(room.id)}
+              >
+                {room.roomName} · {capacityLabel(room.capacity)}
+              </Chip>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="chat-floorlist-footer">
+        <span className="chat-floorlist-hint">
+          {selected ? `${selected.roomName} 선택함` : "회의실을 골라주세요"}
+        </span>
+        <Button size="sm" disabled={!selected} onClick={() => selected && onConfirm(selected)}>
+          이 회의실로 확정
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+// "내 예약 조회" 리스트 카드 — get_my_reservations 결과를 세그먼트 단위로 펼쳐 보여준다.
+function MyReservationsListCard({
+  groups,
+  onAction,
+}: {
+  groups: MyReservationGroup[];
+  onAction: (text: string) => void;
+}) {
+  const now = Date.now();
+  const rows = groups.flatMap((group) =>
+    group.segments.map((segment) => ({
+      key: segment.reservationId,
+      room: segment.roomName ?? "회의실 미상",
+      title: group.title,
+      startAt: segment.startAt,
+      endAt: segment.endAt,
+    })),
+  );
+  if (rows.length === 0) return null;
+
+  const nextKey = rows.find((row) => new Date(row.endAt).getTime() > now)?.key;
+
+  return (
+    <Card radius="xl" bordered className="chat-mylist-card">
+      <div className="chat-mylist-header">
+        <span>오늘 예약</span>
+        <span className="mono">{rows.length}건</span>
+      </div>
+      <ul className="chat-mylist-rows">
+        {rows.map((row) => {
+          const ended = new Date(row.endAt).getTime() <= now;
+          const isNext = row.key === nextKey;
+          return (
+            <li key={row.key} className={`chat-mylist-row ${ended ? "chat-mylist-row-ended" : ""}`}>
+              <span className={`chat-mylist-rail ${isNext ? "chat-mylist-rail-next" : ""}`} aria-hidden="true" />
+              <span className="chat-mylist-info">
+                <span className="chat-mylist-room-line">
+                  <span className="chat-mylist-room">{row.room}</span>
+                  {isNext && <span className="chat-mylist-next-badge">다음</span>}
+                  {ended && <Badge tone="neutral">종료</Badge>}
+                </span>
+                <span className="chat-mylist-title">{row.title}</span>
+              </span>
+              <span className="chat-mylist-time mono">
+                {hhmm(row.startAt)}~{hhmm(row.endAt)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="chat-mylist-footer">
+        <Button size="sm" variant="ghost" onClick={() => onAction("예약 시간을 변경하고 싶어")}>
+          시간 변경
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onAction("예약을 취소하고 싶어")}>
+          예약 취소
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+// "취소/변경 대상 되묻기" 카드 — find_reservation_candidates가 ambiguous일 때 표시.
+// 목표 예약을 특정하는 단계일 뿐 실제 취소/변경은 이후 propose_*의 확인 카드에서 한 번 더
+// 확정받으므로, 여기서는 danger 톤을 쓰지 않고 중립적으로 "선택"만 받는다.
+function ReservationPickerCard({
+  candidates,
+  onAction,
+}: {
+  candidates: ReservationCandidate[];
+  onAction: (text: string) => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = candidates.find((c) => c.reservationId === selectedId) ?? null;
+
+  return (
+    <Card radius="xl" bordered className="chat-picker-card">
+      <ul className="chat-picker-list">
+        {candidates.map((candidate) => {
+          const isSelected = candidate.reservationId === selectedId;
+          return (
+            <li key={candidate.reservationId}>
+              <button
+                type="button"
+                className={`chat-picker-row ${isSelected ? "chat-picker-row-selected" : ""}`}
+                aria-pressed={isSelected}
+                onClick={() => setSelectedId(candidate.reservationId)}
+              >
+                <span className={`chat-picker-radio ${isSelected ? "chat-picker-radio-selected" : ""}`} aria-hidden="true" />
+                <span className="chat-picker-row-info">
+                  <span className="chat-picker-room">{candidate.roomName ?? "회의실 미상"}</span>
+                  <span className="chat-picker-title">{candidate.title}</span>
+                </span>
+                <span className="chat-picker-time mono">
+                  {hhmm(candidate.startAt)}~{hhmm(candidate.endAt)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="chat-picker-footer">
+        <span className="chat-picker-hint">
+          {selected ? `${selected.roomName ?? "이"} 예약을 선택했어요` : "예약을 골라주세요"}
+        </span>
+        <Button
+          size="sm"
+          disabled={!selected}
+          onClick={() =>
+            selected &&
+            onAction(`${selected.roomName ?? ""} ${hhmm(selected.startAt)}~${hhmm(selected.endAt)} ${selected.title} 예약`)
+          }
+        >
+          선택
+        </Button>
+      </div>
+    </Card>
+  );
 }
 
 function TodayReservationsRail({ groups, isLoading }: { groups: MyReservationGroup[] | undefined; isLoading: boolean }) {

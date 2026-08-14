@@ -55,6 +55,7 @@ import { chromium as playwrightChromium, type Browser } from "playwright";
 import { config } from "../config/env";
 import { findUserById } from "../db/repositories/userRepository";
 import { decryptCorporatePassword } from "../security/corporatePassword";
+import { getCachedCjSession, setCachedCjSession } from "./sessionCache";
 
 const LOGIN_NAV_TIMEOUT_MS = 30_000;
 
@@ -201,9 +202,19 @@ export async function loginAndGetSession(userId: string): Promise<CjSession> {
 }
 
 /**
- * 도구 계층의 유일한 진입점. "세션 캐싱하지 않고 매 요청마다 로그인부터 시작"
- * 전략을 그대로 구현한다 — 상위 계층은 세션 상태를 알거나 관리하지 않는다.
+ * 도구 계층의 유일한 진입점.
+ *
+ * [2026-08-14 변경, 사용자 요청] 원래는 "세션 캐싱하지 않고 매 요청마다 로그인부터 시작"
+ * 전략이었으나(각 요청이 몇~수십 초씩 CJ 로그인 지연을 그대로 겪는 문제), 이 앱
+ * 로그인(JWT) 시점에 미리 확보해둔 CJ 세션을 짧은 TTL(`sessionCache.ts`) 동안 재사용하는
+ * 방식으로 바꿨다. 캐시에 유효한 세션이 있으면 그대로 반환하고, 없거나 만료됐으면 새로
+ * 로그인한 뒤 캐시에 저장한다.
  */
 export async function getValidSession(userId: string): Promise<CjSession> {
-  return loginAndGetSession(userId);
+  const cached = getCachedCjSession(userId);
+  if (cached) return cached;
+
+  const session = await loginAndGetSession(userId);
+  setCachedCjSession(userId, session);
+  return session;
 }

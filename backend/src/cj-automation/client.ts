@@ -222,11 +222,37 @@ export interface GetEmptyRoomInfoParams {
   endTime: string;
 }
 
+// [2026-08-14 실사용 검증 완료] 실제 CJ 웹 UI(reserve_insmod.js의 getReservationInfo() ->
+// getRoomOptionInfo())는 신규 예약 폼을 열 때 이 API로 회의실별 REQUIRED_APPROVAL(승인
+// 필요 여부)/PRE_MAIL_ALARM_YN(사전알림 여부)/승인자 목록(Table3)을 먼저 조회해서
+// SaveReserve의 gubun/is_send_alarm/admin_alias/admin_lang 필드를 채운다. 우리는 이 호출을
+// 아예 안 하고 이 네 필드를 전부 0/"False"/""/""로 고정해서 보내고 있었다 — 실제로 승인이
+// 필요한 회의실(REQUIRED_APPROVAL=1)에 대해 gubun=0을 보내면 서버가 데이터 불일치로
+// SaveReserve를 조용히 거부(Result:0)하는 것으로 추정된다(SaveReserve Result:0 미해결
+// 이슈의 유력한 원인 — reservation.tool.ts/modifyReservation.tool.ts 참고).
+// `.d`는 문자열로 감싸인 JSON이라(`$.parseJSON(data.d)`) callCjApi가 이미 이중 디코딩한다.
+// 실패/데이터없음 시 `.d`가 리터럴 문자열 `"nodata"`로 오기도 한다(JSON이 아니므로 그대로
+// 문자열째 반환됨) — 호출부에서 Table1이 없는 경우로 방어적으로 처리해야 한다.
+export interface GetEmptyRoomInfoResponse {
+  Table1?: Array<{
+    ROOM_NAME?: string;
+    PRE_MAIL_ALARM_YN?: string;
+    REQUIRED_APPROVAL?: string | number;
+    [key: string]: unknown;
+  }>;
+  Table3?: Array<{
+    EMAIL_ALIAS?: string;
+    DEFAULT_LANGUAGE_TYPE?: string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+}
+
 export async function getEmptyRoomInfo(
   session: CjSession,
   params: GetEmptyRoomInfoParams
-): Promise<unknown> {
-  return callCjApi(session, "WSConfReserveinsmod.asmx/getEmptyRoomInfo", {
+): Promise<GetEmptyRoomInfoResponse | string> {
+  return callCjApi<GetEmptyRoomInfoResponse | string>(session, "WSConfReserveinsmod.asmx/getEmptyRoomInfo", {
     roomcode: params.roomCode,
     startdate: params.startDate,
     starttime: params.startTime,

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  body { margin:0; background:#FAFAF9; font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:#1C1C1B; text-decoration:underline; text-underline-offset:2px; }
+  a:hover { color:#E8552A; }
+  input { font-family:inherit; }
+  input::placeholder { color:#B8B7B2; }
+</style>
+</helmet>
+
+<section style="padding:48px; display:flex; flex-direction:column; gap:24px">
+  <div style="display:flex; flex-direction:column; gap:6px; max-width:640px">
+    <div style="font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:#8B8B87; font-weight:600">Turn 3 · 인증 화면</div>
+    <div style="font-size:22px; font-weight:700; color:#1C1C1B; letter-spacing:-0.01em">로그인 · 계정 등록 신청</div>
+    <div style="font-size:14px; line-height:1.6; color:#6E6E6A; text-wrap:pretty">가운데 정렬 카드 한 장 구성은 유지하고, 챗봇 카드와 같은 색·라운드·버튼 규칙을 씁니다. 긴 등록 폼은 세 덩어리로 나누고, 선호 회의실은 [+ 추가] 대신 챗봇에서 쓰는 칩으로 골라 순서를 매깁니다.</div>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:32px; align-items:flex-start">
+
+    <div id="3a" style="display:flex; flex-direction:column; gap:10px">
+      <div style="display:flex; align-items:center; gap:8px">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.06em; color:#fff; background:#111; padding:3px 8px; border-radius:6px">3a</div>
+        <div style="font-size:14px; font-weight:600; color:#1C1C1B">로그인</div>
+      </div>
+
+      <div style="width:440px; background:#F4F3F1; border-radius:20px; padding:44px 40px 40px; display:flex; justify-content:center">
+        <div style="width:100%; max-width:360px; display:flex; flex-direction:column; gap:22px">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px">
+            <div style="width:36px; height:36px; border-radius:11px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700">회</div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:4px">
+              <div style="font-size:21px; font-weight:700; color:#1C1C1B; letter-spacing:-0.02em">회의실 예약</div>
+              <div style="font-size:13.5px; color:#8B8B87">사내 계정으로 로그인하세요</div>
+            </div>
+          </div>
+
+          <div style="background:#fff; border:1px solid #E4E3DF; border-radius:16px; padding:22px 20px; display:flex; flex-direction:column; gap:16px">
+            <div style="display:flex; flex-direction:column; gap:7px">
+              <div style="font-size:12.5px; font-weight:600; color:#6E6E6A">사내 계정 ID</div>
+              <input type="text" placeholder="hong.gildong" style="width:100%; box-sizing:border-box; height:44px; padding:0 13px; font-size:14px; color:#1C1C1B; background:#fff; border:1px solid #E4E3DF; border-radius:10px; outline:none; transition:border-color .12s" style-focus="borderColor:#111" style-hover="borderColor:#B9B8B3">
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:7px">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px">
+                <div style="font-size:12.5px; font-weight:600; color:#6E6E6A">앱 로그인 비밀번호</div>
+                <div onClick="{{ toggleLoginPw }}" style="font-size:12px; font-weight:600; color:#8B8B87; cursor:pointer" style-hover="color:#1C1C1B">{{ loginPwToggleLabel }}</div>
+              </div>
+              <input type="{{ loginPwType }}" placeholder="••••••••" style="width:100%; box-sizing:border-box; height:44px; padding:0 13px; font-size:14px; color:#1C1C1B; background:#fff; border:1px solid #E4E3DF; border-radius:10px; outline:none; transition:border-color .12s" style-focus="borderColor:#111" style-hover="borderColor:#B9B8B3">
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+              <div onClick="{{ toggleRemember }}" style="display:flex; align-items:center; gap:7px; cursor:pointer">
+                <div style="{{ rememberBoxStyle }}">
+                  <div style="{{ rememberDotStyle }}"></div>
+                </div>
+                <div style="font-size:13px; color:#3C3C3A">로그인 상태 유지</div>
+              </div>
+              <a href="#3a" style="font-size:13px; color:#8B8B87; text-decoration:none" style-hover="color:#1C1C1B">비밀번호 찾기</a>
+            </div>
+
+            <div onClick="{{ noop }}" style="height:46px; display:flex; align-items:center; justify-content:center; background:#111; color:#fff; font-size:14.5px; font-weight:600; border-radius:11px; cursor:pointer; transition:background .12s" style-hover="background:#000">로그인</div>
+          </div>
+
+          <div style="text-align:center; font-size:13px; color:#8B8B87">아직 계정이 없으신가요? <a href="#3b" style="color:#1C1C1B; font-weight:600; text-decoration:none; border-bottom:1px solid #D6D5D1; padding-bottom:1px" style-hover="color:#E8552A">등록 신청</a></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="3b" style="display:flex; flex-direction:column; gap:10px">
+      <div style="display:flex; align-items:center; gap:8px">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.06em; color:#fff; background:#111; padding:3px 8px; border-radius:6px">3b</div>
+        <div style="font-size:14px; font-weight:600; color:#1C1C1B">계정 등록 신청</div>
+        <div style="font-size:13px; color:#8B8B87">3단계로 분할</div>
+      </div>
+
+      <div style="width:600px; background:#F4F3F1; border-radius:20px; padding:44px 40px 40px; display:flex; justify-content:center">
+        <div style="width:100%; max-width:520px; display:flex; flex-direction:column; gap:22px">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px">
+            <div style="width:36px; height:36px; border-radius:11px; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700">회</div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:4px">
+              <div style="font-size:21px; font-weight:700; color:#1C1C1B; letter-spacing:-0.02em">계정 등록 신청</div>
+              <div style="font-size:13.5px; color:#8B8B87">승인까지 보통 1영업일이 걸려요</div>
+            </div>
+          </div>
+
+          <div style="background:#fff; border:1px solid #E4E3DF; border-radius:16px; padding:6px 22px 22px; display:flex; flex-direction:column">
+
+            <div style="display:flex; flex-direction:column; gap:15px; padding:22px 0; border-bottom:1px solid #F0EFED">
+              <div style="display:flex; align-items:center; gap:9px">
+                <div style="width:20px; height:20px; border-radius:50%; background:#F2F1EF; color:#6E6E6A; font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums">1</div>
+                <div style="font-size:14px; font-weight:700; color:#1C1C1B; letter-spacing:-0.01em">사내 계정</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:7px">
+                <div style="font-size:12.5px; font-weight:600; color:#6E6E6A">계정 ID</div>
+                <input type="text" placeholder="hong.gildong" style="width:100%; box-sizing:border-box; height:44px; padding:0 13px; font-size:14px; color:#1C1C1B; background:#fff; border:1px solid #E4E3DF; border-radius:10px; outline:none; transition:border-color .12s" style-focus="borderColor:#111" style-hover="borderColor:#B9B8B3">
+                <div style="font-size:12px; color:#9A9A95">메일 주소 앞부분이에요. @회사도메인은 빼고 입력하세요.</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:7px">
+                <div style="font-size:12.5px; font-weight:600; color:#6E6E6A">계정 비밀번호</div>
+                <input type="password" placeholder="••••••••" style="width:100%; box-sizing:border-box; height:44px; padding:0 13px; font-size:14px; color:#1C1C1B; background:#fff; border:1px solid #E4E3DF; border-radius:10px; outline:none; transition:border-color .12s" style-focus="borderColor:#111" style-hover="borderColor:#B9B8B3">
+                <div style="font-size:12px; color:#9A9A95">예약 자동화 로그인에만 쓰이고 암호화 저장됩니다.</div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:15px; padding:22px 0; border-bottom:1px solid #F0EFED">
+              <div style="display:flex; align-items:center; gap:9px">
+                <div style="width:20px; height:20px; border-radius:50%; background:#F2F1EF; color:#6E6E6A; font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums">2</div>
+                <div style="font-size:14px; font-weight:700; color:#1C1C1B; letter-spacing:-0.01em">선호 회의실</div>
+                <div style="font-size:12px; color:#9A9A95">선택</div>
+              </div>
+              <div style="font-size:12.5px; color:#8B8B87; line-height:1.5">자주 쓰는 순서대로 눌러주세요. 누른 순서가 추천 우선순위가 됩니다.</div>
+              <div style="display:flex; flex-wrap:wrap; gap:6px">
+                <sc-for list="{{ roomChips }}" as="r" hint-placeholder-count="10">
+                  <div onClick="{{ r.onClick }}" style="{{ r.chipStyle }}" style-hover="borderColor:#B9B8B3">
+                    <span style="{{ r.badgeStyle }}">{{ r.order }}</span>
+                    <span>{{ r.id }}</span>
+                    <span style="{{ r.capStyle }}">{{ r.cap }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="{{ prefSummaryStyle }}">
+                <div style="font-size:12.5px; color:#6E6E6A">{{ prefSummary }}</div>
+                <div onClick="{{ clearPrefs }}" style="{{ clearBtnStyle }}" style-hover="color:#1C1C1B">모두 지우기</div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:15px; padding:22px 0 6px">
+              <div style="display:flex; align-items:center; gap:9px">
+                <div style="width:20px; height:20px; border-radius:50%; background:#F2F1EF; color:#6E6E6A; font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums">3</div>
+                <div style="font-size:14px; font-weight:700; color:#1C1C1B; letter-spacing:-0.01em">앱 로그인 비밀번호</div>
+              </div>
+              <div style="font-size:12.5px; color:#8B8B87; line-height:1.5">사내 계정 비밀번호와 다른 값을 쓰세요. 해시로 저장됩니다.</div>
+              <div style="display:flex; gap:12px">
+                <div style="display:flex; flex-direction:column; gap:7px; flex:1; min-width:0">
+                  <div style="font-size:12.5px; font-weight:600; color:#6E6E6A">비밀번호</div>
+                  <input type="password" placeholder="8자 이상" onInput="{{ onPw }}" style="width:100%; box-sizing:border-box; height:44px; padding:0 13px; font-size:14px; color:#1C1C1B; background:#fff; border:1px solid #E4E3DF; border-radius:10px; outline:none; transition:border-color .12s" style-focus="borderColor:#111" style-hover="borderColor:#B9B8B3">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:7px; flex:1; min-width:0">
+                  <div style="font-size:12.5px; font-weight:600; color:#6E6E6A">비밀번호 확인</div>
+                  <input type="password" placeholder="다시 한 번" onInput="{{ onPw2 }}" style="{{ pw2Style }}" style-focus="borderColor:#111">
+                </div>
+              </div>
+              <div style="{{ matchStyle }}">{{ matchText }}</div>
+            </div>
+
+            <div onClick="{{ noop }}" style="height:46px; display:flex; align-items:center; justify-content:center; background:#111; color:#fff; font-size:14.5px; font-weight:600; border-radius:11px; cursor:pointer; margin-top:8px; transition:background .12s" style-hover="background:#000">등록 신청</div>
+          </div>
+
+          <div style="text-align:center; font-size:13px; color:#8B8B87">이미 승인된 계정이 있으신가요? <a href="#3a" style="color:#1C1C1B; font-weight:600; text-decoration:none; border-bottom:1px solid #D6D5D1; padding-bottom:1px" style-hover="color:#E8552A">로그인</a></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ROOMS = [
+  { id: '3F-1', cap: 8 }, { id: '3F-4', cap: 8 }, { id: '3F-6', cap: 12 },
+  { id: '3F-9', cap: 8 }, { id: '3F-12', cap: 8 }, { id: '8F-7', cap: 10 },
+  { id: '13F-3', cap: 8 }, { id: '14F-2', cap: 8 }, { id: '14F-5', cap: 16 },
+  { id: '15F-5', cap: 8 }
+];
+
+class Component extends DCLogic {
+  state = { prefs: ['3F-6'], showLoginPw: false, remember: true, pw: '', pw2: '' };
+
+  togglePref(id) {
+    const prefs = this.state.prefs.includes(id)
+      ? this.state.prefs.filter(p => p !== id)
+      : [...this.state.prefs, id];
+    this.setState({ prefs });
+  }
+
+  renderVals() {
+    const { prefs, showLoginPw, remember, pw, pw2 } = this.state;
+
+    const roomChips = ROOMS.map(r => {
+      const i = prefs.indexOf(r.id);
+      const on = i >= 0;
+      return {
+        id: r.id, cap: r.cap + '인', order: on ? String(i + 1) : '',
+        chipStyle: {
+          display: 'inline-flex', alignItems: 'center', gap: '5px',
+          padding: '6px 10px', borderRadius: '9px',
+          border: on ? '1px solid #111' : '1px solid #E4E3DF',
+          background: on ? '#111' : '#fff',
+          color: on ? '#fff' : '#1C1C1B',
+          fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+          transition: 'border-color .12s, background .12s', whiteSpace: 'nowrap'
+        },
+        badgeStyle: on
+          ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: '15px', height: '15px', borderRadius: '50%',
+              background: '#E8552A', color: '#fff', fontSize: '10px', fontWeight: 700,
+              fontVariantNumeric: 'tabular-nums' }
+          : { display: 'none' },
+        capStyle: { fontSize: '11.5px', color: on ? 'rgba(255,255,255,0.62)' : '#9A9A95', fontVariantNumeric: 'tabular-nums' },
+        onClick: () => this.togglePref(r.id)
+      };
+    });
+
+    const matched = pw.length > 0 && pw === pw2;
+    const mismatched = pw2.length > 0 && pw !== pw2;
+
+    return {
+      roomChips,
+      prefSummary: prefs.length ? '우선순위 · ' + prefs.join(' → ') : '선택한 회의실이 없어요. 비워두면 매번 전체 목록에서 추천해요.',
+      prefSummaryStyle: {
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
+        background: '#FBFBFA', border: '1px solid #F0EFED', borderRadius: '10px', padding: '10px 12px'
+      },
+      clearPrefs: () => this.setState({ prefs: [] }),
+      clearBtnStyle: {
+        fontSize: '12px', fontWeight: 600, color: '#9A9A95', cursor: 'pointer',
+        whiteSpace: 'nowrap', display: prefs.length ? 'block' : 'none'
+      },
+
+      loginPwType: showLoginPw ? 'text' : 'password',
+      loginPwToggleLabel: showLoginPw ? '숨기기' : '표시',
+      toggleLoginPw: () => this.setState({ showLoginPw: !showLoginPw }),
+
+      rememberBoxStyle: {
+        width: '16px', height: '16px', borderRadius: '5px', flex: 'none',
+        border: remember ? '1px solid #111' : '1px solid #D6D5D1',
+        background: remember ? '#111' : '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center'
+      },
+      rememberDotStyle: {
+        width: '6px', height: '6px', borderRadius: '2px',
+        background: remember ? '#fff' : 'transparent'
+      },
+      toggleRemember: () => this.setState({ remember: !remember }),
+
+      onPw: e => this.setState({ pw: e.target.value }),
+      onPw2: e => this.setState({ pw2: e.target.value }),
+      pw2Style: {
+        width: '100%', boxSizing: 'border-box', height: '44px', padding: '0 13px',
+        fontSize: '14px', color: '#1C1C1B', background: '#fff',
+        border: mismatched ? '1px solid #EBC9C4' : (matched ? '1px solid #BFE0CB' : '1px solid #E4E3DF'),
+        borderRadius: '10px', outline: 'none', transition: 'border-color .12s'
+      },
+      matchText: mismatched ? '두 비밀번호가 서로 달라요' : (matched ? '비밀번호가 일치해요' : ''),
+      matchStyle: {
+        fontSize: '12px', fontWeight: 600,
+        color: mismatched ? '#C0362C' : '#1E7A4B',
+        display: (mismatched || matched) ? 'block' : 'none'
+      },
+
+      noop: () => {}
+    };
+  }
+}
+
+</script>
+</body>
+</html>

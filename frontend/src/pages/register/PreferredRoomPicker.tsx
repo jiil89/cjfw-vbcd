@@ -1,6 +1,5 @@
-import { useId } from "react";
 import "./PreferredRoomPicker.css";
-import { Button } from "../../components";
+import { Chip } from "../../components";
 import type { Room } from "../../types/room";
 
 // 회원가입 폼이 다룰 수 있는 우선순위 상한. 회의실 총량(26개)에 비해 의미 있는 선택지는
@@ -11,45 +10,34 @@ export interface PreferredRoomPickerProps {
   rooms: Room[];
   isLoading: boolean;
   loadError: boolean;
-  /** 우선순위 순서의 room id 배열. 빈 문자열은 "아직 선택 안 함" 상태의 행. */
+  /** 선택 순서대로의 room id 배열(= 우선순위). */
   value: string[];
   onChange: (next: string[]) => void;
 }
 
 /**
- * 선호 회의실 우선순위 선택 UI — `7-wireframes.md` 1번 "[ 선호 회의실 (우선순위 순서) ]" 절.
- * 와이어프레임은 행마다 [+ 추가]/[- 삭제] 버튼을 나란히 두지만, 이 구현은 목록 끝에
- * 추가(맨 뒤에 새 우선순위 추가)/삭제(맨 뒤 우선순위 제거) 버튼 한 쌍으로 단순화했다 —
- * 기능(우선순위 추가/삭제, 비워둘 수 있음)은 동일하게 충족하면서 개별 행 삭제 버튼×N을
- * 두지 않아 오버엔지니어링을 피했다.
+ * 선호 회의실 우선순위 선택 UI — `design_recom/README-auth.md` 8번 기준.
+ * 칩을 누른 순서가 그대로 우선순위가 된다(다시 누르면 해제 + 뒤 순번이 앞당겨짐).
+ * 챗봇 카드(ChatPage.tsx)의 회의실 칩과 동일한 `Chip` 컴포넌트를 재사용한다.
  */
 export function PreferredRoomPicker({ rooms, isLoading, loadError, value, onChange }: PreferredRoomPickerProps) {
-  const baseId = useId();
-
-  function handleSelectChange(index: number, roomId: string) {
-    const next = [...value];
-    next[index] = roomId;
-    onChange(next);
-  }
-
-  function handleAddRow() {
-    if (value.length >= MAX_PRIORITY_COUNT) return;
-    onChange([...value, ""]);
-  }
-
-  function handleRemoveLastRow() {
-    if (value.length === 0) return;
-    onChange(value.slice(0, -1));
-  }
-
   const disabled = isLoading || loadError;
-  const canAddMore = !disabled && value.length < Math.min(MAX_PRIORITY_COUNT, rooms.length || MAX_PRIORITY_COUNT);
-  const canRemove = !disabled && value.length > 0;
+
+  function toggleRoom(roomId: string) {
+    if (value.includes(roomId)) {
+      onChange(value.filter((id) => id !== roomId));
+      return;
+    }
+    if (value.length >= MAX_PRIORITY_COUNT) return;
+    onChange([...value, roomId]);
+  }
 
   return (
     <fieldset className="room-picker">
-      <legend className="room-picker-legend">선호 회의실 (우선순위 순서)</legend>
-      <p className="room-picker-hint">선택 입력 — 비워둘 수 있음</p>
+      <legend className="room-picker-legend">선호 회의실</legend>
+      <p className="room-picker-hint">
+        자주 쓰는 순서대로 눌러주세요. 누른 순서가 추천 우선순위가 됩니다. (선택 입력, 최대 {MAX_PRIORITY_COUNT}곳)
+      </p>
 
       {loadError && (
         <p className="room-picker-error" role="alert">
@@ -59,51 +47,40 @@ export function PreferredRoomPicker({ rooms, isLoading, loadError, value, onChan
 
       {!loadError && isLoading && <p className="room-picker-loading">회의실 목록을 불러오는 중…</p>}
 
-      {!loadError && !isLoading && value.length === 0 && (
-        <p className="room-picker-empty">아직 선택한 회의실이 없습니다. 필요하면 아래 [+ 추가]를 눌러주세요.</p>
-      )}
-
-      {!loadError && value.length > 0 && (
-        <div className="room-picker-rows">
-          {value.map((roomId, index) => {
-            const usedElsewhere = new Set(value.filter((_, i) => i !== index).filter(Boolean));
-            const options = rooms.filter((room) => room.id === roomId || !usedElsewhere.has(room.id));
-            const selectId = `${baseId}-priority-${index}`;
+      {!loadError && !isLoading && rooms.length > 0 && (
+        <div className="room-picker-chips">
+          {rooms.map((room) => {
+            const order = value.indexOf(room.id);
+            const selected = order !== -1;
+            const atLimit = !selected && value.length >= MAX_PRIORITY_COUNT;
             return (
-              <div className="room-picker-row" key={index}>
-                <label className="room-picker-row-label" htmlFor={selectId}>
-                  {index + 1}순위
-                </label>
-                <select
-                  id={selectId}
-                  className="room-picker-select"
-                  value={roomId}
-                  disabled={disabled}
-                  onChange={(event) => handleSelectChange(index, event.target.value)}
-                >
-                  <option value="">회의실 선택</option>
-                  {options.map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {room.roomName}
-                      {room.floorLabel ? ` (${room.floorLabel})` : ""}
-                      {room.capacity ? ` · ${room.capacity}인` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Chip key={room.id} selected={selected} disabled={disabled || atLimit} onClick={() => toggleRoom(room.id)}>
+                {selected && <span className="room-picker-chip-order">{order + 1}</span>}
+                <span>
+                  {room.roomName}
+                  {room.floorLabel ? ` (${room.floorLabel})` : ""}
+                </span>
+                {room.capacity != null && <span className="room-picker-chip-cap">{room.capacity}인</span>}
+              </Chip>
             );
           })}
         </div>
       )}
 
-      <div className="room-picker-actions">
-        <Button variant="ghost" size="sm" onClick={handleAddRow} disabled={!canAddMore}>
-          + 추가
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleRemoveLastRow} disabled={!canRemove}>
-          - 삭제
-        </Button>
-      </div>
+      {!loadError && !isLoading && (
+        <div className="room-picker-summary">
+          <span className="room-picker-summary-text">
+            {value.length > 0
+              ? `우선순위 · ${value.map((id) => rooms.find((room) => room.id === id)?.roomName ?? id).join(" → ")}`
+              : "선택한 회의실이 없어요. 비워두면 매번 전체 목록에서 추천해요."}
+          </span>
+          {value.length > 0 && (
+            <button type="button" className="room-picker-clear" onClick={() => onChange([])}>
+              모두 지우기
+            </button>
+          )}
+        </div>
+      )}
     </fieldset>
   );
 }

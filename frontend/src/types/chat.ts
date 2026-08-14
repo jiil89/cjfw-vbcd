@@ -51,6 +51,9 @@ export interface ConfirmedResultData {
 export interface CheckAvailabilityData {
   preferred: Room[];
   others: Room[];
+  date: string;
+  startTime: string;
+  endTime: string;
 }
 
 // GET /me/reservations/today — backend/src/tools/myReservations.tool.ts의 MyReservationGroup과 동일.
@@ -65,4 +68,26 @@ export interface MyReservationGroup {
     endAt: string;
     cjSeq: string | null;
   }>;
+}
+
+// get_my_reservations 결과.
+export interface GetMyReservationsData {
+  groups: MyReservationGroup[];
+}
+
+// find_reservation_candidates 결과 — status로 세 갈래(정확히 특정됨/후보없음/후보 여러 건).
+export interface ReservationCandidate {
+  reservationId: string;
+  reservationRequestId: string | null;
+  title: string;
+  roomName: string | null;
+  startAt: string;
+  endAt: string;
+}
+
+export interface FindReservationCandidatesData {
+  status: "resolved" | "not_found" | "ambiguous";
+  message?: string;
+  candidates?: ReservationCandidate[];
+  reservation?: ReservationCandidate;
 }

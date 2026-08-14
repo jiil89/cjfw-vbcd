@@ -1,0 +1,102 @@
+.cat-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) 0;
+}
+
+.cat-loader-stage {
+  position: relative;
+  width: 64px;
+  height: 44px;
+}
+
+.cat-loader-emoji {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  font-size: 30px;
+  line-height: 1;
+  transform-origin: bottom center;
+  animation: cat-loader-hop 1100ms ease-in-out infinite;
+}
+
+.cat-loader-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 26px;
+  height: 6px;
+  margin-left: -13px;
+  border-radius: var(--radius-full);
+  background: var(--ink-tertiary);
+  opacity: 0.3;
+  animation: cat-loader-shadow 1100ms ease-in-out infinite;
+}
+
+.cat-loader-label {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+/* 제자리에서 좌우로 살짝 오가며 통통 뛰는 모션 — 걷는 느낌을 내되 자리는 벗어나지 않는다 */
+@keyframes cat-loader-hop {
+  0% {
+    transform: translate(-50%, 0) scaleX(1) scaleY(1);
+  }
+  20% {
+    transform: translate(-70%, -22px) scaleX(0.92) scaleY(1.08) rotate(-6deg);
+  }
+  50% {
+    transform: translate(-50%, -2px) scaleX(1.05) scaleY(0.94);
+  }
+  70% {
+    transform: translate(-30%, -22px) scaleX(0.92) scaleY(1.08) rotate(6deg);
+  }
+  100% {
+    transform: translate(-50%, 0) scaleX(1) scaleY(1);
+  }
+}
+
+@keyframes cat-loader-shadow {
+  0%,
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 0.32;
+  }
+  20% {
+    transform: translateX(-8px) scale(0.7);
+    opacity: 0.18;
+  }
+  50% {
+    transform: translateX(0) scale(1);
+    opacity: 0.32;
+  }
+  70% {
+    transform: translateX(8px) scale(0.7);
+    opacity: 0.18;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cat-loader-emoji {
+    animation: cat-loader-sway 2400ms ease-in-out infinite;
+  }
+  .cat-loader-shadow {
+    animation: none;
+    transform: translateX(0) scale(1);
+  }
+
+  @keyframes cat-loader-sway {
+    0%,
+    100% {
+      transform: translate(-50%, 0) rotate(-4deg);
+    }
+    50% {
+      transform: translate(-50%, 0) rotate(4deg);
+    }
+  }
+}

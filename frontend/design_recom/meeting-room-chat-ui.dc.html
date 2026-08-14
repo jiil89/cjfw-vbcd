@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  body { margin:0; background:#FAFAF9; font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:#1C1C1B; text-decoration:underline; text-underline-offset:2px; }
+  a:hover { color:#E8552A; }
+</style>
+</helmet>
+
+<section style="padding:48px 48px 24px; display:flex; flex-direction:column; gap:24px">
+  <div style="display:flex; flex-direction:column; gap:6px; max-width:640px">
+    <div style="font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:#8B8B87; font-weight:600">Turn 2 · 시나리오별 메시지 세트</div>
+    <div style="font-size:22px; font-weight:700; color:#1C1C1B; letter-spacing:-0.01em">같은 카드 문법으로 상황을 확장</div>
+    <div style="font-size:14px; line-height:1.6; color:#6E6E6A; text-wrap:pretty">1a의 카드·칩 규칙을 그대로 씁니다. 큰 카드는 “지금 결정할 대상” 하나, 칩은 “대안 목록”, 하단 버튼은 “이 메시지의 다음 행동” 하나. 취소처럼 되돌릴 수 없는 행동만 빨간색을 씁니다.</div>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start">
+
+    <div id="2a" style="display:flex; flex-direction:column; gap:10px; width:460px">
+      <div style="display:flex; align-items:center; gap:8px">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.06em; color:#fff; background:#111; padding:3px 8px; border-radius:6px">2a</div>
+        <div style="font-size:14px; font-weight:600; color:#1C1C1B">내 예약 조회</div>
+      </div>
+      <div style="background:#fff; border:1px solid #E8E7E4; border-radius:16px; padding:20px 18px; display:flex; flex-direction:column; gap:14px; box-shadow:0 1px 2px rgba(0,0,0,0.03)">
+        <div style="display:flex; justify-content:flex-end">
+          <div style="background:#111; color:#fff; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 4px 16px; max-width:75%">내가 오늘 예약한 회의실은 뭐야?</div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-start">
+          <div style="width:26px; height:26px; border-radius:50%; background:#E8552A; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none; margin-top:2px">A</div>
+          <div style="display:flex; flex-direction:column; gap:10px; flex:1; min-width:0">
+            <div style="background:#F1F0EE; color:#1C1C1B; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 16px 4px; align-self:flex-start">오늘 예약 3건이에요. 다음 일정은 1시간 뒤예요.</div>
+            <div style="border:1px solid #DFDEDA; border-radius:14px; background:#fff; overflow:hidden">
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 14px; background:#FBFBFA; border-bottom:1px solid #F0EFED">
+                <div style="font-size:12px; font-weight:600; color:#6E6E6A">8월 14일 (금)</div>
+                <div style="font-size:12px; color:#9A9A95; font-variant-numeric:tabular-nums">3건</div>
+              </div>
+              <sc-for list="{{ myBookings }}" as="b" hint-placeholder-count="3">
+                <div style="{{ b.rowStyle }}">
+                  <div style="{{ b.railStyle }}"></div>
+                  <div style="display:flex; flex-direction:column; gap:2px; flex:1; min-width:0">
+                    <div style="display:flex; align-items:center; gap:7px">
+                      <div style="font-size:14px; font-weight:600; color:#1C1C1B; letter-spacing:-0.01em">{{ b.room }}</div>
+                      <div style="{{ b.stateStyle }}">{{ b.state }}</div>
+                    </div>
+                    <div style="font-size:12.5px; color:#8B8B87">{{ b.title }}</div>
+                  </div>
+                  <div style="font-size:13px; color:#3C3C3A; font-variant-numeric:tabular-nums; white-space:nowrap">{{ b.time }}</div>
+                </div>
+              </sc-for>
+              <div style="display:flex; gap:6px; padding:11px 14px; border-top:1px solid #F0EFED; background:#FBFBFA">
+                <div onClick="{{ noop }}" style="font-size:12.5px; font-weight:600; color:#1C1C1B; border:1px solid #E4E3DF; background:#fff; padding:7px 12px; border-radius:8px; cursor:pointer" style-hover="borderColor:#B9B8B3">시간 변경</div>
+                <div onClick="{{ noop }}" style="font-size:12.5px; font-weight:600; color:#1C1C1B; border:1px solid #E4E3DF; background:#fff; padding:7px 12px; border-radius:8px; cursor:pointer" style-hover="borderColor:#B9B8B3">예약 취소</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="2b" style="display:flex; flex-direction:column; gap:10px; width:460px">
+      <div style="display:flex; align-items:center; gap:8px">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.06em; color:#fff; background:#111; padding:3px 8px; border-radius:6px">2b</div>
+        <div style="font-size:14px; font-weight:600; color:#1C1C1B">전체 가용 목록</div>
+        <div style="font-size:13px; color:#8B8B87">개수가 많을 때</div>
+      </div>
+      <div style="background:#fff; border:1px solid #E8E7E4; border-radius:16px; padding:20px 18px; display:flex; flex-direction:column; gap:14px; box-shadow:0 1px 2px rgba(0,0,0,0.03)">
+        <div style="display:flex; justify-content:flex-end">
+          <div style="background:#111; color:#fff; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 4px 16px; max-width:80%">오늘 오후 2-3시에 가능한 회의실 리스트 다 알려줘</div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-start">
+          <div style="width:26px; height:26px; border-radius:50%; background:#E8552A; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none; margin-top:2px">A</div>
+          <div style="display:flex; flex-direction:column; gap:10px; flex:1; min-width:0">
+            <div style="background:#F1F0EE; color:#1C1C1B; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 16px 4px; align-self:flex-start">14:00–15:00에 14곳 비어 있어요. 층별로 정리했어요.</div>
+            <div style="border:1px solid #DFDEDA; border-radius:14px; padding:6px 14px 12px; background:#fff; display:flex; flex-direction:column">
+              <sc-for list="{{ floors }}" as="g" hint-placeholder-count="5">
+                <div style="display:flex; gap:12px; align-items:center; padding:9px 0; border-bottom:1px solid #F0EFED">
+                  <div style="width:34px; flex:none; font-size:12.5px; font-weight:700; color:#8B8B87; font-variant-numeric:tabular-nums">{{ g.floor }}</div>
+                  <div style="display:flex; flex-wrap:wrap; gap:6px; flex:1; min-width:0">
+                    <sc-for list="{{ g.rooms }}" as="r" hint-placeholder-count="3">
+                      <div onClick="{{ r.onClick }}" style="{{ r.chipStyle }}" style-hover="borderColor:#B9B8B3">
+                        <span>{{ r.id }}</span>
+                        <span style="{{ r.capStyle }}">{{ r.cap }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:12px">
+                <div style="font-size:12.5px; color:#8B8B87">선택 · <span style="color:#1C1C1B; font-weight:600">{{ selList }}</span></div>
+                <div onClick="{{ noop }}" style="background:#111; color:#fff; font-size:13px; font-weight:600; padding:9px 16px; border-radius:9px; cursor:pointer" style-hover="background:#000">이 회의실로 예약</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="2c" style="display:flex; flex-direction:column; gap:10px; width:460px">
+      <div style="display:flex; align-items:center; gap:8px">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.06em; color:#fff; background:#111; padding:3px 8px; border-radius:6px">2c</div>
+        <div style="font-size:14px; font-weight:600; color:#1C1C1B">취소 대상 되묻기</div>
+      </div>
+      <div style="background:#fff; border:1px solid #E8E7E4; border-radius:16px; padding:20px 18px; display:flex; flex-direction:column; gap:14px; box-shadow:0 1px 2px rgba(0,0,0,0.03)">
+        <div style="display:flex; justify-content:flex-end">
+          <div style="background:#111; color:#fff; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 4px 16px; max-width:75%">오늘 예약한 회의실 취소할게</div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-start">
+          <div style="width:26px; height:26px; border-radius:50%; background:#E8552A; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none; margin-top:2px">A</div>
+          <div style="display:flex; flex-direction:column; gap:10px; flex:1; min-width:0">
+            <div style="background:#F1F0EE; color:#1C1C1B; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 16px 4px; align-self:flex-start">오늘 예약 3건 중 어떤 걸 취소할까요?</div>
+            <div style="border:1px solid #DFDEDA; border-radius:14px; background:#fff; overflow:hidden">
+              <sc-for list="{{ cancelRows }}" as="b" hint-placeholder-count="3">
+                <div onClick="{{ b.onClick }}" style="{{ b.rowStyle }}" style-hover="background:#FAFAF9">
+                  <div style="{{ b.radioStyle }}">
+                    <div style="{{ b.radioDotStyle }}"></div>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:2px; flex:1; min-width:0">
+                    <div style="{{ b.nameStyle }}">{{ b.room }}</div>
+                    <div style="font-size:12.5px; color:#8B8B87">{{ b.title }}</div>
+                  </div>
+                  <div style="font-size:13px; color:#3C3C3A; font-variant-numeric:tabular-nums; white-space:nowrap">{{ b.time }}</div>
+                </div>
+              </sc-for>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 14px; border-top:1px solid #F0EFED; background:#FBFBFA">
+                <div style="font-size:12.5px; color:#8B8B87">{{ cancelHint }}</div>
+                <div onClick="{{ noop }}" style="background:#fff; color:#C0362C; border:1px solid #EBC9C4; font-size:13px; font-weight:600; padding:8px 14px; border-radius:9px; cursor:pointer" style-hover="background:#FCF1EF">취소하기</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="2d" style="display:flex; flex-direction:column; gap:10px; width:460px">
+      <div style="display:flex; align-items:center; gap:8px">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.06em; color:#fff; background:#111; padding:3px 8px; border-radius:6px">2d</div>
+        <div style="font-size:14px; font-weight:600; color:#1C1C1B">완료 · 되돌리기</div>
+      </div>
+      <div style="background:#fff; border:1px solid #E8E7E4; border-radius:16px; padding:20px 18px; display:flex; flex-direction:column; gap:14px; box-shadow:0 1px 2px rgba(0,0,0,0.03)">
+        <div style="display:flex; justify-content:flex-end">
+          <div style="background:#111; color:#fff; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 4px 16px; max-width:75%">13F-3 취소해줘</div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-start">
+          <div style="width:26px; height:26px; border-radius:50%; background:#E8552A; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none; margin-top:2px">A</div>
+          <div style="display:flex; flex-direction:column; gap:10px; flex:1; min-width:0">
+            <div style="background:#F1F0EE; color:#1C1C1B; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 16px 4px; align-self:flex-start">취소했어요. 참석자에게 알림도 보냈어요.</div>
+            <div style="border:1px solid #DFDEDA; border-radius:14px; padding:14px; background:#fff; display:flex; align-items:center; gap:12px">
+              <div style="display:flex; flex-direction:column; gap:3px; flex:1; min-width:0">
+                <div style="font-size:15px; font-weight:600; color:#8B8B87; text-decoration:line-through; letter-spacing:-0.01em">13F-3 · 13:00–14:00</div>
+                <div style="font-size:12.5px; color:#9A9A95">디자인 리뷰 · 8월 14일 (금)</div>
+              </div>
+              <div onClick="{{ noop }}" style="font-size:12.5px; font-weight:600; color:#1C1C1B; border:1px solid #E4E3DF; background:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; white-space:nowrap" style-hover="borderColor:#B9B8B3">되돌리기</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="2e" style="display:flex; flex-direction:column; gap:10px; width:460px">
+      <div style="display:flex; align-items:center; gap:8px">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.06em; color:#fff; background:#111; padding:3px 8px; border-radius:6px">2e</div>
+        <div style="font-size:14px; font-weight:600; color:#1C1C1B">가능한 곳 없음 · 대안</div>
+      </div>
+      <div style="background:#fff; border:1px solid #E8E7E4; border-radius:16px; padding:20px 18px; display:flex; flex-direction:column; gap:14px; box-shadow:0 1px 2px rgba(0,0,0,0.03)">
+        <div style="display:flex; justify-content:flex-end">
+          <div style="background:#111; color:#fff; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 4px 16px; max-width:75%">오늘 4시에 20명 들어가는 회의실</div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-start">
+          <div style="width:26px; height:26px; border-radius:50%; background:#E8552A; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none; margin-top:2px">A</div>
+          <div style="display:flex; flex-direction:column; gap:10px; flex:1; min-width:0">
+            <div style="background:#F1F0EE; color:#1C1C1B; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 16px 4px; align-self:flex-start">16:00에 20인실은 비어 있는 곳이 없어요. 가까운 대안이에요.</div>
+            <div style="border:1px solid #DFDEDA; border-radius:14px; padding:14px; background:#fff; display:flex; flex-direction:column; gap:12px">
+              <div style="display:flex; flex-direction:column; gap:7px">
+                <div style="font-size:12px; color:#8B8B87; font-weight:600">같은 회의실, 다른 시간</div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px">
+                  <div onClick="{{ noop }}" style="display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:9px; border:1px solid #E4E3DF; background:#fff; font-size:13px; color:#1C1C1B; cursor:pointer" style-hover="borderColor:#B9B8B3">15:00<span style="font-size:11.5px; color:#9A9A95">20F-1</span></div>
+                  <div onClick="{{ noop }}" style="display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:9px; border:1px solid #E4E3DF; background:#fff; font-size:13px; color:#1C1C1B; cursor:pointer" style-hover="borderColor:#B9B8B3">17:30<span style="font-size:11.5px; color:#9A9A95">20F-1</span></div>
+                  <div onClick="{{ noop }}" style="display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:9px; border:1px solid #E4E3DF; background:#fff; font-size:13px; color:#1C1C1B; cursor:pointer" style-hover="borderColor:#B9B8B3">내일 16:00<span style="font-size:11.5px; color:#9A9A95">20F-1</span></div>
+                </div>
+              </div>
+              <div style="height:1px; background:#F0EFED"></div>
+              <div style="display:flex; flex-direction:column; gap:7px">
+                <div style="font-size:12px; color:#8B8B87; font-weight:600">16:00 가능, 조금 작은 곳</div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px">
+                  <div onClick="{{ noop }}" style="display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:9px; border:1px solid #E4E3DF; background:#fff; font-size:13px; color:#1C1C1B; cursor:pointer" style-hover="borderColor:#B9B8B3">18F-2<span style="font-size:11.5px; color:#9A9A95">16인</span></div>
+                  <div onClick="{{ noop }}" style="display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:9px; border:1px solid #E4E3DF; background:#fff; font-size:13px; color:#1C1C1B; cursor:pointer" style-hover="borderColor:#B9B8B3">3F-6<span style="font-size:11.5px; color:#9A9A95">12인</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="padding:24px 48px 56px; display:flex; flex-direction:column; gap:16px; border-top:1px solid #ECEBE8">
+  <div style="display:flex; flex-direction:column; gap:6px; max-width:520px">
+    <div style="font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:#8B8B87; font-weight:600">Turn 1 · 확정</div>
+    <div style="font-size:18px; font-weight:700; color:#1C1C1B; letter-spacing:-0.01em">추천 우선형 (기본 예약 흐름)</div>
+  </div>
+
+  <div style="width:460px; background:#fff; border:1px solid #E8E7E4; border-radius:16px; padding:20px 18px; display:flex; flex-direction:column; gap:14px; box-shadow:0 1px 2px rgba(0,0,0,0.03)">
+    <div style="display:flex; justify-content:flex-end">
+      <div style="background:#111; color:#fff; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 4px 16px; max-width:75%">다음주 월요일, 오전 10시, 1시간동안, 7명</div>
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:flex-start">
+      <div style="width:26px; height:26px; border-radius:50%; background:#E8552A; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none; margin-top:2px">A</div>
+      <div style="display:flex; flex-direction:column; gap:10px; flex:1; min-width:0">
+        <div style="background:#F1F0EE; color:#1C1C1B; font-size:14px; line-height:1.5; padding:10px 14px; border-radius:16px 16px 16px 4px; align-self:flex-start">7명 · 10:00–11:00, 가능한 회의실 8곳이에요.</div>
+
+        <div style="border:1px solid #DFDEDA; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:12px; background:#fff">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px">
+            <div style="display:flex; align-items:center; gap:8px">
+              <div style="font-size:18px; font-weight:700; color:#1C1C1B; letter-spacing:-0.01em">{{ selAObj.id }}</div>
+              <div style="font-size:11px; font-weight:600; color:#7A5C00; background:#FCF1CF; padding:2px 7px; border-radius:5px">추천</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:1px">
+              <div style="font-size:11.5px; color:#9A9A95; font-variant-numeric:tabular-nums">8월 17일 (월)</div>
+              <div style="font-size:12.5px; color:#8B8B87; font-variant-numeric:tabular-nums">10:00–11:00</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap">
+            <div style="font-size:12px; font-weight:600; color:#1E7A4B; background:#E8F5EC; padding:3px 8px; border-radius:6px">{{ selAObj.cap }}인</div>
+            <div style="font-size:12px; color:#6E6E6A; background:#F2F1EF; padding:3px 8px; border-radius:6px">{{ selAObj.note }}</div>
+          </div>
+          <div style="display:flex; gap:8px">
+            <div onClick="{{ noop }}" style="flex:1; text-align:center; background:#111; color:#fff; font-size:13.5px; font-weight:600; padding:10px 12px; border-radius:9px; cursor:pointer" style-hover="background:#000">이 회의실로 확정</div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:7px">
+          <div style="font-size:12px; color:#8B8B87; font-weight:600">다른 후보 7곳</div>
+          <div style="display:flex; flex-wrap:wrap; gap:6px">
+            <sc-for list="{{ othersA }}" as="r" hint-placeholder-count="7">
+              <div onClick="{{ r.onClick }}" style="{{ r.chipStyle }}" style-hover="borderColor:#B9B8B3">
+                <span>{{ r.id }}</span>
+                <span style="{{ r.capStyle }}">{{ r.cap }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ROOMS = [
+  { id: '3F-6',  cap: 12, floor: '3F',  pref: true },
+  { id: '3F-1',  cap: 8,  floor: '3F' },
+  { id: '3F-4',  cap: 8,  floor: '3F' },
+  { id: '3F-9',  cap: 8,  floor: '3F' },
+  { id: '3F-12', cap: 8,  floor: '3F' },
+  { id: '13F-3', cap: 8,  floor: '13F' },
+  { id: '14F-2', cap: 8,  floor: '14F' },
+  { id: '15F-5', cap: 8,  floor: '15F' }
+];
+
+const AVAILABLE_2PM = [
+  { id: '3F-1',  cap: 8,  floor: '3F' },
+  { id: '3F-2',  cap: 4,  floor: '3F' },
+  { id: '3F-6',  cap: 12, floor: '3F' },
+  { id: '3F-9',  cap: 8,  floor: '3F' },
+  { id: '3F-12', cap: 8,  floor: '3F' },
+  { id: '8F-3',  cap: 6,  floor: '8F' },
+  { id: '8F-7',  cap: 10, floor: '8F' },
+  { id: '13F-3', cap: 8,  floor: '13F' },
+  { id: '13F-8', cap: 4,  floor: '13F' },
+  { id: '14F-2', cap: 8,  floor: '14F' },
+  { id: '14F-5', cap: 16, floor: '14F' },
+  { id: '15F-5', cap: 8,  floor: '15F' },
+  { id: '15F-6', cap: 6,  floor: '15F' },
+  { id: '15F-11',cap: 10, floor: '15F' }
+];
+
+const BOOKINGS = [
+  { id: '3F-4',  time: '09:30–10:00', title: '데일리 스탠드업', state: '종료' },
+  { id: '13F-3', time: '13:00–14:00', title: '디자인 리뷰',     state: '다음' },
+  { id: '3F-6',  time: '16:00–17:00', title: '1:1',            state: '' }
+];
+
+class Component extends DCLogic {
+  state = { sel: '3F-6', selList: '3F-6', cancelSel: null };
+
+  chip(on) {
+    return {
+      display: 'inline-flex', alignItems: 'center', gap: '5px',
+      padding: '6px 10px', borderRadius: '9px',
+      border: on ? '1px solid #111' : '1px solid #E4E3DF',
+      background: on ? '#111' : '#fff',
+      color: on ? '#fff' : '#1C1C1B',
+      fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+      transition: 'border-color .12s, background .12s', whiteSpace: 'nowrap'
+    };
+  }
+
+  capStyle(on) {
+    return { fontSize: '11.5px', color: on ? 'rgba(255,255,255,0.62)' : '#9A9A95', fontVariantNumeric: 'tabular-nums' };
+  }
+
+  renderVals() {
+    const { sel, selList, cancelSel } = this.state;
+    const cur = ROOMS.find(r => r.id === sel);
+
+    const othersA = ROOMS.filter(r => r.id !== sel).map(r => ({
+      id: r.id, cap: r.cap + '인',
+      chipStyle: this.chip(false),
+      capStyle: this.capStyle(false),
+      onClick: () => this.setState({ sel: r.id })
+    }));
+
+    const floors = ['3F', '8F', '13F', '14F', '15F'].map(f => ({
+      floor: f,
+      rooms: AVAILABLE_2PM.filter(r => r.floor === f).map(r => ({
+        id: r.id, cap: r.cap + '인',
+        chipStyle: this.chip(selList === r.id),
+        capStyle: this.capStyle(selList === r.id),
+        onClick: () => this.setState({ selList: r.id })
+      }))
+    }));
+
+    const myBookings = BOOKINGS.map((b, i) => ({
+      room: b.id, time: b.time, title: b.title,
+      state: b.state || '예정',
+      rowStyle: {
+        display: 'flex', alignItems: 'center', gap: '10px',
+        padding: '11px 14px',
+        borderTop: i === 0 ? 'none' : '1px solid #F0EFED',
+        opacity: b.state === '종료' ? 0.55 : 1
+      },
+      railStyle: {
+        width: '3px', height: '28px', borderRadius: '2px', flex: 'none',
+        background: b.state === '다음' ? '#E8552A' : '#E0DFDB'
+      },
+      stateStyle: b.state === '다음'
+        ? { fontSize: '11px', fontWeight: 600, color: '#B23F1D', background: '#FBEBE4', padding: '2px 6px', borderRadius: '5px' }
+        : { fontSize: '11px', fontWeight: 600, color: '#8B8B87', background: '#F2F1EF', padding: '2px 6px', borderRadius: '5px' }
+    }));
+
+    const cancelRows = BOOKINGS.map((b, i) => {
+      const on = cancelSel === b.id;
+      return {
+        room: b.id, time: b.time, title: b.title,
+        onClick: () => this.setState({ cancelSel: b.id }),
+        rowStyle: {
+          display: 'flex', alignItems: 'center', gap: '10px',
+          padding: '11px 14px', cursor: 'pointer',
+          background: on ? '#FCF5F4' : '#fff',
+          borderTop: i === 0 ? 'none' : '1px solid #F0EFED',
+          transition: 'background .12s'
+        },
+        radioStyle: {
+          width: '16px', height: '16px', borderRadius: '50%', flex: 'none',
+          border: on ? '1px solid #C0362C' : '1px solid #D6D5D1',
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        },
+        radioDotStyle: {
+          width: '8px', height: '8px', borderRadius: '50%',
+          background: on ? '#C0362C' : 'transparent'
+        },
+        nameStyle: { fontSize: '14px', fontWeight: on ? 700 : 600, color: '#1C1C1B', letterSpacing: '-0.01em' }
+      };
+    });
+
+    return {
+      selAObj: { ...cur, note: cur.pref ? '선호 회의실' : '여유 좌석' },
+      othersA, floors, selList, myBookings, cancelRows,
+      cancelHint: cancelSel ? cancelSel + ' 예약을 취소해요' : '취소할 예약을 골라주세요',
+      noop: () => {}
+    };
+  }
+}
+
+</script>
+</body>
+</html>

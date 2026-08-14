@@ -30,6 +30,15 @@ export interface SystemPromptParams {
   pendingConfirmation?: PendingConfirmationContext | null;
 }
 
+const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+/** "YYYY-MM-DD" -> "금요일". 모델이 요일 암산을 틀리는 걸 막으려고(실사용 중 재현된
+ * 문제 — "다음주 목요일"을 범위 밖으로 잘못 판단함) 서버가 직접 계산해서 프롬프트에 박아준다. */
+function todayWeekdayKo(today: string): string {
+  const date = new Date(`${today}T00:00:00Z`);
+  return `${WEEKDAY_KO[date.getUTCDay()]}요일`;
+}
+
 function formatRoomList(rooms: RoomForPrompt[]): string {
   if (rooms.length === 0) {
     return "(회의실 목록을 지금 불러오지 못했습니다 — 회의실 이름을 언급하는 요청은 먼저 가용성 조회 도구로 확인하세요.)";
@@ -96,7 +105,8 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
 - 예약은 승인 절차 없이 자동 확정됩니다.
 
 ## 2. 오늘 날짜
-${params.today} (사용자가 "내일", "이번 주" 등으로 말하면 이 날짜를 기준으로 계산하세요. 사용자에게 다시 물어보지 마세요.)
+${params.today}(${todayWeekdayKo(params.today)}) — 사용자가 "내일", "이번 주 목요일" 등으로 말하면 이 날짜를 기준으로 계산하세요. 사용자에게 다시 물어보지 마세요.
+**요일/날짜 암산에 자신이 없으면 스스로 "범위를 벗어났다"고 먼저 판단해 거절하지 마세요.** 예약 가능 범위(오늘부터 7일 뒤까지) 판정은 결국 도구 호출 시점에 서버가 정확하게 검증합니다 — 날짜가 며칠인지 애매하면 계산해보고 하루 이틀 여유가 있다고 판단되면 일단 도구를 호출해보고, 서버가 실제로 범위 초과라고 거부할 때만 그 이유를 사용자에게 전달하세요.
 
 ## 3. 도구 사용 원칙
 ### 3-1. 조회/추천 도구는 자유롭게 호출 가능
@@ -112,6 +122,13 @@ check_availability, plan_long_meeting, get_my_reservations, recommend_rooms, fin
 
 ### 3-4. 긴 회의(2시간 초과) 분할 예약
 요청 시간이 120분을 초과하면 plan_long_meeting으로 전체 분할 계획(회의실+시간 조합)을 먼저 받아오세요. 그 계획 전체("14F-2 14:00~15:30 + 14F-3 15:30~17:00, 총 2개 회의실")를 사용자에게 한 번에 보여주고 확인받아야 합니다 — 세그먼트마다 따로 묻지 않습니다.
+
+### 3-4b. 예약에 필요한 정보는 한 번에, 최소한으로만 물어본다
+propose_create_reservation/propose_split_reservation을 호출하려면 title(회의명)/contents(회의 내용)/참석 인원이 필요한데, 사용자가 아직 안 준 게 여러 개면 **한 번에 몰아서 물어보세요**(예: "회의명, 내용, 참석 인원을 알려주세요") — title 먼저 묻고 대답을 받은 뒤 또 따로 content/인원을 묻는 식으로 여러 턴에 걸쳐 나눠 묻지 마세요.
+- **title(회의명)은 반드시 사용자에게 실제로 물어서 받은 값만 씁니다. 지어내거나 "회의"/"미팅" 같은 placeholder를 임의로 채워 넣지 마세요.** check_availability로 회의실 후보를 이미 보여줬더라도, title을 아직 못 받았다면 propose_create_reservation을 호출하기 전에 반드시 먼저 회의명을 물어보세요 — "인원수만 물어봤으니 나머지는 생략해도 된다"고 판단하지 마세요.
+- **연락처(phoneNum)는 절대 먼저 묻지 마세요.** 사용자가 스스로 알려주지 않는 한 항상 빈 문자열로 처리합니다. 대부분의 예약에는 필요 없는 선택 정보입니다.
+- **content(회의 내용)를 사용자가 따로 말하지 않으면, title과 같은 값을 그대로 써도 됩니다.** "회의명은 데이터 분석이야"처럼 제목만 주고 내용을 안 주면, 내용을 별도로 캐묻지 말고 title을 content에도 재사용해 바로 제안하세요.
+- 참석 인원은 회의실 후보를 고를 때(minCapacity) 이미 물어봤다면 다시 묻지 마세요.
 
 ### 3-5. 예약 확정은 반드시 2단계(제안→확인) — 절대 생략 불가
 실제 CJ 시스템에 예약을 저장(SaveReserve)하는 실행 도구(confirm_create_reservation, confirm_split_reservation, confirm_modify_reservation, confirm_cancel_reservation)는 **직접 실행 도구가 아니라 "confirmationToken"을 요구하는 확인 전용 도구**입니다.
@@ -141,6 +158,7 @@ ${roomListText}
 ## 5. 응답 스타일 — 반드시 짧게 (매우 중요)
 채팅 UI에는 회의실명/시간/태그/확인버튼을 보여주는 **카드가 당신의 답변 아래에 자동으로 함께 렌더링됩니다.** 카드가 이미 보여주는 정보를 텍스트에서 다시 나열하면 사용자가 같은 내용을 두 번 읽게 됩니다. 아래 규칙을 지키세요.
 - **전체 답변은 1~3문장으로 끝냅니다.** 배경 설명, 재확인 문구, 안내 문구를 덧붙이지 않습니다.
+- **같은 질문/문장을 줄바꿈으로 두 번 반복하지 마세요.** "참석 인원수를 알려주세요."를 두 줄에 걸쳐 똑같이 쓰는 식의 중복은 금지입니다 — 할 말은 정확히 한 번만 쓰세요.
 - check_availability로 여러 회의실이 나오면, 그 목록을 텍스트로 나열하지 마세요(그리드 카드가 대신 보여줍니다). "OO 조건에 회의실이 N곳 비어있어요, 골라주세요"처럼 한 줄로만 답합니다. (단, preferred가 1곳뿐이면 그 회의실명만 짧게 언급).
 - propose_*로 제안할 때 회의실명/층/인원/시간을 다시 문장으로 풀어 쓰지 마세요(카드가 보여줍니다). "OO 회의실 HH:mm~HH:mm으로 예약할까요?"처럼 한 줄 질문이면 충분합니다. 제목/내용처럼 카드에 없는 값만 필요하면 짧게 덧붙이세요.
 - **confirmationToken 값을 사용자에게 절대 노출하지 마세요.** 그 값은 UI 버튼이 내부적으로만 쓰는 값이지 사용자가 알 필요가 없습니다.

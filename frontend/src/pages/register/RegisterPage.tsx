@@ -57,83 +57,112 @@ export function RegisterPage() {
 
   return (
     <main className="register-page">
-      <Card radius="xl" className="register-card">
-        <h1 className="register-title">회의실 예약 — 계정 등록 신청</h1>
+      <div className="register-column">
+        <div className="register-brand">
+          <div className="register-logo" aria-hidden="true">
+            회
+          </div>
+          <div className="register-brand-text">
+            <h1 className="register-title">계정 등록 신청</h1>
+            <p className="register-subtitle">승인까지 보통 1영업일이 걸려요</p>
+          </div>
+        </div>
 
-        <form className="register-form" onSubmit={handleSubmit} noValidate>
-          <section className="register-section">
-            <h2 className="register-section-title">사내 계정 정보</h2>
-            <TextInput
-              label="사내 계정 ID (email_alias)"
-              name="email_alias"
-              autoComplete="username"
-              required
-              value={emailAlias}
-              onChange={(event) => setEmailAlias(event.target.value)}
-            />
-            <TextInput
-              label="사내 계정 비밀번호"
-              name="corporate_password"
-              type="password"
-              autoComplete="new-password"
-              required
-              helpText="CJ 자동화 로그인용으로 암호화 저장됩니다."
-              value={corporatePassword}
-              onChange={(event) => setCorporatePassword(event.target.value)}
-            />
-          </section>
+        <Card radius="xl" bordered className="register-card">
+          <form className="register-form" onSubmit={handleSubmit} noValidate>
+            <section className="register-section">
+              <h2 className="register-section-title">
+                <span className="register-section-number">1</span>
+                사내 계정
+              </h2>
+              <p className="register-section-warning">
+                실제로 존재하는 CJ 사내 계정인지는 별도로 확인하지 않아요. 잘못된 ID·비밀번호를 입력하면
+                승인되어도 회의실 예약 기능이 동작하지 않습니다.
+              </p>
+              <TextInput
+                label="계정 ID"
+                name="email_alias"
+                autoComplete="username"
+                required
+                helpText="메일 주소 앞부분이에요. @회사도메인은 빼고 입력하세요."
+                value={emailAlias}
+                onChange={(event) => setEmailAlias(event.target.value)}
+              />
+              <TextInput
+                label="계정 비밀번호"
+                name="corporate_password"
+                type="password"
+                autoComplete="new-password"
+                required
+                helpText="예약 자동화 로그인에만 쓰이고 암호화 저장됩니다."
+                value={corporatePassword}
+                onChange={(event) => setCorporatePassword(event.target.value)}
+              />
+            </section>
 
-          <section className="register-section">
-            <PreferredRoomPicker
-              rooms={roomsQuery.data ?? []}
-              isLoading={roomsQuery.isLoading}
-              loadError={roomsQuery.isError}
-              value={preferredRoomIds}
-              onChange={setPreferredRoomIds}
-            />
-          </section>
+            <section className="register-section">
+              <h2 className="register-section-title">
+                <span className="register-section-number">2</span>
+                선호 회의실
+                <span className="register-section-optional">선택</span>
+              </h2>
+              <PreferredRoomPicker
+                rooms={roomsQuery.data ?? []}
+                isLoading={roomsQuery.isLoading}
+                loadError={roomsQuery.isError}
+                value={preferredRoomIds}
+                onChange={setPreferredRoomIds}
+              />
+            </section>
 
-          <section className="register-section">
-            <h2 className="register-section-title">이 앱 로그인 정보</h2>
-            <TextInput
-              label="앱 로그인 비밀번호"
-              name="app_password"
-              type="password"
-              autoComplete="new-password"
-              required
-              value={appPassword}
-              onChange={(event) => setAppPassword(event.target.value)}
-            />
-            <TextInput
-              label="앱 로그인 비밀번호 확인"
-              name="app_password_confirm"
-              type="password"
-              autoComplete="new-password"
-              required
-              helpText="사내 계정 비밀번호와 별개 값입니다. 해시로 저장됩니다."
-              errorMessage={passwordsMismatch ? "비밀번호가 일치하지 않습니다." : undefined}
-              success={passwordsMatch}
-              value={appPasswordConfirm}
-              onChange={(event) => setAppPasswordConfirm(event.target.value)}
-              onBlur={() => setConfirmTouched(true)}
-            />
-          </section>
+            <section className="register-section">
+              <h2 className="register-section-title">
+                <span className="register-section-number">3</span>
+                앱 로그인 비밀번호
+              </h2>
+              <p className="register-section-hint">사내 계정 비밀번호와 다른 값을 쓰세요. 해시로 저장됩니다.</p>
+              <div className="register-password-row">
+                <TextInput
+                  label="비밀번호"
+                  name="app_password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={appPassword}
+                  onChange={(event) => setAppPassword(event.target.value)}
+                />
+                <TextInput
+                  label="비밀번호 확인"
+                  name="app_password_confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  errorMessage={passwordsMismatch ? "두 비밀번호가 서로 달라요" : undefined}
+                  success={passwordsMatch}
+                  helpText={passwordsMatch ? "비밀번호가 일치해요" : undefined}
+                  value={appPasswordConfirm}
+                  onChange={(event) => setAppPasswordConfirm(event.target.value)}
+                  onBlur={() => setConfirmTouched(true)}
+                />
+              </div>
+            </section>
 
-          {submitError && (
-            <p className="register-error-banner" role="alert">
-              {submitError}
-            </p>
-          )}
+            {submitError && (
+              <p className="register-error-banner" role="alert">
+                {submitError}
+              </p>
+            )}
 
-          <Button type="submit" className="register-submit" loading={registerMutation.isPending}>
-            등록 신청
-          </Button>
-        </form>
+            <Button type="submit" className="register-submit" loading={registerMutation.isPending}>
+              등록 신청
+            </Button>
+          </form>
+        </Card>
 
         <p className="register-login-link">
           이미 승인된 계정이 있으신가요? <Link to="/login">로그인하러 가기</Link>
         </p>
-      </Card>
+      </div>
     </main>
   );
 }
@@ -148,18 +177,20 @@ function RegistrationConfirmation({ result, onGoToLogin }: RegistrationConfirmat
 
   return (
     <main className="register-page">
-      <Card radius="xl" className="register-card register-confirmation">
-        <h1 className="register-title">등록 신청이 접수되었습니다.</h1>
-        <p className="register-confirmation-lead">승인되면 로그인하실 수 있어요.</p>
-        <p className="register-confirmation-branch">
-          {isAutoApproved
-            ? "화이트리스트 대상으로 확인되어 자동 승인되었습니다. 바로 로그인하실 수 있어요."
-            : "화이트리스트 대상이 아니어서 관리자 승인 후 이용하실 수 있어요."}
-        </p>
-        <Button className="register-submit" onClick={onGoToLogin}>
-          로그인 페이지로 이동
-        </Button>
-      </Card>
+      <div className="register-column">
+        <Card radius="xl" bordered className="register-card register-confirmation">
+          <h1 className="register-title">등록 신청이 접수되었습니다.</h1>
+          <p className="register-confirmation-lead">승인되면 로그인하실 수 있어요.</p>
+          <p className="register-confirmation-branch">
+            {isAutoApproved
+              ? "화이트리스트 대상으로 확인되어 자동 승인되었습니다. 바로 로그인하실 수 있어요."
+              : "화이트리스트 대상이 아니어서 관리자 승인 후 이용하실 수 있어요."}
+          </p>
+          <Button className="register-submit" onClick={onGoToLogin}>
+            로그인 페이지로 이동
+          </Button>
+        </Card>
+      </div>
     </main>
   );
 }

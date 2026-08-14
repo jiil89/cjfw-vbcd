@@ -10,7 +10,7 @@
 // 아직 라이브 테스트한 적이 없다(도메인 정의서 8번). 이 파일은 그 가정을 그대로 적용해
 // seq를 넘기지만, 실사용 확인 후 도메인 정의서 9번/8번과 함께 갱신해야 한다.
 import { checkDayCountLimit, checkRoom, checkStraightRoom, delReserve, saveReserve } from "../cj-automation/client";
-import { getValidSession } from "../cj-automation/session";
+import { getValidSession, type CjSession } from "../cj-automation/session";
 import {
   findReservationById,
   findReservationsByRequestId,
@@ -21,7 +21,7 @@ import { findRoomById } from "../db/repositories/roomRepository";
 import type { Room } from "../db/repositories/roomRepository";
 import { resolveEmailAlias } from "./availability.tool";
 import { assertValidReservationWindow, BusinessRuleViolationError } from "./businessRules";
-import { ReservationConflictError } from "./reservation.tool";
+import { fetchRoomOptionInfo, ReservationConflictError } from "./reservation.tool";
 import { ReservationNotFoundError } from "./reservationTargeting";
 
 export { resolveSingleReservationTarget, findReservationCandidates } from "./reservationTargeting";
@@ -96,6 +96,56 @@ function extractSeq(raw: unknown): string {
 
 function splitTimestamp(ts: string): { date: string; time: string } {
   return { date: ts.slice(0, 10), time: ts.slice(11, 16) };
+}
+
+/**
+ * [2026-08-14 실사용 검증 완료] gubun/is_send_alarm/admin_alias/admin_lang을 회의실별로
+ * getEmptyRoomInfo에서 동적으로 채운다(reservation.tool.ts와 동일 이유 — client.ts의
+ * GetEmptyRoomInfoResponse 주석 참고). SaveReserve 응답의 Result 필드도 명시적으로 확인한다
+ * (기존엔 이 확인이 없어서 실패해도 extractSeq가 우연히 뭔가를 뽑아내면 성공으로 오판할
+ * 여지가 있었다).
+ */
+async function saveReserveChecked(
+  session: CjSession,
+  room: Room,
+  params: { date: string; startTime: string; endTime: string; title: string; contents: string; phoneNum: string }
+): Promise<string> {
+  const roomOption = await fetchRoomOptionInfo(session, {
+    roomCode: room.roomCode,
+    date: params.date,
+    startTime: params.startTime,
+    endTime: params.endTime,
+  });
+
+  const saveResult = await saveReserve(session, {
+    buildingCode: room.areaCode,
+    floorCode: room.subAreaCode,
+    roomCode: room.roomCode,
+    roomName: room.roomName,
+    reserveDate: params.date,
+    startTime: params.startTime,
+    endTime: params.endTime,
+    title: params.title,
+    contents: params.contents,
+    phoneNum: params.phoneNum,
+    isSendMail: "0",
+    attendeeCount: "",
+    gubun: roomOption.gubun,
+    reqList: "",
+    optList: "",
+    isSendAlarm: roomOption.isSendAlarm,
+    adminAlias: roomOption.adminAlias,
+    adminLang: roomOption.adminLang,
+    reserveType: "I",
+  });
+
+  const resultObj = saveResult && typeof saveResult === "object" ? (saveResult as Record<string, unknown>) : {};
+  if (resultObj.Result !== "1" && resultObj.Result !== 1) {
+    console.error(`[tools/modifyReservation] SaveReserve Result≠1(실패로 판정): ${JSON.stringify(saveResult)}`);
+    throw new ReservationConflictError(`${room.roomName} 예약 저장이 CJ 시스템에서 거부되었습니다.`);
+  }
+
+  return extractSeq(saveResult);
 }
 
 /**
@@ -189,55 +239,27 @@ export async function modifyReservation(
 
   let newCjSeq: string;
   try {
-    const saveResult = await saveReserve(session, {
-      buildingCode: newRoom.areaCode,
-      floorCode: newRoom.subAreaCode,
-      roomCode: newRoom.roomCode,
-      roomName: newRoom.roomName,
-      reserveDate: newDate,
+    newCjSeq = await saveReserveChecked(session, newRoom, {
+      date: newDate,
       startTime: newStartTime,
       endTime: newEndTime,
       title: reservation.title,
       contents: reservation.contents ?? "",
       phoneNum: "",
-      isSendMail: "0",
-      attendeeCount: "",
-      gubun: 0,
-      reqList: "",
-      optList: "",
-      isSendAlarm: "False",
-      adminAlias: "",
-      adminLang: "",
-      reserveType: "I",
     });
-    newCjSeq = extractSeq(saveResult);
   } catch (err) {
     const originalRoom = await findRoomById(reservation.roomId);
     let restored = false;
     if (originalRoom) {
       try {
-        const restoreResult = await saveReserve(session, {
-          buildingCode: originalRoom.areaCode,
-          floorCode: originalRoom.subAreaCode,
-          roomCode: originalRoom.roomCode,
-          roomName: originalRoom.roomName,
-          reserveDate: original.date,
+        const restoredSeq = await saveReserveChecked(session, originalRoom, {
+          date: original.date,
           startTime: original.time,
           endTime: originalEnd.time,
           title: reservation.title,
           contents: reservation.contents ?? "",
           phoneNum: "",
-          isSendMail: "0",
-          attendeeCount: "",
-          gubun: 0,
-          reqList: "",
-          optList: "",
-          isSendAlarm: "False",
-          adminAlias: "",
-          adminLang: "",
-          reserveType: "I",
         });
-        const restoredSeq = extractSeq(restoreResult);
         await markReservationModified(reservation.id, { cjSeq: restoredSeq });
         restored = true;
       } catch {

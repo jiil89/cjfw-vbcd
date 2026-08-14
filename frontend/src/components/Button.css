@@ -74,6 +74,21 @@
   transform: scale(0.98);
 }
 
+/* ---- danger: 되돌리기 어려운 파괴적 행동(예약 취소) 전용 — ghost 톤 + semantic-error 색 ---- */
+.btn-danger {
+  background: var(--surface-1);
+  color: var(--semantic-error);
+  border: 1px solid var(--semantic-error-soft);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--semantic-error-soft);
+}
+
+.btn-danger:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 /* ---- shared interactive states ---- */
 .btn:focus-visible {
   outline: 2px solid var(--ink);

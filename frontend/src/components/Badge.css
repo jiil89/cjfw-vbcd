@@ -35,3 +35,9 @@
   background: var(--semantic-error-soft);
   color: var(--semantic-error);
 }
+
+/* "추천" 배지 등 강조성 안내에 쓰는 앰버 톤 (design_recom 핸드오프 문서의 "추천" 배지 대응) */
+.badge-warn {
+  background: var(--semantic-warn-soft);
+  color: var(--semantic-warn);
+}

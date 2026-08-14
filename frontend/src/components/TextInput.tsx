@@ -1,8 +1,10 @@
-import { forwardRef, useId, type InputHTMLAttributes } from "react";
+import { forwardRef, useId, type InputHTMLAttributes, type ReactNode } from "react";
 import "./TextInput.css";
 
 export interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
   label?: string;
+  /** 라벨 행 우측에 넣는 보조 액션(예: 비밀번호 표시/숨기기 토글 버튼) */
+  labelAction?: ReactNode;
   /** 필드 아래 보조 설명(도움말). errorMessage가 있으면 그 대신 에러가 표시된다 */
   helpText?: string;
   errorMessage?: string;
@@ -17,7 +19,7 @@ export interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElemen
  * 상태: default · hover · focus-visible · active(입력 중) · disabled · loading · error · success
  */
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function TextInput(
-  { label, helpText, errorMessage, success = false, loading = false, disabled, className, id, ...rest },
+  { label, labelAction, helpText, errorMessage, success = false, loading = false, disabled, className, id, ...rest },
   ref
 ) {
   const generatedId = useId();
@@ -36,10 +38,15 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
 
   return (
     <div className={wrapClasses}>
-      {label && (
-        <label className="text-input-label" htmlFor={inputId}>
-          {label}
-        </label>
+      {(label || labelAction) && (
+        <div className="text-input-label-row">
+          {label && (
+            <label className="text-input-label" htmlFor={inputId}>
+              {label}
+            </label>
+          )}
+          {labelAction}
+        </div>
       )}
       <div className="text-input-field">
         <input

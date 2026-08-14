@@ -11,6 +11,7 @@ vi.mock("../../cj-automation/client", () => ({
   checkDayCountLimit: vi.fn(),
   saveReserve: vi.fn(),
   delReserve: vi.fn(),
+  getEmptyRoomInfo: vi.fn(),
 }));
 vi.mock("../../cj-automation/session", () => ({
   getValidSession: vi.fn(async () => ({ cookieHeader: "fake", baseUrl: "https://example.test" })),
@@ -27,11 +28,19 @@ vi.mock("../../db/repositories/userRepository", () => ({
   findUserById: vi.fn(async () => ({ id: "user-1", emailAlias: "tester" })),
 }));
 
-import { checkDayCountLimit, checkRoom, checkStraightRoom, delReserve, saveReserve } from "../../cj-automation/client";
+import {
+  checkDayCountLimit,
+  checkRoom,
+  checkStraightRoom,
+  delReserve,
+  getEmptyRoomInfo,
+  saveReserve,
+} from "../../cj-automation/client";
 import { createReservation as insertReservationRow } from "../../db/repositories/reservationRepository";
 import type { Room } from "../../db/repositories/roomRepository";
 import {
   buildSegmentTimeWindows,
+  createReservation,
   createSplitReservation,
   SegmentReservationFailedError,
   splitIntoSegments,
@@ -87,12 +96,101 @@ describe("buildSegmentTimeWindows", () => {
   });
 });
 
+describe("createReservation -- getEmptyRoomInfo로 gubun/is_send_alarm/admin_alias를 동적으로 채운다 (SaveReserve Result:0 조사)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (checkRoom as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (checkStraightRoom as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (checkDayCountLimit as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (saveReserve as ReturnType<typeof vi.fn>).mockResolvedValue({ Result: "1", seq: "3001" });
+    (insertReservationRow as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "res-1" });
+  });
+
+  it("승인 불필요 회의실(REQUIRED_APPROVAL=0)이면 gubun=0, admin 필드는 빈 문자열로 SaveReserve를 호출한다", async () => {
+    (getEmptyRoomInfo as ReturnType<typeof vi.fn>).mockResolvedValue({
+      Table1: [{ REQUIRED_APPROVAL: "0", PRE_MAIL_ALARM_YN: "False" }],
+      Table3: [],
+    });
+
+    await createReservation(
+      "user-1",
+      {
+        title: "회의",
+        contents: "내용",
+        phoneNum: "",
+        date: "2026-08-14",
+        startTime: "10:00",
+        endTime: "11:00",
+        room: makeRoom({ roomCode: "3F-1" }),
+      },
+      "2026-08-13"
+    );
+
+    expect(saveReserve).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ gubun: 0, isSendAlarm: "False", adminAlias: "", adminLang: "" })
+    );
+  });
+
+  it("승인 필요 회의실(REQUIRED_APPROVAL=1)이면 gubun=1과 승인자 목록(admin_alias/admin_lang)을 채워 SaveReserve를 호출한다", async () => {
+    (getEmptyRoomInfo as ReturnType<typeof vi.fn>).mockResolvedValue({
+      Table1: [{ REQUIRED_APPROVAL: "1", PRE_MAIL_ALARM_YN: "True" }],
+      Table3: [{ EMAIL_ALIAS: "admin.one", DEFAULT_LANGUAGE_TYPE: "KOR" }],
+    });
+
+    await createReservation(
+      "user-1",
+      {
+        title: "회의",
+        contents: "내용",
+        phoneNum: "",
+        date: "2026-08-14",
+        startTime: "10:00",
+        endTime: "11:00",
+        room: makeRoom({ roomCode: "13F-1" }),
+      },
+      "2026-08-13"
+    );
+
+    expect(saveReserve).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        gubun: 1,
+        isSendAlarm: "True",
+        adminAlias: "admin.one;",
+        adminLang: "_KOR;",
+      })
+    );
+  });
+
+  it("getEmptyRoomInfo가 실패하거나 'nodata'를 반환해도 기본값(gubun=0)으로 SaveReserve를 계속 시도한다", async () => {
+    (getEmptyRoomInfo as ReturnType<typeof vi.fn>).mockResolvedValue("nodata");
+
+    await createReservation(
+      "user-1",
+      {
+        title: "회의",
+        contents: "내용",
+        phoneNum: "",
+        date: "2026-08-14",
+        startTime: "10:00",
+        endTime: "11:00",
+        room: makeRoom({ roomCode: "3F-1" }),
+      },
+      "2026-08-13"
+    );
+
+    expect(saveReserve).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ gubun: 0 }));
+  });
+});
+
 describe("createSplitReservation -- 부분 실패 시 보상 트랜잭션 (BE-6 완료조건)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (checkRoom as ReturnType<typeof vi.fn>).mockResolvedValue(true);
     (checkStraightRoom as ReturnType<typeof vi.fn>).mockResolvedValue(true);
     (checkDayCountLimit as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (getEmptyRoomInfo as ReturnType<typeof vi.fn>).mockResolvedValue("nodata");
   });
 
   it("모든 세그먼트가 성공하면 각각 DB에 저장되고 delReserve는 호출되지 않는다", async () => {

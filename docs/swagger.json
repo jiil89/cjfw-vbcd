@@ -60,7 +60,7 @@
       "post": {
         "tags": ["Auth"],
         "summary": "로그인",
-        "description": "승인이 완료된 사용자만 로그인할 수 있다. 로그인 성공 시 Access Token은 응답 바디로, Refresh Token은 httpOnly+Secure+SameSite 쿠키로 발급된다(Refresh Token은 응답 바디에 절대 포함되지 않는다). 인증이 필요 없는 공개 엔드포인트다.",
+        "description": "승인이 완료된 사용자만 로그인할 수 있다. 로그인 성공 시 Access Token은 응답 바디로, Refresh Token은 httpOnly+Secure+SameSite 쿠키로 발급된다(Refresh Token은 응답 바디에 절대 포함되지 않는다). 인증이 필요 없는 공개 엔드포인트다. [2026-08-14] 앱 로그인(app_password) 검증 후 실제 CJ 사내 계정으로도 로그인을 시도해 성공한 세션을 짧게(TTL) 캐싱한다 — 이후 채팅에서 회의실 조회/예약 도구를 쓸 때 로그인 지연 없이 바로 시작하기 위함. 그만큼 로그인 응답 자체가 몇~수십 초 걸릴 수 있다. [2026-08-14 수정] 이 CJ 계정 인증이 실패하면(존재하지 않거나 틀린 CJ 계정) 앱 로그인 자체를 401(CJ_LOGIN_FAILED)로 거부한다 — CJ 세션 없이는 이 앱의 모든 기능(예약 조회/생성 등)이 동작하지 않으므로, 가짜 CJ 계정으로 앱에는 들어와지지만 아무것도 못 하는 상태를 막기 위함.",
         "security": [],
         "requestBody": {
           "required": true,
@@ -86,7 +86,7 @@
             }
           },
           "401": {
-            "description": "인증 실패 — 사내 계정 ID 또는 앱 로그인 비밀번호가 일치하지 않음",
+            "description": "인증 실패 — 사내 계정 ID/앱 로그인 비밀번호가 일치하지 않거나(INVALID_CREDENTIALS), 실제 CJ 사내 계정 인증에 실패함(CJ_LOGIN_FAILED)",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
           },
           "403": {
