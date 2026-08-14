@@ -11,6 +11,7 @@
 // 저장 단계(reservations_no_overlap 등)에서 실패를 잡는다. 실사용 확인 후 도메인 정의서
 // 9번과 이 주석을 함께 갱신해야 한다.
 import {
+  CjApiError,
   checkDayCountLimit,
   checkRoom,
   checkStraightRoom,
@@ -72,10 +73,32 @@ function addMinutesToTime(hhmm: string, minutesToAdd: number): string {
   const minute = (totalMinutes % 60).toString().padStart(2, "0");
   return `${hour}:${minute}`;
 }
-/** true를 반환하면 이 검증을 통과했다(문제 없음)는 뜻으로 해석한다. */
+/**
+ * true를 반환하면 이 검증을 통과했다(문제 없음)는 뜻으로 해석한다.
+ *
+ * [2026-08-14 실사용 검증 완료] CJ 실제 웹 UI 소스(`reserve_insmod.js`의 `chkRoom`/
+ * `chkStraight`/`chkDayCountLimit` 함수)를 직접 확보해 정확한 규약을 확인했다:
+ * checkRoom/checkStraightRoom/checkDayCountLimit 세 API 모두 **`Result === "0"`이면
+ * 문제 없음(통과), 그 외 값이면 문제 있음(차단)** 이다 — 실제 클라이언트 코드가
+ * `if (data.Result != "0") { returnValue = true /* 차단 *\/; }` 로 판정하는 것을 그대로
+ * 옮긴 것. (SaveReserve의 `Result === "1" = 성공` 규약과는 반대이니 혼동 주의 — API마다
+ * 각자 다른 규약을 쓴다.) 처음에는 반대로(`"1"`=통과) 잘못 추정했었는데, 실사용 테스트에서
+ * 예약 이력이 전혀 없는 계정의 빈 슬롯 요청이 checkStraightRoom에서 부당하게 막히는
+ * 것을 보고 재확인해서 바로잡았다. `client.ts`의 `callCjApi`가 `.d`를 한 번 더
+ * JSON.parse하도록 고치기 전에는 이 객체가 문자열째로 전달되어 `Result` 필드를 전혀
+ * 못 읽고 있었고, 그 결과 이 함수는 사실상 항상 true(통과)를 반환하고 있었다 — 즉 이
+ * 세 검증이 지금까지 한 번도 실제로 걸러낸 적이 없었다. */
 function isCjCheckAffirmative(raw: unknown): boolean {
   if (typeof raw === "boolean") {
     return raw;
+  }
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (typeof obj.Result === "string") return obj.Result === "0";
+    if (typeof obj.Result === "number") return obj.Result === 0;
+    if (typeof obj.success === "boolean") return obj.success;
+    if (typeof obj.Success === "boolean") return obj.Success;
+    if (typeof obj.result === "boolean") return obj.result;
   }
   if (typeof raw === "string") {
     const normalized = raw.trim().toUpperCase();
@@ -83,12 +106,6 @@ function isCjCheckAffirmative(raw: unknown): boolean {
       return false;
     }
     return true;
-  }
-  if (raw && typeof raw === "object") {
-    const obj = raw as Record<string, unknown>;
-    if (typeof obj.success === "boolean") return obj.success;
-    if (typeof obj.Success === "boolean") return obj.Success;
-    if (typeof obj.result === "boolean") return obj.result;
   }
   return true;
 }
@@ -165,20 +182,49 @@ async function saveOneSegmentToCj(params: SaveOneSegmentParams): Promise<string>
     throw new ReservationConflictError("일일 예약 가능 건수 제한을 초과했습니다.");
   }
 
-  const saveResult = await saveReserve(session, {
-    buildingCode: room.areaCode,
-    floorCode: room.subAreaCode,
-    roomCode: room.roomCode,
-    roomName: room.roomName,
-    reserveDate: params.date,
-    startTime: params.startTime,
-    endTime: params.endTime,
-    title: params.title,
-    contents: params.contents,
-    phoneNum: params.phoneNum,
-    isSendMail: false,
-    reserveType: "I",
-  });
+  let saveResult: unknown;
+  try {
+    saveResult = await saveReserve(session, {
+      buildingCode: room.areaCode,
+      floorCode: room.subAreaCode,
+      roomCode: room.roomCode,
+      roomName: room.roomName,
+      reserveDate: params.date,
+      startTime: params.startTime,
+      endTime: params.endTime,
+      title: params.title,
+      contents: params.contents,
+      phoneNum: params.phoneNum,
+      isSendMail: "0",
+      attendeeCount: "",
+      gubun: 0,
+      reqList: "",
+      optList: "",
+      isSendAlarm: "False",
+      adminAlias: "",
+      adminLang: "",
+      reserveType: "I",
+    });
+  } catch (err) {
+    // [FE-5 실사용 검증에서 발견, 20260814] SaveReserve 실패가 confirm_create_reservation까지
+    // "CJ 시스템 오류가 발생했습니다"로만 뭉뚱그려져 원인을 알 수 없었다(rawBody가 그 자리에서
+    // 버려짐). 실제 원인 진단을 위해 원본 응답 본문을 여기서 로그로 남긴다 — 사용자 응답
+    // 문구는 바꾸지 않는다(위 catch에서 여전히 일반화된 메시지로 감싼다).
+    if (err instanceof CjApiError) {
+      console.error(
+        `[tools/reservation] SaveReserve 실패(status ${err.status}), 원본 응답: ${err.rawBody.slice(0, 2000)}`
+      );
+    }
+    throw err;
+  }
+
+  // [2026-08-14 실사용 검증 완료] 실제 CJ 웹 UI도 `data.Result == "1"`일 때만 성공으로
+  // 판정한다(reserve_insmod.js) — 우리도 동일하게 명시적으로 확인한다.
+  const resultObj = saveResult && typeof saveResult === "object" ? (saveResult as Record<string, unknown>) : {};
+  if (resultObj.Result !== "1" && resultObj.Result !== 1) {
+    console.error(`[tools/reservation] SaveReserve Result≠1(실패로 판정): ${JSON.stringify(saveResult)}`);
+    throw new ReservationConflictError(`${room.roomName} 예약 저장이 CJ 시스템에서 거부되었습니다.`);
+  }
 
   return extractCjSeq(saveResult);
 }

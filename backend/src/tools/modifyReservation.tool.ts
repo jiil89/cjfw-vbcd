@@ -200,7 +200,14 @@ export async function modifyReservation(
       title: reservation.title,
       contents: reservation.contents ?? "",
       phoneNum: "",
-      isSendMail: false,
+      isSendMail: "0",
+      attendeeCount: "",
+      gubun: 0,
+      reqList: "",
+      optList: "",
+      isSendAlarm: "False",
+      adminAlias: "",
+      adminLang: "",
       reserveType: "I",
     });
     newCjSeq = extractSeq(saveResult);
@@ -220,7 +227,14 @@ export async function modifyReservation(
           title: reservation.title,
           contents: reservation.contents ?? "",
           phoneNum: "",
-          isSendMail: false,
+          isSendMail: "0",
+          attendeeCount: "",
+          gubun: 0,
+          reqList: "",
+          optList: "",
+          isSendAlarm: "False",
+          adminAlias: "",
+          adminLang: "",
           reserveType: "I",
         });
         const restoredSeq = extractSeq(restoreResult);

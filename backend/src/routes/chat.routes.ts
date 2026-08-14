@@ -62,6 +62,7 @@ chatRouter.post("/messages", requireAuth, async (req: AuthenticatedRequest, res:
     const result = await withTimeout(handleUserMessage(userId, message), CHAT_MESSAGE_TIMEOUT_MS);
     res.status(200).json({
       reply: result.reply,
+      proposal: result.proposal,
       elapsed_ms: Date.now() - startedAt,
     });
   } catch (error) {

@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react'
 // 결정됨). 그래서 프록시도 이 경로들을 각각 개별 지정한다. changeOrigin은 백엔드가
 // Host 헤더를 신뢰하지 않으므로 필요 없지만, 로컬 개발 관례상 켜둔다.
 // /rooms는 FE-2(회원가입 페이지, GET /rooms 공개 조회)에서 신규 추가.
+// /me는 FE-5(챗봇 UI 사이드바, 본인 예약/선호 회의실 읽기 전용 조회)에서 신규 추가.
 const BACKEND_ORIGIN = 'http://localhost:3000'
 
 // [FE-4에서 발견/수정] 프론트 페이지 라우트 /admin, /chat이 백엔드 API 프리픽스와 이름이
@@ -36,6 +37,7 @@ export default defineConfig({
       '/admin': proxyTo(),
       '/chat': proxyTo(),
       '/rooms': proxyTo(),
+      '/me': proxyTo(),
     },
   },
 })

@@ -73,6 +73,11 @@ create table if not exists public.admin_whitelist (
 comment on table public.admin_whitelist is
   'Admin 부트스트랩용 사전 등록 목록. 여기 있는 email_alias로 가입 신청하면 자동 승인 + Admin 권한 부여됨. Admin만 추가/제거 가능.';
 
+-- 최초 Admin 시드: jiil (닭과 달걀 문제 해결용 정적 데이터, 재실행 안전)
+insert into public.admin_whitelist (email_alias, reason)
+values ('jiil', '최초 Admin 부트스트랩 계정')
+on conflict (email_alias) do nothing;
+
 
 -- -----------------------------------------------------------------------------
 -- 2. User (요청자)

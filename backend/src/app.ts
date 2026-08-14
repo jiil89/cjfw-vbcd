@@ -8,6 +8,7 @@ import { pool } from "./db/pool";
 import { adminRouter } from "./routes/admin.routes";
 import { authRouter } from "./routes/auth.routes";
 import { chatRouter } from "./routes/chat.routes";
+import { meRouter } from "./routes/me.routes";
 import { registrationRouter } from "./routes/registration.routes";
 import { roomsRouter } from "./routes/rooms.routes";
 
@@ -49,6 +50,9 @@ export function createApp(): Express {
 
   // BE-8: 웹 챗봇 API
   app.use("/chat", chatRouter);
+
+  // FE-5 선행 작업: 챗봇 UI 사이드바용 읽기 전용 본인 컨텍스트 조회
+  app.use("/me", meRouter);
 
   return app;
 }

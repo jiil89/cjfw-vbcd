@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "./AdminPanelPage.css";
 import { Badge, Button, Card } from "../../components";
 import { useAuthStore } from "../../stores/authStore";
@@ -71,6 +71,12 @@ export function AdminPanelPage() {
         <h1 className="admin-title">회의실 예약 — Admin 패널</h1>
         <div className="admin-header-actions">
           {adminUser && <span className="admin-identity">{adminUser.email_alias}</span>}
+          {/* Admin도 챗봇 UI에 접근할 수 있어야 하는데, 세션이 메모리(Zustand)에만 있어
+              풀 페이지 이동(주소창 직접 입력)은 세션을 지워버린다 — 반드시 클라이언트
+              사이드 라우팅(react-router Link)으로 이동해야 세션이 유지된다. */}
+          <Link to="/chat" className="btn btn-ghost btn-sm">
+            <span className="btn-label">챗봇으로 이동</span>
+          </Link>
           <Button variant="ghost" size="sm" onClick={handleLogout} loading={logoutMutation.isPending}>
             로그아웃
           </Button>

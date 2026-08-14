@@ -203,7 +203,7 @@ flowchart LR
   - [x] `reservations_no_overlap` EXCLUDE 제약 위반 시 서버가 이를 "이미 예약됨" 사용자 메시지로 정상 변환함 (`reservationRepository.ts`, SQLSTATE `23P01` → `RoomAlreadyBookedError`)
 
   **후속 확인 필요 사항** (실사용 전 CJ 실제 API 응답으로 재검증 필요, 코드 주석에도 남김):
-  - `checkRoom`/`checkStraightRoom`/`checkDayCountLimit`/`SaveReserve`의 실제 성공/실패 응답 스키마가 미확인이라 보수적으로 해석하는 헬퍼로 구현함
+  - `checkRoom`/`checkStraightRoom`/`checkDayCountLimit`/`SaveReserve`의 실제 성공/실패 응답 스키마가 미확인이라 보수적으로 해석하는 헬퍼로 구현함 — **[20260814, FE-5 실사용 검증에서 재확인·정정]** 이 "보수적 해석"이 실제로는 Result 판정 극성이 반대였던 버그였음이 드러남(`checkRoom` 등은 `Result:"0"`=통과, `Result:"1"`=차단인데 반대로 구현되어 있었음 + `.d` 이중디코딩 누락으로 사실상 항상 통과 처리됨). 두 버그 모두 수정 완료, `SaveReserve` 자체는 여전히 원인 미해결 — 상세는 FE-5 섹션 참고.
   - 예약 변경은 "delReserve 후 SaveReserve 재생성" 전략으로 구현(도메인 정의서 8번에 명시된 미확인 사항). 분할 예약(긴 회의) 건의 변경은 이번 범위에서 미지원으로 명시적으로 막음(취소는 지원)
   - `SaveReserve`에 필요한 `phoneNum`은 현재 `users` 테이블에 저장 컬럼이 없어 호출자가 매번 넘기는 파라미터로 처리 — DB 컬럼 추가 필요 여부는 추후 검토
 
@@ -220,6 +220,12 @@ flowchart LR
 
   **BE-7 검증 중 발견해 함께 고친 버그** (BE-4/BE-6 범위지만 BE-7 라이브 테스트로만 드러남):
   - `cj-automation/session.ts`: `23_service.aspx?CONTENTS_ID=EPCT3427`로 직접 `page.goto`하면 `net::ERR_ABORTED`로 실패함을 재검증 — 포털 메인(`23_main.aspx`) 로딩 후 회의실예약 버튼(`#bntConf`) 클릭 방식으로 수정(파일 상단 주석에 상세 기록)
+
+  **[2026-08-14, FE-5 실사용 피드백 반영]** 사용자가 실제 채팅을 써보고 4가지를 지적함:
+  1. "응답이 너무 장황하다" — `systemPrompt.ts` §5 "응답 스타일"을 대폭 강화: 전체 답변 1~3문장 제한, check_availability/propose_* 결과를 텍스트로 다시 나열 금지(카드가 이미 보여주므로), confirmationToken 노출 금지, 재시도 시 이전 내용 반복 설명 금지 등 구체적 규칙 추가.
+  2. "속도가 여전히 느리다" — "매 요청마다 CJ 재로그인" 아키텍처 자체의 비용이라 프롬프트 튜닝으로 해결되지 않음. 세션 캐싱 도입 여부는 별도 논의 필요(위험도 있는 아키텍처 결정이라 임의로 진행하지 않음) — 다음 세션 검토 대상.
+  3. "다른 회의실 제안이 이전과 동일하다" — 실제로는 카드 없이 텍스트로만 답하며 이전 턴 정보를 재활용하고 있었음(check_availability를 다시 호출 안 함). `systemPrompt.ts`에 §3-7 신설: "다른 곳 보여줘" 류 요청에는 반드시 check_availability를 재호출해 새 카드로 응답하도록 명시.
+  4. "선호 회의실을 가입 후에도 채팅에서 추가/제거할 수 있어야 한다" — 신규 기능 추가: `db/repositories/userPreferredRoomRepository.ts`에 `addPreferredRoom`/`removePreferredRoomByRoomId`(삭제 후 우선순위 1..N 재정렬, 음수 경유 2단계 UPDATE로 unique 제약 충돌 방지), `tools/preferredRooms.tool.ts` 신규(회의실명으로 조회 후 추가/제거), `orchestrator.ts`/`toolSchemas.ts`에 `add_preferred_room`/`remove_preferred_room` 도구 추가(CJ 쓰기가 아니라 되돌리기 쉬운 로컬 설정이라 propose/confirm 2단계 생략, 즉시 실행). 프론트는 이 두 도구 실행 후 사이드바 "선호 회의실"을 자동 재조회하도록 `ChatPage.tsx`에 연결. `AdminPanelPage.tsx`/`ChatPage.tsx`에는 서로 오가는 네비게이션 버튼도 추가(세션이 메모리에만 있어 풀 페이지 이동 시 로그아웃되는 문제 — react-router `Link`로 클라이언트 사이드 이동하게 함).
   - `tools/availability.tool.ts`: CJ의 `reserve_all_list`가 JSON 배열이 아니라 `"룸코드:슬롯|룸코드:슬롯|..."` 파이프 구분 문자열이었는데 `Array.isArray` 체크로 항상 빈 배열 처리되어 **모든 회의실이 상시 "불가"로 판정되는 치명적 버그**였음. `event_list`의 `start`/`end`도 `"HH:mm"`이 아니라 전체 ISO 타임스탬프였음. 둘 다 파싱 함수 추가로 수정, `availability.tool.test.ts` 신규 추가(6개 테스트)로 회귀 방지
 
 ### BE-8. 챗봇 API 엔드포인트
@@ -230,6 +236,8 @@ flowchart LR
   - [x] 미로그인 요청은 401로 거부됨 (`requireAuth` 미들웨어, curl로 Authorization 헤더 없이 호출 시 `401 UNAUTHORIZED` 실측 확인)
   - [x] 로그인된 사용자의 메시지가 오케스트레이터를 거쳐 도구 호출 결과까지 포함한 응답으로 반환됨 (유효 Access Token으로 curl 호출 → `200`, BE-7에서 검증된 것과 일치하는 오케스트레이터 응답 실측 확인)
   - [x] 콜드스타트로 응답이 지연될 수 있는 구간에 대해 클라이언트가 처리 중 상태를 표시할 수 있는 응답 구조 제공 — SSE/스트리밍은 오버엔지니어링으로 판단해 도입하지 않음(판단 근거는 `chat.routes.ts` 상단 주석). 대신 응답에 `elapsed_ms` 필드 포함 + 120초 서버측 타임아웃(초과 시 `504 CHAT_TIMEOUT`)으로 대체
+
+  **[FE-5 착수 시 소폭 계약 추가, 20260814]** 와이어프레임 4번(회의실 제안 카드 [확정]/[다른 곳 보기] 버튼)을 실제 데이터에 바인딩하려면 `reply` 텍스트 파싱이 아니라 구조화된 데이터가 필요하다고 판단(AskUserQuestion으로 사용자에게 확인 후 결정). 새 엔드포인트를 만들지 않고 기존 응답에 `proposal: { tool, data } | null` 필드만 추가 — `handleUserMessage`가 이번 턴에 실행한 **마지막 도구 호출 결과**를 그대로 실어 보낸다(`orchestrator.ts`의 `ChatProposal`). `propose_create_reservation`/`propose_split_reservation`의 tool 결과에도 `room`/`date`/`startTime`/`endTime`(분할은 `segments`)을 문자열 요약과 별개 필드로 추가해, 프론트가 카드에 바로 바인딩할 수 있게 함. `docs/swagger.json`의 `ChatMessageResponse`/`ChatMessageRequest`도 실제 구현(요청은 `message`만 사용, `session_id`는 애초에 미사용)에 맞게 함께 정정.
 
 ### BE-9. CORS 및 배포 보안 설정
 
@@ -302,11 +310,27 @@ flowchart LR
 - **작업 내용**: `7-wireframes.md` 4번 / `docs/design/chatbot-shell.html` 기준. 메시지 스레드, 단일/다중 회의실 제안 카드, 빠른명령 칩, 입력창, 오른쪽 사이드바(오늘예약/선호회의실/규칙안내). BE-8 API와 실제 연동.
 - **선행 Task**: FE-1, BE-8
 - **완료 조건**:
-  - [ ] 사용자 메시지 전송 → 백엔드 응답 → 메시지 스레드에 렌더링되는 전체 흐름이 실제로 동작함
-  - [ ] 회의실 제안 카드의 [확정]/[다른 곳 보기] 버튼이 실제 예약 확정/재조회 API를 호출함
-  - [ ] 콜드스타트로 응답이 지연되는 구간에 "확인 중입니다" 처리중 표시가 나타남 (서비스 시나리오 10번)
-  - [ ] 빠른명령 칩(내 예약 조회/자주 쓰는 회의실/예약 취소)이 각각 대응하는 요청을 전송함
-  - [ ] 860px 이하에서 사이드바가 숨겨지고 채팅 컬럼이 전체폭으로 전환됨
+  - [x] 사용자 메시지 전송 → 백엔드 응답 → 메시지 스레드에 렌더링되는 전체 흐름이 실제로 동작함 — 실제 브라우저로 로그인(jiil) → `/chat` 진입 → "내일 오후 2시부터 1시간 3층 회의실 잡아줘" 전송 → 실제 OpenAI 호출 + 실제 CJ `getDayPilotConfReserveList` 조회 결과가 회의실 그리드로 렌더링됨을 실측 확인
+  - [x] 회의실 제안 카드의 [확정]/[다른 곳 보기] 버튼이 실제 예약 확정/재조회 API를 호출함 — **[BE-8 계약 소폭 확장, 20260814]** 기존 `POST /chat/messages` 응답(`reply`, `elapsed_ms`)만으로는 카드에 바인딩할 구조화된 데이터가 없어(설계 당시엔 텍스트 전용으로 충분하다고 판단했었음), `reply` 텍스트를 정규식으로 파싱하는 방식과 백엔드가 구조화 데이터를 함께 내려주는 방식 중 사용자에게 AskUserQuestion으로 확인 후 후자로 결정. `orchestrator.ts`의 `handleUserMessage`가 이번 턴의 **마지막 도구 호출 결과**를 `proposal: { tool, data }`로 함께 반환하도록 확장(`propose_create_reservation`/`propose_split_reservation`은 `room`/`date`/`startTime`/`endTime`(분할은 `segments`)도 별도 필드로 추가). 프론트는 `proposal.tool` 값으로 카드 종류를 판단(`check_availability`→회의실 선택 그리드, `propose_*`→확정 대기 카드, `confirm_*`→"● 예약 확정" 라벨). 실제 브라우저로 그리드 클릭 → 단일 카드 제안 → [확정] 클릭까지 전체 흐름이 실제 `confirm_create_reservation`을 호출함을 실측 확인(성공/실패 모두 — 아래 CJ SaveReserve 500 발견 참고). `docs/swagger.json`의 `ChatMessageRequest`/`ChatMessageResponse`도 실제 구현(요청은 `message`만 사용)에 맞게 함께 정정
+  - [x] 콜드스타트로 응답이 지연되는 구간에 "확인 중입니다" 처리중 표시가 나타남 — 전송 직후 스피너+"확인 중입니다…" 에이전트 버블이 뜨고 빠른명령칩/입력창/전송버튼이 모두 비활성화됨을 실측 확인(응답까지 실제로 10~90초 정도 걸리는 구간에서 계속 표시됨)
+  - [x] 빠른명령 칩(내 예약 조회/자주 쓰는 회의실/예약 취소)이 각각 대응하는 요청을 전송함 — 클릭 시 고정 문구("오늘 내 예약을 보여줘" 등)를 `POST /chat/messages`로 전송하는 코드 확인. "오늘 내 예약 조회"에 대응하는 `get_my_reservations` 실제 호출은 별도로 "내일(2026-08-15) 내 예약이 있는지 확인해줘" 메시지로 실측(실제 CJ `bindMyReservation` 경유 확인)
+  - [x] 860px 이하에서 사이드바가 숨겨지고 채팅 컬럼이 전체폭으로 전환됨 — `@media (max-width: 860px)`로 `.chat-rail { display: none }` + `.chat-body`가 1열로 전환되는 코드는 FE-2~FE-4와 동일한, 이미 여러 차례 실측 검증된 패턴을 그대로 재사용. 이번엔 Playwright 세션이 중간에 끊겨 390px 스크린샷으로 재확인은 못 했고, 빌드된 CSS에 미디어쿼리가 그대로 살아있음만 확인(FE-6에서 최종 반응형 QA 때 다시 스크린샷으로 재검증 예정)
+
+  **[사이드바 데이터용 소폭 백엔드 추가, 20260814]** 사이드바 "오늘 예약"/"선호 회의실"을 목업 문구로 고정하면 Hallmark 원칙(실제 데이터 없이 가짜 콘텐츠 노출 금지)에 어긋나므로, 읽기 전용 엔드포인트 2개를 새로 추가: `GET /me/preferred-rooms`(우선순위 순 `Room[]`), `GET /me/reservations/today`(`tools/myReservations.tool.ts`의 `getMyReservations`를 오늘 하루로 고정 재사용). 예약 생성/변경/취소로 이어지는 write 경로는 절대 추가하지 않음 — BE-7의 propose→confirm 2단계 확인 게이트를 우회하는 별도 API가 생기는 걸 막기 위함. jiil 계정으로 실제 CJ 연동까지 실측(빈 배열 정상 응답, 약 12초 소요).
+
+  **[CJ 연동 실사용 검증 — 사용자 피드백("여전히 실제 예약은 안 된다")으로 재조사, 20260814, 부분 해결·핵심 미해결]**
+
+  1차 조사에서는 `SaveReserve`가 HTTP 500(제네릭 `"요청을 처리하는 동안 오류가 발생했습니다"`)으로 실패하는 것만 확인했고, `listArea`(DB-5)가 겪은 것과 같은 "JSON 대신 form-urlencoded를 기대함" 문제로 추정해 form-urlencoded로 바꿨더니 구체적인 "매개 변수가 없습니다: X" 오류로 바뀌면서 몰랐던 필수 파라미터 6개(`attendee_count`/`gubun`/`req_list`/`opt_list`/`is_send_alarm`/`admin_alias`/`admin_lang`)를 발견했다 — 여기까지는 유효한 진전이었지만, **"form-urlencoded가 정답"이라는 결론 자체는 틀렸다.**
+
+  사용자가 실제 채팅으로 재차 확정을 시도하다 여전히 실패하는 걸 겪어서, 이번엔 **CJ 실제 웹 UI(`https://cjwappr.cj.net/NConf/conferenceRoom/reserve_main.aspx`)를 Playwright로 직접 열어 진짜 예약 다이얼로그를 재현**했다(로그인 → 빈 슬롯 더블클릭 → 팝업 iframe(`reserve_insmod.aspx`) 진입). 이 페이지가 로드하는 `/NCONF/ConferenceRoom/script/reserve_insmod.js`를 그대로 받아서(`$('#btnConfirm').click(...)` 핸들러 원본) SaveReserve 호출부를 정확히 확인했다:
+
+  - **실제 CJ 프론트는 JSON으로 호출한다** (`contentType: "application/json; charset=utf-8"`) — form-urlencoded는 완전히 잘못된 가설이었다. 원래 500이 난 진짜 이유는 인코딩이 아니라 **애초에 필수 필드 6개를 아예 안 보내고 있었기 때문**(ASP.NET이 JSON 모델 바인딩 실패를 제네릭 500으로만 알려줌 — form-urlencoded로 바꾸자 필드별 구체 오류가 나온 건 인코딩이 아니라 "클래식 Request.Form 파싱 방식이 필드 단위로 오류를 알려주는 방식"으로 바뀐 부수효과였다).
+  - **필드 6개의 정확한 타입/기본값**도 이 소스에서 확인됨(전부 이전 추측과 다름): `attendee_count`는 참석자 수가 아니라 **항상 빈 문자열**(UI 자체가 안 씀), `gubun`은 "선호 회의실 카테고리"가 아니라 **회의실의 승인 필요 여부**(`REQUIRED_APPROVAL`, 0=불필요/1=필요 — 일반 회의실은 0 고정), `is_send_mail`/`is_send_alarm`은 boolean이 아니라 **문자열**("0"/"1", "True"/"False"), `req_list`/`opt_list`는 참석자/참조자 alias 목록(없으면 빈 문자열), `admin_alias`/`admin_lang`은 신청자 본인이 아니라 **승인자 목록**(gubun=0이면 빈 문자열). `client.ts`의 `SaveReserveParams`를 이 타입/값에 맞게 전부 다시 씀.
+  - **`.d` 응답이 "JSON 문자열을 담은 JSON 문자열"(이중 인코딩)** 이라 실제 웹 UI도 `$.parseJSON(data.d)`로 한 번 더 파싱한다 — 우리 `callCjApi`는 `.d`를 그대로 반환만 했어서 이 값이 항상 원시 문자열로 새어나가고 있었다(`getDayPilotConfReserveList`처럼 반환 타입이 원래 객체인 엔드포인트는 이 문제가 없어서 지금까지 안 드러남). `.d`가 문자열이면 한 번 더 `JSON.parse`하도록 수정.
+  - **더 중요한 발견 — `checkRoom`/`checkStraightRoom`/`checkDayCountLimit`의 Result 판정이 반대로 구현되어 있었다.** 같은 JS 소스의 `chkRoom()`/`chkStraight()`/`chkDayCountLimit()` 함수는 `if (data.Result != "0") { 차단; }`으로 판정한다 — 즉 **`Result:"0"`이 "문제없음(통과)"** 이고 그 외 값이 "문제있음(차단)"이다(SaveReserve 자신의 `Result:"1"=성공` 규약과는 정반대라 헷갈리기 쉬움). `tools/reservation.tool.ts`의 `isCjCheckAffirmative`는 원래 `Result:"1"`을 통과로 잘못 해석하고 있었는데, 그 이전에는 `.d` 이중디코딩 버그 때문에 이 함수가 `Result` 필드 자체를 못 읽고 **사실상 항상 true(통과)를 반환**하고 있었다 — 즉 **이 세 검증은 지금까지 한 번도 실제로 뭔가를 걸러낸 적이 없었다.** 두 버그를 함께 고치고 나서 실사용 테스트로 checkStraightRoom이 실제로 특정 슬롯을 정확히 막는 것을 확인했다(3F-1, 2026-08-19 종일 — 실측으로 확인한 진짜 제약이었고 우리 테스트로 생긴 유령 예약이 아님을 `bindMyReservation`/그리드 재조회로 교차 확인함).
+  - **아직 미해결**: 위 모든 걸 고치고 실제 빈 슬롯(3F-2, 2026-08-19 07:00~07:30)으로 다시 시도해도 `SaveReserve`는 여전히 `{"Result":0,"MailResult":0,"Seq":null}`(실패)을 반환한다. 필드명·타입·일반적인 기본값은 실제 클라이언트 소스와 대조까지 마쳤는데도 안 되는 걸 보면, 남은 원인은 정적 분석으로는 못 찾는 **런타임에서만 채워지는 값**일 가능성이 높다(예: 회의실별 메타데이터를 가져오는 초기화 AJAX 호출 하나를 우리가 아예 안 하고 있어서, 서버가 세션에 없는 상태값을 참조해 조용히 거부하는 경우 등). 사용자 실사용 테스트를 안전하게 유지하기 위해(실제 회사 CJ 계정에 대한 반복 쓰기 시도 최소화) 이번 세션은 여기서 멈춘다.
+  - **다음 시도 우선순위**: (a) 이번에 확보한 실제 CJ 웹 UI(Playwright로 재현 가능, `reserve_main.aspx` → 빈 슬롯 더블클릭 → iframe `reserve_insmod.aspx`)에서 브라우저 네트워크 탭 대신 Playwright의 `page.on('request')`로 **실제 성공하는 저장 요청**을 캡처해서 우리 페이로드와 필드 단위로 diff — 회의실 메타데이터 초기화 호출(`getReservationInfo()`가 부르는 엔드포인트)도 같이 캡처해 우리가 빠뜨린 초기화 단계가 있는지 확인. (b) 사내 IT/인프라팀에 API 스펙 문의.
+  - **부수적으로 확인/정리한 것**: (1) 이번 조사 전체에서 실제 CJ 시스템에 유령 예약이 하나도 생기지 않았음을 여러 차례 교차 확인(`bindMyReservation` 전체 재조회 0건, 그리드 재조회로 슬롯이 계속 비어있음 확인). (2) `backend/scripts/tmp-*.ts` 임시 진단 스크립트는 모두 삭제함. (3) 실제 CJ UI의 HTML/JS 원본은 `scratchpad/reserve_insmod.js` 등에 남겨뒀다(리포에는 포함 안 됨, 다음 세션 참고용).
 
 ### FE-6. 반응형 전체 QA 및 접근성 점검
 

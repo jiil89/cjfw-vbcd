@@ -97,8 +97,8 @@ describe("createSplitReservation -- 부분 실패 시 보상 트랜잭션 (BE-6 
 
   it("모든 세그먼트가 성공하면 각각 DB에 저장되고 delReserve는 호출되지 않는다", async () => {
     (saveReserve as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ seq: "1001" })
-      .mockResolvedValueOnce({ seq: "1002" });
+      .mockResolvedValueOnce({ Result: "1", seq: "1001" })
+      .mockResolvedValueOnce({ Result: "1", seq: "1002" });
     (insertReservationRow as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ id: "res-1" })
       .mockResolvedValueOnce({ id: "res-2" });
@@ -122,7 +122,7 @@ describe("createSplitReservation -- 부분 실패 시 보상 트랜잭션 (BE-6 
 
   it("두 번째 세그먼트가 실패하면 첫 번째 세그먼트를 delReserve로 자동 취소하고 예외를 던진다", async () => {
     (saveReserve as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ seq: "1001" }) // 첫 세그먼트 SaveReserve 성공
+      .mockResolvedValueOnce({ Result: "1", seq: "1001" }) // 첫 세그먼트 SaveReserve 성공
       .mockRejectedValueOnce(new Error("CJ 쪽에서 다른 사람이 선점")); // 두 번째 세그먼트 실패
     (insertReservationRow as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ id: "res-1" });
     (delReserve as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -149,8 +149,8 @@ describe("createSplitReservation -- 부분 실패 시 보상 트랜잭션 (BE-6 
 
   it("DB 저장(reservations_no_overlap 등)이 실패해도 이미 만든 CJ 세그먼트들을 보상 취소한다", async () => {
     (saveReserve as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ seq: "2001" })
-      .mockResolvedValueOnce({ seq: "2002" });
+      .mockResolvedValueOnce({ Result: "1", seq: "2001" })
+      .mockResolvedValueOnce({ Result: "1", seq: "2002" });
     (insertReservationRow as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ id: "res-1" })
       .mockRejectedValueOnce(new Error("DB insert failed"));

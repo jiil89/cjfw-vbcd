@@ -302,6 +302,38 @@ export const toolSchemas: OpenAiToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "add_preferred_room",
+      description:
+        '사용자가 선호 회의실을 추가/등록하고 싶어할 때 사용(예: "선호 회의실에 14F-2 추가해줘", "회원가입할 때 못 넣었는데 3F-6도 선호로 넣어줘"). 이미 등록돼 있으면 조용히 무시된다. 되돌리기 쉬운 작업(remove_preferred_room으로 취소 가능)이므로 별도 확인 없이 바로 실행해도 된다. 갱신된 전체 선호 회의실 목록(우선순위 순)을 반환한다.',
+      parameters: {
+        type: "object",
+        properties: {
+          roomName: { type: "string", description: '정식 회의실명(예: "14F-2"). 회의실 목록에서 가장 가까운 이름으로 매칭할 것.' },
+        },
+        required: ["roomName"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "remove_preferred_room",
+      description:
+        '사용자가 선호 회의실을 제거/삭제하고 싶어할 때 사용(예: "선호 회의실에서 3F-6 빼줘"). 등록돼 있지 않으면 조용히 무시된다. 되돌리기 쉬운 작업(add_preferred_room으로 취소 가능)이므로 별도 확인 없이 바로 실행해도 된다. 갱신된 전체 선호 회의실 목록(우선순위 순)을 반환한다.',
+      parameters: {
+        type: "object",
+        properties: {
+          roomName: { type: "string", description: "정식 회의실명" },
+        },
+        required: ["roomName"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 export const TOOL_NAMES = toolSchemas.map((t) => t.function.name);

@@ -40,6 +40,14 @@ export class CjApiError extends Error {
   }
 }
 
+// [2026-08-14 실사용 검증 완료] SaveReserve가 실패(Result:0)할 때, `.d` 안의 JSON 텍스트에
+// CJ 쪽 직렬화 버그로 보이는 결측 값이 섞여 나온다 — 예: `{"Result":0,"MailResult":0,"Seq":}`
+// 처럼 값 없이 콜론 뒤에 바로 `}`/`,`가 오는 필드. 이런 "구멍"을 `null`로 메꿔서 최소한
+// 파싱은 되게 한다(성공 시에는 Seq가 정상적으로 채워져 있어 이 문제가 없다).
+function repairDanglingJsonValues(text: string): string {
+  return text.replace(/:\s*([,}])/g, ": null$1");
+}
+
 function decodeCjResponseBody(buffer: Buffer): string {
   // 실사용 재검증 결과 응답은 항상 UTF-8이다 (파일 상단 주석 참고). Content-Type 헤더에
   // charset이 없는 경우가 있어 헤더를 신뢰하지 않고 항상 UTF-8로 디코딩한다.
@@ -112,15 +120,17 @@ async function callCjApi<T = unknown>(
   });
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  const text = decodeCjResponseBody(buffer);
+  const rawText = decodeCjResponseBody(buffer);
 
   if (!response.ok) {
     throw new CjApiError(
       `[cj-automation/client] ${endpointPath} 호출 실패 (status ${response.status})`,
       response.status,
-      text
+      rawText
     );
   }
+
+  const text = rawText;
 
   let parsed: unknown;
   try {
@@ -133,13 +143,33 @@ async function callCjApi<T = unknown>(
       throw new CjApiError(
         `[cj-automation/client] ${endpointPath} 응답을 JSON으로 파싱하지 못했습니다.`,
         response.status,
-        text
+        rawText
       );
     }
   }
 
   if (parsed && typeof parsed === "object" && "d" in (parsed as Record<string, unknown>)) {
-    return (parsed as Record<string, unknown>).d as T;
+    const inner = (parsed as Record<string, unknown>).d;
+    // [2026-08-14 실사용 검증] ASMX 메서드의 C# 반환 타입이 string인 경우(예: checkRoom,
+    // SaveReserve) `.d`는 객체가 아니라 "JSON 텍스트를 담은 문자열"이라 한 번 더 파싱해야
+    // 실제 필드(Result 등)에 접근할 수 있다(실제 웹 UI도 `$.parseJSON(data.d)`로 이렇게
+    // 이중 파싱한다 — reserve_insmod.js). 반환 타입이 이미 객체인 엔드포인트(예:
+    // getDayPilotConfReserveList)는 `.d`가 처음부터 객체라 이 분기를 타지 않는다.
+    if (typeof inner === "string") {
+      try {
+        return JSON.parse(inner) as T;
+      } catch {
+        // [2026-08-14 실사용 검증] SaveReserve가 실패(Result:0)할 때 CJ 쪽 직렬화 버그로
+        // 보이는 `"Seq":}`처럼 값 없는 필드가 섞여 나온다(JSON 모드/form 모드 둘 다 동일
+        // 하게 재현됨). 값 없는 필드를 null로 메꿔서 최소한 Result/MailResult는 읽히게 한다.
+        try {
+          return JSON.parse(repairDanglingJsonValues(inner)) as T;
+        } catch {
+          return inner as T;
+        }
+      }
+    }
+    return inner as T;
   }
   return parsed as T;
 }
@@ -291,8 +321,33 @@ export interface SaveReserveParams {
   title: string;
   contents: string;
   phoneNum: string;
-  isSendMail: boolean;
-  /** "I" = 생성 (9번). 수정 모드 지원 여부는 미확인 (8번 Open Question). */
+  /** [2026-08-14 실사용 검증 완료] CJ 실제 웹 UI가 브라우저에서 보내는 요청을 Playwright로
+   * 직접 재현/캡처해서(`/NCONF/ConferenceRoom/script/reserve_insmod.js`의 `$('#btnConfirm')`
+   * click 핸들러 원본을 확보함) 아래 필드들과 정확한 타입/기본값을 확정했다. 이전 버전의
+   * 필드 추측(예: attendeeCount=회의실 정원, isSendMail=boolean)은 전부 틀렸었다 — CJ가
+   * "매개 변수가 없습니다"로 필드 누락은 알려줬지만 타입/의미는 알려주지 않았기 때문.
+   * "1" = 메일 발송함, "0" = 안 함(체크박스 기본 미체크 상태와 동일). */
+  isSendMail: "0" | "1";
+  /** 참석 인원수 필드지만, 실제 UI는 참석자 목록(reqList) 인원수와 무관하게 **항상 빈
+   * 문자열**을 보낸다(reserve_insmod.js: `"attendee_count": ''`) — UI 자체가 이 필드를
+   * 사실상 안 쓰는 것으로 보임. */
+  attendeeCount: "";
+  /** "승인 필요 여부"(도메인 정의서 9번이 읽기 경로에서 관찰한 GUBUN과는 별개 의미).
+   * 회의실 마스터데이터의 `REQUIRED_APPROVAL` 값을 그대로 전달하는 필드 — 0=승인 불필요,
+   * 1=승인 필요. 이 프로젝트가 다루는 일반 회의실은 전부 승인 불필요이므로 0 고정. */
+  gubun: 0 | 1;
+  /** 참석자(TO) 목록 — 사내 계정 alias를 쉼표로 이어붙인 문자열. 참석자 없으면 빈 문자열. */
+  reqList: string;
+  /** 참조자(CC) 목록 — reqList와 동일 형식. */
+  optList: string;
+  /** 사전알림 제공 회의실 여부. "True"/"False" 문자열(boolean 아님) — 회의실 마스터데이터의
+   * `PRE_MAIL_ALARM_YN` 값을 그대로 전달한다. */
+  isSendAlarm: "True" | "False";
+  /** 승인 필요 회의실(gubun=1)일 때만 값이 채워지는 승인자 alias 목록. gubun=0이면 빈 문자열. */
+  adminAlias: string;
+  /** adminAlias와 짝을 이루는 승인자 언어 목록. gubun=0이면 빈 문자열. */
+  adminLang: string;
+  /** "I" = 생성, "U"는 실제로는 별도 엔드포인트(`modReserve`)를 쓴다(9번 Open Question 갱신 필요). */
   reserveType: string;
 }
 
@@ -301,6 +356,7 @@ export async function saveReserve(
   params: SaveReserveParams
 ): Promise<unknown> {
   return callCjApi(session, "WSConfReserveinsmod.asmx/SaveReserve", {
+    seq: "",
     area_code: params.buildingCode,
     subarea_code: params.floorCode,
     room_code: params.roomCode,
@@ -310,8 +366,15 @@ export async function saveReserve(
     end_time: params.endTime,
     title: params.title,
     contents: params.contents,
+    attendee_count: params.attendeeCount,
     phone_num: params.phoneNum,
+    gubun: params.gubun,
+    req_list: params.reqList,
+    opt_list: params.optList,
     is_send_mail: params.isSendMail,
+    is_send_alarm: params.isSendAlarm,
+    admin_alias: params.adminAlias,
+    admin_lang: params.adminLang,
     reservetype: params.reserveType,
   });
 }

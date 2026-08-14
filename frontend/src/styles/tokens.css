@@ -35,6 +35,12 @@
   --color-semantic-success-soft: rgba(11, 223, 80, 0.12);
   --color-semantic-error-soft: rgba(196, 28, 28, 0.1);
 
+  /* PROPOSED — DESIGN.md에는 warn(경고/안내) semantic 색이 없다. docs/design/chatbot-shell.html
+     (FE-5의 소스오브트루스 목업)이 이미 이 정확한 값으로 규칙 안내 박스에 쓰고 있어 그대로 가져온다 —
+     신규 hex 창작이 아니라 이미 존재하는 락된 목업 값의 이식. */
+  --color-semantic-warn: #9a6b12;
+  --color-semantic-warn-soft: rgba(154, 107, 18, 0.1);
+
   /* 현재 테마에서 실제로 쓰는 alias — 컴포넌트는 이 alias만 참조한다.
      라이트 기본값이며, 다크 블록에서 재정의된다. */
   --canvas: var(--color-canvas);
@@ -53,6 +59,8 @@
   --semantic-success: var(--color-semantic-success);
   --semantic-success-soft: var(--color-semantic-success-soft);
   --semantic-error-soft: var(--color-semantic-error-soft);
+  --semantic-warn: var(--color-semantic-warn);
+  --semantic-warn-soft: var(--color-semantic-warn-soft);
 
   /* ---- Typography — DESIGN.md `typography` ----
      Saans/SaansMono는 사내 배포 불가한 proprietary 폰트이므로
@@ -135,6 +143,9 @@
     --color-inverse-ink-tertiary: #626260;
     --color-inverse-hairline: rgba(255, 255, 255, 0.14);
     --color-inverse-hairline-soft: rgba(255, 255, 255, 0.08);
+    /* warn만 예외적으로 다크 변형이 필요 — chatbot-shell.html이 이미 정의해둔 값 그대로. */
+    --color-semantic-warn: #d6a15c;
+    --color-semantic-warn-soft: rgba(214, 161, 92, 0.14);
 
     --canvas: var(--color-inverse-canvas);
     --surface-1: var(--color-inverse-surface-1);
@@ -147,8 +158,10 @@
     --hairline-soft: var(--color-inverse-hairline-soft);
     --primary-bg: var(--color-inverse-ink);
     --primary-fg: var(--color-inverse-canvas);
+    --semantic-warn: var(--color-semantic-warn);
+    --semantic-warn-soft: var(--color-semantic-warn-soft);
 
-    /* fin-orange/semantic 색은 DESIGN.md가 다크 변형을 정의하지 않았고,
+    /* fin-orange/success/error semantic 색은 DESIGN.md가 다크 변형을 정의하지 않았고,
        배지/버튼의 배경색(칠 영역)으로만 쓰여 검정 캔버스 위에서도 충분한
        대비를 내므로 라이트와 동일 값을 그대로 쓴다 — 임의 변형 없음. */
   }
@@ -161,6 +174,8 @@
   --color-inverse-ink-tertiary: #626260;
   --color-inverse-hairline: rgba(255, 255, 255, 0.14);
   --color-inverse-hairline-soft: rgba(255, 255, 255, 0.08);
+  --color-semantic-warn: #d6a15c;
+  --color-semantic-warn-soft: rgba(214, 161, 92, 0.14);
 
   --canvas: var(--color-inverse-canvas);
   --surface-1: var(--color-inverse-surface-1);
@@ -173,6 +188,8 @@
   --hairline-soft: var(--color-inverse-hairline-soft);
   --primary-bg: var(--color-inverse-ink);
   --primary-fg: var(--color-inverse-canvas);
+  --semantic-warn: var(--color-semantic-warn);
+  --semantic-warn-soft: var(--color-semantic-warn-soft);
 }
 
 * {

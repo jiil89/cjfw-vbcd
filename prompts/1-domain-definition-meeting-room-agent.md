@@ -205,6 +205,14 @@
 
 ## 8. 확인이 필요한 사항 (Open Questions)
 
+- **[신규 발견 — 2026-08-14, FE-5 실사용 검증 중, 부분 해결·핵심 미해결]** `SaveReserve`가 실제로 한 번도 성공한 적이 없었다. 1차 조사에서 "JSON 대신 form-urlencoded를 기대함"으로 추정했던 건 **틀린 가설**이었음이 이후 확인됨(아래). 최종 확인된 사실:
+  1. **실제 CJ 프론트는 JSON으로 호출한다.** 1차 500 에러의 진짜 원인은 인코딩이 아니라 **필수 파라미터 6개(`attendee_count`/`gubun`/`req_list`/`opt_list`/`is_send_mail`/`is_send_alarm`/`admin_alias`/`admin_lang`)를 아예 안 보내고 있었기 때문**이다 — Playwright로 CJ 실제 예약 UI(`reserve_main.aspx` → 빈 슬롯 더블클릭 → `reserve_insmod.aspx`)를 열어 그 페이지가 로드하는 `/NCONF/ConferenceRoom/script/reserve_insmod.js`(`$('#btnConfirm')` 클릭 핸들러 원본)를 직접 확보해 확정함.
+  2. 필드별 정확한 타입/기본값(전부 이전 추측과 다름): `attendee_count`=항상 빈 문자열, `gubun`=회의실의 **승인 필요 여부**(`REQUIRED_APPROVAL`, 0=불필요·일반 회의실은 0 고정 — "선호 회의실 카테고리"가 아니었음), `is_send_mail`/`is_send_alarm`=boolean이 아니라 문자열("0"/"1", "True"/"False"), `req_list`/`opt_list`=참석자/참조자 목록(없으면 빈 문자열), `admin_alias`/`admin_lang`=신청자 본인이 아니라 **승인자 목록**(gubun=0이면 빈 문자열).
+  3. `.d` 응답은 "JSON 문자열을 담은 JSON 문자열"(이중 인코딩)이라 한 번 더 `JSON.parse`해야 함 — 실제 UI도 `$.parseJSON(data.d)`로 그렇게 한다. 이전엔 이걸 안 해서 `checkRoom` 등의 응답이 항상 원시 문자열로 새어나가고 있었음.
+  4. **더 중요한 발견**: `checkRoom`/`checkStraightRoom`/`checkDayCountLimit`는 `Result:"0"`이 "통과"이고 그 외 값이 "차단"이다(SaveReserve 자신의 `Result:"1"=성공` 규약과 정반대). 위 3번 이중디코딩 버그 때문에 지금까지 이 세 검증이 `Result` 필드를 전혀 못 읽고 **사실상 항상 통과를 반환**하고 있었다 — 즉 한 번도 실제로 걸러낸 적이 없었다. 두 버그를 고친 뒤 checkStraightRoom이 실제로 특정 슬롯(3F-1, 특정 날짜 종일)을 정확히 막는 것을 실사용으로 확인(우리 테스트로 생긴 게 아니라 진짜 제약임을 `bindMyReservation` 전체 재조회로 교차 확인).
+  5. **위를 전부 고치고도 `SaveReserve`는 여전히 `{"Result":0,"Seq":null}`(실패)을 반환한다 — 핵심 원인은 아직 미해결.** 정적 분석(JS 소스 읽기)으로 확인 가능한 필드는 다 맞춘 것으로 보이므로, 남은 원인은 런타임에만 채워지는 값(예: 회의실 메타데이터 초기화 AJAX 호출을 우리가 안 하고 있어서 세션에 없는 상태값을 참조하는 경우 등)일 가능성이 높다.
+  - **다음 시도 우선순위**: (a) Playwright의 `page.on('request')`로 CJ 실제 UI가 보내는 **성공하는 저장 요청**을 캡처해 우리 페이로드와 필드 단위로 diff(회의실 메타데이터 초기화 호출도 함께 캡처). (b) 사내 IT/인프라팀에 API 스펙 문의.
+  - 상세 진단 기록: `prompts/9-plan.md` FE-5 섹션. 관련 코드: `backend/src/cj-automation/client.ts`(`SaveReserveParams` 필드 재정의, `.d` 이중디코딩), `backend/src/tools/reservation.tool.ts`(`isCjCheckAffirmative` Result 판정 수정).
 - **[신규]** 예약 변경 시 `SaveReserve`가 `reservetype` 값으로 "수정 모드"를 지원하는지, 아니면 `delReserve`(취소) 후 `SaveReserve`(재생성)로 처리해야 하는지 — 실제 변경 흐름으로 라이브 테스트 필요 (2번 "예약 변경" 참고)
 - **[신규]** `checkRoom`/`checkStraightRoom`/`checkDayCountLimit`가 공통으로 받는 `seq` 파라미터가 "이 예약 자신은 충돌/누적시간 계산에서 제외"하는 용도로 추정되나, 신규 생성 흐름에서만 관찰했고 변경 흐름에서는 아직 확인 못함
 - ~~사내 예약 시스템 연동 방식~~ → **확인 완료.** 9번 참고 (공식 API 문서는 없음, 사내 SSO 로그인 후 발급되는 세션 쿠키 기반의 내부 ASMX 웹서비스 호출 방식)

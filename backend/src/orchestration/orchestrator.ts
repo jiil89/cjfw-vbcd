@@ -40,6 +40,7 @@ import {
   type RoomedSegmentPlan,
 } from "../tools/reservation.tool";
 import { getMyReservations } from "../tools/myReservations.tool";
+import { addPreferredRoom, removePreferredRoom, RoomNotFoundError } from "../tools/preferredRooms.tool";
 import {
   modifyReservation,
   resolveSingleReservationTarget,
@@ -188,6 +189,12 @@ async function callOpenAi(messages: OpenAiRequestMessage[]): Promise<OpenAiChatC
       messages,
       tools: toolSchemas,
       tool_choice: "auto",
+      // [2026-08-14] gpt-5.6-luna(추론 모델)로 전환하면서 필요해짐 — reasoning_effort가
+      // 기본값(추론함)이면 /v1/chat/completions에서 함수 도구 호출 자체가 거부된다
+      // ("Function tools with reasoning_effort are not supported ... set reasoning_effort
+      // to 'none'"). 이 프로젝트는 도구 호출이 핵심이라 "none"으로 고정 — 부수적으로
+      // 내부 추론(느려지는 주된 원인 중 하나)도 꺼져서 응답 속도에도 도움이 된다.
+      reasoning_effort: "none",
     }),
   });
 
@@ -402,7 +409,19 @@ async function executeTool(
           createdAtTurn: session.turnIndex,
         };
         setPendingConfirmation(session, pending);
-        return { content: { confirmationToken: pending.token, summary, requiresUserConfirmation: true } };
+        // room/date/startTime/endTime을 요약 문자열과 별개 필드로도 내려준다 — FE-5가 이
+        // 결과를 그대로 "회의실 제안 카드"에 바인딩한다(문자열 파싱 없이).
+        return {
+          content: {
+            confirmationToken: pending.token,
+            summary,
+            requiresUserConfirmation: true,
+            room: toRoomSummary(params.room),
+            date,
+            startTime,
+            endTime,
+          },
+        };
       }
 
       case "confirm_create_reservation": {
@@ -421,6 +440,11 @@ async function executeTool(
         } catch (err) {
           setPendingConfirmation(session, null);
           if (err instanceof ReservationConflictError || err instanceof BusinessRuleViolationError) {
+            // [FE-5 실사용 검증에서 발견, 20260814] confirm_* 실패는 사용자에게는 "다시
+            // 시도해달라"는 안내로 자연스럽게 흡수되지만, 서버 로그에는 아무것도 남지 않아
+            // CJ 연동이 반복 실패해도 운영자가 알 방법이 없었다 — 원인 메시지만 남긴다
+            // (사용자 응답 내용은 바꾸지 않는다).
+            console.warn(`[orchestration/orchestrator] confirm_create_reservation 실패: ${err.message}`);
             return errorResult(err.message);
           }
           throw err;
@@ -458,7 +482,15 @@ async function executeTool(
           createdAtTurn: session.turnIndex,
         };
         setPendingConfirmation(session, pending);
-        return { content: { confirmationToken: pending.token, summary, requiresUserConfirmation: true } };
+        return {
+          content: {
+            confirmationToken: pending.token,
+            summary,
+            requiresUserConfirmation: true,
+            date,
+            segments: plan.map((s) => ({ room: toRoomSummary(s.room), startTime: s.startTime, endTime: s.endTime })),
+          },
+        };
       }
 
       case "confirm_split_reservation": {
@@ -477,6 +509,7 @@ async function executeTool(
         } catch (err) {
           setPendingConfirmation(session, null);
           if (err instanceof SegmentReservationFailedError) {
+            console.warn(`[orchestration/orchestrator] confirm_split_reservation 실패: ${err.message}`);
             return errorResult(err.message);
           }
           if (err instanceof BusinessRuleViolationError) return errorResult(err.message);
@@ -540,6 +573,7 @@ async function executeTool(
             err instanceof ReservationConflictError ||
             err instanceof BusinessRuleViolationError
           ) {
+            console.warn(`[orchestration/orchestrator] confirm_modify_reservation 실패: ${err.message}`);
             return errorResult(err.message);
           }
           throw err;
@@ -602,6 +636,30 @@ async function executeTool(
         }
       }
 
+      case "add_preferred_room": {
+        const roomName = requireString(args, "roomName");
+        if (!roomName) return errorResult("roomName은 필수입니다.");
+        try {
+          const rooms = await addPreferredRoom(userId, roomName);
+          return { content: { rooms: rooms.map(toRoomSummary) } };
+        } catch (err) {
+          if (err instanceof RoomNotFoundError) return errorResult(err.message);
+          throw err;
+        }
+      }
+
+      case "remove_preferred_room": {
+        const roomName = requireString(args, "roomName");
+        if (!roomName) return errorResult("roomName은 필수입니다.");
+        try {
+          const rooms = await removePreferredRoom(userId, roomName);
+          return { content: { rooms: rooms.map(toRoomSummary) } };
+        } catch (err) {
+          if (err instanceof RoomNotFoundError) return errorResult(err.message);
+          throw err;
+        }
+      }
+
       default:
         return errorResult(`알 수 없는 도구입니다: ${name}`);
     }
@@ -616,8 +674,21 @@ async function executeTool(
 // ---------------------------------------------------------------------------
 const MAX_TOOL_ITERATIONS = 6;
 
+/**
+ * 이번 턴에 실행된 마지막 도구 호출의 결과를 그대로 프론트에 넘긴다 — FE-5가 채팅
+ * 텍스트를 파싱하지 않고 이 구조화된 데이터로 회의실 제안 카드를 그린다.
+ * tool 이름으로 어떤 모양인지 판단하게 하고(check_availability, propose_*, confirm_* 등),
+ * 새로운 카드 종류가 필요해지면 여기서 새 도구를 추가하는 게 아니라 프론트가 매핑을
+ * 늘리기만 하면 된다 — 오케스트레이터는 "마지막 도구 결과 그대로 전달"이라는 단일 규칙만 유지.
+ */
+export interface ChatProposal {
+  tool: string;
+  data: unknown;
+}
+
 export interface OrchestratorReply {
   reply: string;
+  proposal: ChatProposal | null;
 }
 
 /**
@@ -635,6 +706,7 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
 
   let resetAfterReply = false;
   let finalReply: string | null = null;
+  let lastToolResult: ChatProposal | null = null;
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
     const systemPrompt = buildSystemPrompt({
@@ -700,6 +772,7 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
       if (result.resetSessionAfterReply) {
         resetAfterReply = true;
       }
+      lastToolResult = { tool: name, data: result.content };
       appendMessage(session, {
         role: "tool",
         tool_call_id: toolCall.id,
@@ -720,5 +793,5 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
     resetSession(userId);
   }
 
-  return { reply: finalReply };
+  return { reply: finalReply, proposal: lastToolResult };
 }

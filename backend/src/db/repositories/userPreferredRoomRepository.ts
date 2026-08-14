@@ -56,6 +56,58 @@ export async function setPreferredRooms(userId: string, roomIds: string[]): Prom
   );
 }
 
+/**
+ * [FE-5 챗봇 선호 회의실 관리 기능, 20260814] 이미 등록된 회의실이면 조용히 무시한다
+ * (on conflict do nothing) — 챗봇이 "이미 선호 목록에 있어요"를 별도로 안내할 필요 없이
+ * 이 함수 호출 후 findPreferredRoomsByUserId로 현재 목록을 다시 읽어 그대로 보여주면 된다.
+ */
+export async function addPreferredRoom(userId: string, roomId: string): Promise<void> {
+  await pool.query(
+    `insert into public.user_preferred_rooms (user_id, room_id, priority)
+     select $1, $2, coalesce(max(priority), 0) + 1
+     from public.user_preferred_rooms where user_id = $1
+     on conflict (user_id, room_id) do nothing`,
+    [userId, roomId]
+  );
+}
+
+/**
+ * [FE-5 챗봇 선호 회의실 관리 기능, 20260814] 삭제 후 남은 행의 priority를 1..N으로
+ * 다시 촘촘하게 채운다(순위에 구멍이 생기지 않게). `unique(user_id, priority)` 제약과
+ * 동시에 부딪히지 않도록 먼저 음수로 옮겼다가 다시 채우는 2단계로 처리한다.
+ */
+export async function removePreferredRoomByRoomId(userId: string, roomId: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query(
+      `delete from public.user_preferred_rooms where user_id = $1 and room_id = $2`,
+      [userId, roomId]
+    );
+    await client.query(
+      `update public.user_preferred_rooms set priority = -priority where user_id = $1`,
+      [userId]
+    );
+    await client.query(
+      `with ranked as (
+         select id, row_number() over (order by -priority) as new_priority
+         from public.user_preferred_rooms where user_id = $1
+       )
+       update public.user_preferred_rooms u
+       set priority = ranked.new_priority
+       from ranked
+       where u.id = ranked.id`,
+      [userId]
+    );
+    await client.query("commit");
+  } catch (err) {
+    await client.query("rollback");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /** 사용자가 가입 시 등록한 선호 회의실을 우선순위(1이 최우선) 순서로 반환한다. */
 export async function findPreferredRoomsByUserId(userId: string): Promise<Room[]> {
   const result = await pool.query<PreferredRoomRow>(
