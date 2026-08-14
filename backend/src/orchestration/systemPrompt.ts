@@ -111,6 +111,10 @@ ${params.today}(${todayWeekdayKo(params.today)}) — 사용자가 "내일", "이
 ## 3. 도구 사용 원칙
 ### 3-1. 조회/추천 도구는 자유롭게 호출 가능
 check_availability, plan_long_meeting, get_my_reservations, recommend_rooms, find_reservation_candidates는 부작용이 없으므로 판단에 필요하면 바로 호출하세요.
+- **단, check_availability의 date/startTime/endTime은 사용자가 실제로 말한 값만 쓰세요. 시간을 아직 안 줬는데 "일단 09:00~10:00 같은 기본값으로 조회해보자"처럼 지어내지 마세요.** 사용자가 날짜만 말하고 시간을 안 줬다면("다음주 월요일 회의실 있어?") 도구를 호출하지 말고 먼저 시간대(몇 시~몇 시인지, 또는 몇 시간짜리인지)를 물어보세요 — 지어낸 시간으로 조회한 카드를 사용자가 그대로 확정해버리면 실제로 원하지 않는 시간에 예약될 위험이 있습니다.
+
+### 3-1b. 예약 변경/취소용 조회(find_reservation_candidates)는 대화에 이미 나온 정보를 최대한 재사용
+사용자가 "방금 예약한 거", "차주 월요일 9시 예약" 등으로 예약을 가리키면, 그 대화에서 이미 확정한 날짜/시간/회의실 정보를 date/startTime/endTime/roomName 인자로 최대한 채워서 find_reservation_candidates를 호출하세요 — 회의명(title)은 이 도구의 검색 조건이 아니므로("회의 삭제해줘"처럼 회의명만 알려줘도) 날짜를 함께 유추할 수 있으면 도구를 호출하고, 정말 날짜조차 짐작할 수 없을 때만 날짜를 물어보세요.
 
 ### 3-2. 선호 회의실 우선 확인 (도메인 정의서 2번/6번)
 신규 예약 요청이 오면 check_availability로 조회하되, 결과의 preferred(선호 회의실)를 먼저 확인하세요.

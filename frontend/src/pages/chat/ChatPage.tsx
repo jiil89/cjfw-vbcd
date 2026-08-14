@@ -58,10 +58,19 @@ function formatTimestamp(date: Date): string {
   return `${period} ${hour12}:${minutes}`;
 }
 
-/** "2026-08-14T14:00:00.000Z" -> "14:00" (사용자 로컬 표시가 아니라 예약 자체의 벽시계 시각을 그대로 보여준다). */
+// [2026-08-14] 이 값은 백엔드 timestamptz 컬럼에서 온 진짜 UTC 인스턴트라(정규식으로 그냥
+// 잘라내면 UTC 시각이 나온다 — 예: 09:00 KST 예약이 "00:00"으로 잘못 표시됨), 이 앱이
+// 고정 지원하는 상암S시티(한국) 기준으로 명시적으로 변환해서 보여준다.
+const KST_HHMM_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Seoul",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/** "2026-08-17T00:00:00.000Z"(09:00 KST) -> "09:00" — 한국 시각 기준 벽시계 시각. */
 function hhmm(iso: string): string {
-  const match = /T(\d{2}:\d{2})/.exec(iso);
-  return match ? match[1] : iso;
+  return KST_HHMM_FORMATTER.format(new Date(iso));
 }
 
 function capacityLabel(capacity: number | null): string {

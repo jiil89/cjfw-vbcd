@@ -8,6 +8,7 @@ import {
   findActiveReservationsWithRoomByUserAndRange,
   type ReservationWithRoom,
 } from "../db/repositories/reservationRepository";
+import { kstDayRange, toKstHHmm } from "../lib/kst";
 
 export class ReservationNotFoundError extends Error {
   constructor(message = "해당 조건에 맞는 예약을 찾지 못했습니다.") {
@@ -40,14 +41,12 @@ function hintMatches(reservation: ReservationWithRoom, hint: ReservationTargetHi
     return false;
   }
   if (hint.startTime) {
-    const reservationStartTime = reservation.startAt.slice(11, 16); // "YYYY-MM-DDTHH:mm:ss" -> "HH:mm"
-    if (reservationStartTime !== hint.startTime) {
+    if (toKstHHmm(reservation.startAt) !== hint.startTime) {
       return false;
     }
   }
   if (hint.endTime) {
-    const reservationEndTime = reservation.endAt.slice(11, 16);
-    if (reservationEndTime !== hint.endTime) {
+    if (toKstHHmm(reservation.endAt) !== hint.endTime) {
       return false;
     }
   }
@@ -59,8 +58,7 @@ export async function findReservationCandidates(
   userId: string,
   hint: ReservationTargetHint
 ): Promise<ReservationWithRoom[]> {
-  const rangeStartAt = `${hint.date}T00:00:00`;
-  const rangeEndAt = `${hint.date}T23:59:59`;
+  const { rangeStartAt, rangeEndAt } = kstDayRange(hint.date);
   const dayReservations = await findActiveReservationsWithRoomByUserAndRange(
     userId,
     rangeStartAt,

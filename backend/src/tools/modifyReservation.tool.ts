@@ -23,6 +23,7 @@ import { resolveEmailAlias } from "./availability.tool";
 import { assertValidReservationWindow, BusinessRuleViolationError } from "./businessRules";
 import { fetchRoomOptionInfo, ReservationConflictError } from "./reservation.tool";
 import { ReservationNotFoundError } from "./reservationTargeting";
+import { toKstDate, toKstHHmm, toKstTimestamp } from "../lib/kst";
 
 export { resolveSingleReservationTarget, findReservationCandidates } from "./reservationTargeting";
 
@@ -95,7 +96,7 @@ function extractSeq(raw: unknown): string {
 }
 
 function splitTimestamp(ts: string): { date: string; time: string } {
-  return { date: ts.slice(0, 10), time: ts.slice(11, 16) };
+  return { date: toKstDate(ts), time: toKstHHmm(ts) };
 }
 
 /**
@@ -277,8 +278,8 @@ export async function modifyReservation(
   try {
     await markReservationModified(reservation.id, {
       roomId: newRoom.id,
-      startAt: `${newDate}T${newStartTime}:00`,
-      endAt: `${newDate}T${newEndTime}:00`,
+      startAt: toKstTimestamp(newDate, newStartTime),
+      endAt: toKstTimestamp(newDate, newEndTime),
       cjSeq: newCjSeq,
     });
   } catch (err) {

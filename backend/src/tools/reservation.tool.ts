@@ -38,6 +38,7 @@ import {
   RESERVATION_UNIT_MINUTES,
 } from "./businessRules";
 import { findAvailableRooms, resolveEmailAlias } from "./availability.tool";
+import { toKstTimestamp } from "../lib/kst";
 
 function isoToday(): string {
   return new Date().toISOString().slice(0, 10);
@@ -329,10 +330,6 @@ export interface CreatedReservationSummary {
   cjSeq: string;
 }
 
-function toTimestamp(date: string, hhmm: string): string {
-  return `${date}T${hhmm}:00`;
-}
-
 export async function createReservation(
   userId: string,
   input: CreateReservationInput,
@@ -393,8 +390,8 @@ export async function createReservation(
       cjSeq,
       title: input.title,
       contents: input.contents || null,
-      startAt: toTimestamp(input.date, input.startTime),
-      endAt: toTimestamp(input.date, input.endTime),
+      startAt: toKstTimestamp(input.date, input.startTime),
+      endAt: toKstTimestamp(input.date, input.endTime),
     });
     await linkReservationRequestToReservation(request.id, reservation.id);
 
@@ -553,8 +550,8 @@ export async function createSplitReservation(
         cjSeq,
         title: input.title,
         contents: input.contents || null,
-        startAt: toTimestamp(input.date, segment.startTime),
-        endAt: toTimestamp(input.date, segment.endTime),
+        startAt: toKstTimestamp(input.date, segment.startTime),
+        endAt: toKstTimestamp(input.date, segment.endTime),
       });
 
       createdSummaries.push({

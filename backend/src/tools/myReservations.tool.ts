@@ -13,6 +13,7 @@ import { bindMyReservation } from "../cj-automation/client";
 import { getValidSession } from "../cj-automation/session";
 import { findActiveReservationsByUserAndRange } from "../db/repositories/reservationRepository";
 import { resolveEmailAlias } from "./availability.tool";
+import { kstDayRange } from "../lib/kst";
 
 export interface MyReservationsQuery {
   fromDate: string; // "YYYY-MM-DD"
@@ -58,8 +59,8 @@ export async function getMyReservations(
     console.error("[tools/myReservations] bindMyReservation 호출 실패 (DB 기준으로 계속 진행)", err);
   });
 
-  const rangeStartAt = `${query.fromDate}T00:00:00`;
-  const rangeEndAt = `${query.toDate}T23:59:59`;
+  const rangeStartAt = kstDayRange(query.fromDate).rangeStartAt;
+  const rangeEndAt = kstDayRange(query.toDate).rangeEndAt;
   const reservations = await findActiveReservationsByUserAndRange(userId, rangeStartAt, rangeEndAt);
 
   const groupsByRequestId = new Map<string, MyReservationGroup>();

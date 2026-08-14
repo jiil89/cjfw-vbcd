@@ -34,15 +34,29 @@ interface ReservationRow {
   cj_seq: string | null;
   title: string;
   contents: string | null;
-  start_at: string;
-  end_at: string;
+  // timestamptz 컬럼 — node-postgres가 실제로는 Date 객체를 돌려준다(위 toIsoString 주석 참고).
+  start_at: string | Date;
+  end_at: string | Date;
   status: ReservationStatus;
-  created_at: string;
-  updated_at: string;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 const RESERVATION_COLUMNS =
   "id, reservation_request_id, user_id, room_id, cj_seq, title, contents, start_at, end_at, status, created_at, updated_at";
+
+// [2026-08-14 실사용 검증 완료 — 예약 변경/취소가 항상 "시스템 오류"로 실패하던 버그]
+// start_at/end_at 컬럼은 timestamptz라 node-postgres가 기본적으로 JS Date 객체로 파싱해
+// 돌려준다 — 이 파일의 타입(ReservationRow.start_at: string)은 실제로는 거짓이었다.
+// HTTP 응답으로 나갈 때는 JSON.stringify가 Date를 ISO 문자열로 자동 변환해줘서 문제가
+// 안 드러났지만, reservationTargeting.ts의 hintMatches()처럼 백엔드 안에서 이 값에 직접
+// `.slice(11, 16)`을 호출하는 코드는 `TypeError: startAt.slice is not a function`으로
+// 죽었다(예약 변경/취소가 항상 "시스템 오류가 발생했어요"로만 실패하는 원인이었음). DB
+// 컬럼 → 애플리케이션 타입 변환은 이 리포지토리 계층에서만 한다는 원칙(5-project-principle.md
+// §3)대로, 여기서 항상 실제 문자열로 정규화해 타입 선언이 거짓말이 아니게 만든다.
+function toIsoString(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
 
 function toReservation(row: ReservationRow): Reservation {
   return {
@@ -53,11 +67,11 @@ function toReservation(row: ReservationRow): Reservation {
     cjSeq: row.cj_seq,
     title: row.title,
     contents: row.contents,
-    startAt: row.start_at,
-    endAt: row.end_at,
+    startAt: toIsoString(row.start_at),
+    endAt: toIsoString(row.end_at),
     status: row.status,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at),
   };
 }
 
