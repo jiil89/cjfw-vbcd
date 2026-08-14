@@ -325,6 +325,7 @@ export interface CreateReservationInput {
 export interface CreatedReservationSummary {
   reservationId: string;
   roomName: string;
+  date: string;
   startTime: string;
   endTime: string;
   cjSeq: string;
@@ -398,6 +399,7 @@ export async function createReservation(
     return {
       reservationId: reservation.id,
       roomName: input.room.roomName,
+      date: input.date,
       startTime: input.startTime,
       endTime: input.endTime,
       cjSeq,
@@ -557,6 +559,7 @@ export async function createSplitReservation(
       createdSummaries.push({
         reservationId: reservation.id,
         roomName: segment.room.roomName,
+        date: input.date,
         startTime: segment.startTime,
         endTime: segment.endTime,
         cjSeq,

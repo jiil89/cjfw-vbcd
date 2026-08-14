@@ -20,7 +20,6 @@ import { config } from "../config/env";
 import {
   appendMessage,
   getOrCreateSession,
-  resetSession,
   setPendingConfirmation,
   validatePendingConfirmation,
   type OrchestrationSession,
@@ -214,9 +213,6 @@ async function callOpenAi(messages: OpenAiRequestMessage[]): Promise<OpenAiChatC
 // ---------------------------------------------------------------------------
 interface ToolExecutionResult {
   content: unknown;
-  /** 이 턴의 응답을 사용자에게 보낸 뒤 세션을 리셋해야 하면 true
-   * (BE-7 요구사항: 예약 완료/취소 시 컨텍스트 리셋). */
-  resetSessionAfterReply?: boolean;
 }
 
 function errorResult(message: string): ToolExecutionResult {
@@ -442,7 +438,7 @@ async function executeTool(
             check.pending.params as Parameters<typeof createReservation>[1]
           );
           setPendingConfirmation(session, null);
-          return { content: { status: "confirmed", reservation: result }, resetSessionAfterReply: true };
+          return { content: { status: "confirmed", reservation: result } };
         } catch (err) {
           setPendingConfirmation(session, null);
           if (err instanceof ReservationConflictError || err instanceof BusinessRuleViolationError) {
@@ -511,7 +507,7 @@ async function executeTool(
             check.pending.params as Parameters<typeof createSplitReservation>[1]
           );
           setPendingConfirmation(session, null);
-          return { content: { status: "confirmed", reservations: results }, resetSessionAfterReply: true };
+          return { content: { status: "confirmed", reservations: results } };
         } catch (err) {
           setPendingConfirmation(session, null);
           if (err instanceof SegmentReservationFailedError) {
@@ -616,7 +612,7 @@ async function executeTool(
             check.pending.params as Parameters<typeof cancelReservation>[1]
           );
           setPendingConfirmation(session, null);
-          return { content: { status: "confirmed", cancelled: results }, resetSessionAfterReply: true };
+          return { content: { status: "confirmed", cancelled: results } };
         } catch (err) {
           setPendingConfirmation(session, null);
           if (err instanceof SplitGroupCancelScopeRequiredError) {
@@ -718,7 +714,6 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
   const rooms = await getRoomContext();
   const today = new Date().toISOString().slice(0, 10);
 
-  let resetAfterReply = false;
   let finalReply: string | null = null;
   let lastToolResult: ChatProposal | null = null;
 
@@ -783,9 +778,6 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
       }
 
       const result = await executeTool(session, userId, name, args);
-      if (result.resetSessionAfterReply) {
-        resetAfterReply = true;
-      }
       lastToolResult = { tool: name, data: result.content };
       appendMessage(session, {
         role: "tool",
@@ -801,12 +793,6 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
     console.warn(`[orchestration/orchestrator] 도구 호출 루프가 ${MAX_TOOL_ITERATIONS}회를 넘어 강제 종료됨 (userId=${userId})`);
   } else {
     finalReply = collapseDuplicateLines(finalReply);
-  }
-
-  if (resetAfterReply) {
-    // 도메인 정의서 2번 "긴 회의 요청"/"내 예약 조회" 등에서 예약 완료·취소는 하나의
-    // 용건이 끝났다는 신호다 — BE-7 요구사항대로 다음 턴부터는 새 컨텍스트로 시작한다.
-    resetSession(userId);
   }
 
   return { reply: finalReply, proposal: lastToolResult };
