@@ -171,6 +171,8 @@ flowchart LR
   - [x] `is_admin=false`인 사용자의 토큰으로 호출 시 403 반환
   - [x] 승인/거부 후 목록에서 해당 항목이 사라지고 처리 이력에 반영됨 (curl 6단계 시나리오로 로컬 검증 완료)
 
+  **[2026-08-14 FE-4 착수 전 보강]** `GET /admin/registration-requests`가 `status` 쿼리 파라미터를 지원하도록 확장(`docs/swagger.json`에는 이미 명세돼 있었으나 구현이 안 되어 있었음): 생략 시 pending, `status=processed`는 auto_approved/approved/rejected 3종을 처리 시각 최신순으로 묶어 반환(FE-4 "처리 완료 이력", 최근 50건 제한). 응답에 `processed_by_email_alias`(처리자 표시용, 자동승인 시 null → 프론트가 "system"으로 표시)와 `preferred_room_ids`도 추가. curl로 pending/processed/잘못된 status(400) 전부 실측 검증.
+
 ### BE-4. CJ 자동화 계층
 
 - **작업 내용**: `cj-automation/session.ts`(Playwright 로그인, 세션 유효성 확인+재로그인), `cj-automation/client.ts`(9번 API 명세의 각 엔드포인트 래퍼), `cj-automation/availabilityParser.ts`(`reserve_all_list` + `event_list` 겹침 판정 알고리즘). Vercel Functions 위에서 `@sparticuz/chromium` 사용.
@@ -284,10 +286,16 @@ flowchart LR
 - **작업 내용**: `7-wireframes.md` 3번 기준. 대기중 등록 요청 목록(카드), 승인/거부 버튼, 처리 완료 이력. 모바일에서는 이력 기본 접힘.
 - **선행 Task**: FE-1, BE-3
 - **완료 조건**:
-  - [ ] 대기중 목록이 실시간(또는 재조회)으로 표시되고 승인/거부 처리 후 목록에서 사라짐
-  - [ ] 비밀번호/암호문이 어떤 형태로도 화면에 노출되지 않음
-  - [ ] Admin 권한이 없는 사용자가 접근 시 이 화면으로 진입할 수 없음 (라우팅 가드)
-  - [ ] 860px 이하에서 처리 완료 이력이 기본 접힘 상태로 렌더링됨
+  - [x] 대기중 목록이 실시간(또는 재조회)으로 표시되고 승인/거부 처리 후 목록에서 사라짐 — TanStack Query, 승인/거부 성공 시 pending·processed 쿼리 모두 invalidate. 실제 브라우저로 승인 1건/거부 1건 처리 → 즉시 목록에서 사라지고 이력 맨 위에 나타나는 것까지 실측 확인
+  - [x] 비밀번호/암호문이 어떤 형태로도 화면에 노출되지 않음 — 백엔드 응답 자체에 비밀번호 필드가 없고(구조적으로 불가능), 프론트도 이름을 명시한 필드만 렌더링
+  - [x] Admin 권한이 없는 사용자가 접근 시 이 화면으로 진입할 수 없음 (`RequireAdmin` 라우팅 가드, `routes/RequireAdmin.tsx`) — 실제 브라우저로 3가지 케이스 전부 실측: 미로그인 시 `/login`, 로그인했지만 non-admin이면 `/chat`, admin이면 정상 진입
+  - [x] 860px 이하에서 처리 완료 이력이 기본 접힘 상태로 렌더링됨(`<details>`, 데스크톱은 별도 섹션으로 항상 펼침) — 390px 스크린샷으로 실측 확인
+
+  **FE-4 진행 중 발견해 함께 고친 버그 2건**:
+  1. `frontend/vite.config.ts`의 dev 프록시가 `/admin`,`/chat` 등 프론트 페이지 라우트와 이름이 겹치는 백엔드 API 경로를 무조건 백엔드로 넘겨서, `/admin`에 직접 접속(새로고침 등)하면 SPA 대신 백엔드의 raw JSON 401 응답이 그대로 노출되던 버그(실측 확인). Vite 공식 문서의 `bypass` 패턴으로 수정: `Accept` 헤더에 `html`이 포함된 요청(브라우저 최상위 내비게이션)은 프록시를 건너뛰고 `index.html`을 서빙해 SPA 라우터가 처리하게 함.
+  2. 공용 `Button` 컴포넌트에 `white-space: nowrap`이 없어, 좁은 flex 컨테이너(Admin 헤더의 "로그아웃" 버튼, 390px)에서 버튼 라벨이 글자 단위로 세로 줄바꿈되던 버그(실측 확인, 스크린샷으로 재현·수정 확인). `components/Button.css`에 `white-space: nowrap; flex-shrink: 0;` 추가 — 프로젝트 전역 버튼에 적용되는 근본 수정.
+
+  **[2026-08-14, 사내망 재연결 후 회귀 테스트]** 백엔드 `npx tsc --noEmit`+`vitest`(93개), 프론트 `npm run build`+`vitest`(4개) 전부 재통과 확인. CJ 실시간 연동(BE-4/BE-6/BE-7)도 `findAvailableRooms` 라이브 호출로 재검증(14개 회의실 정상 조회) — 이번 FE-4 작업이 기존 CJ 연동에 영향 없음을 확인.
 
 ### FE-5. 웹 챗봇 UI
 

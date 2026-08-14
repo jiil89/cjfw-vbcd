@@ -4,11 +4,15 @@
 
 import { pool } from "../pool";
 
+export type RegistrationRequestStatus = "pending" | "auto_approved" | "approved" | "rejected";
+
 export interface RegistrationRequest {
   id: string;
   emailAlias: string;
-  status: "pending" | "auto_approved" | "approved" | "rejected";
+  status: RegistrationRequestStatus;
   processedByUserId: string | null;
+  /** FE-4: 처리자 표시용(와이어프레임 "처리자: hong.gd"). 자동승인이면 null(프론트가 "system"으로 표시). */
+  processedByEmailAlias: string | null;
   processedBySystem: boolean;
   processedAt: string | null;
   resultingUserId: string | null;
@@ -19,8 +23,9 @@ export interface RegistrationRequest {
 interface RegistrationRequestRow {
   id: string;
   email_alias: string;
-  status: "pending" | "auto_approved" | "approved" | "rejected";
+  status: RegistrationRequestStatus;
   processed_by_user_id: string | null;
+  processed_by_email_alias: string | null;
   processed_by_system: boolean;
   processed_at: string | null;
   resulting_user_id: string | null;
@@ -28,8 +33,15 @@ interface RegistrationRequestRow {
   created_at: string;
 }
 
+// INSERT ... RETURNING 등 별칭(alias) 없는 단순 쿼리용 — processed_by_email_alias는
+// 아직 처리 전(pending 신규 생성)이라 항상 null이다.
 const REGISTRATION_REQUEST_COLUMNS =
-  "id, email_alias, status, processed_by_user_id, processed_by_system, processed_at, resulting_user_id, preferred_room_ids, created_at";
+  "id, email_alias, status, processed_by_user_id, processed_by_system, processed_at, resulting_user_id, preferred_room_ids, created_at, null as processed_by_email_alias";
+
+// FE-4: 처리자 이름(email_alias) 표시를 위해 users와 LEFT JOIN하는 조회용.
+// `from public.account_registration_requests arr left join public.users admin_u on ...`와 함께 쓴다.
+const REGISTRATION_REQUEST_COLUMNS_WITH_PROCESSOR =
+  "arr.id, arr.email_alias, arr.status, arr.processed_by_user_id, admin_u.email_alias as processed_by_email_alias, arr.processed_by_system, arr.processed_at, arr.resulting_user_id, arr.preferred_room_ids, arr.created_at";
 
 function toRegistrationRequest(row: RegistrationRequestRow): RegistrationRequest {
   return {
@@ -37,6 +49,7 @@ function toRegistrationRequest(row: RegistrationRequestRow): RegistrationRequest
     emailAlias: row.email_alias,
     status: row.status,
     processedByUserId: row.processed_by_user_id,
+    processedByEmailAlias: row.processed_by_email_alias ?? null,
     processedBySystem: row.processed_by_system,
     processedAt: row.processed_at,
     resultingUserId: row.resulting_user_id,
@@ -110,24 +123,41 @@ export async function findRegistrationRequestById(
   requestId: string
 ): Promise<RegistrationRequest | null> {
   const result = await pool.query<RegistrationRequestRow>(
-    `select ${REGISTRATION_REQUEST_COLUMNS}
-     from public.account_registration_requests
-     where id = $1`,
+    `select ${REGISTRATION_REQUEST_COLUMNS_WITH_PROCESSOR}
+     from public.account_registration_requests arr
+     left join public.users admin_u on admin_u.id = arr.processed_by_user_id
+     where arr.id = $1`,
     [requestId]
   );
   return result.rows[0] ? toRegistrationRequest(result.rows[0]) : null;
 }
 
 /**
- * BE-3: Admin 승인 패널용 — pending 상태 목록만 조회한다. 비밀번호/암호문 컬럼은
+ * BE-3/FE-4: Admin 승인 패널용 — 상태별 목록을 조회한다. `docs/swagger.json`의
+ * `GET /admin/registration-requests?status=` 계약과 동일하게, pending은 신청 오래된
+ * 순(먼저 접수된 것부터 처리하도록), 처리 완료 상태(auto_approved/approved/rejected)는
+ * 최근 처리분이 먼저 보이도록 최신 처리 시각 순으로 정렬한다. 비밀번호/암호문 컬럼은
  * 애초에 SELECT하지 않으므로 응답에 절대 포함되지 않는다.
+ *
+ * @param limit 처리 완료 이력이 무한정 쌓이는 것을 막기 위한 상한(pending 조회 시엔 무시).
  */
-export async function findPendingRegistrationRequests(): Promise<RegistrationRequest[]> {
+export async function findRegistrationRequestsByStatuses(
+  statuses: RegistrationRequestStatus[],
+  limit = 50
+): Promise<RegistrationRequest[]> {
+  const isPendingOnly = statuses.length === 1 && statuses[0] === "pending";
+  const orderClause = isPendingOnly ? "arr.created_at asc" : "arr.processed_at desc nulls last";
+  const limitClause = isPendingOnly ? "" : "limit $2";
+  const values: unknown[] = isPendingOnly ? [statuses] : [statuses, limit];
+
   const result = await pool.query<RegistrationRequestRow>(
-    `select ${REGISTRATION_REQUEST_COLUMNS}
-     from public.account_registration_requests
-     where status = 'pending'
-     order by created_at asc`
+    `select ${REGISTRATION_REQUEST_COLUMNS_WITH_PROCESSOR}
+     from public.account_registration_requests arr
+     left join public.users admin_u on admin_u.id = arr.processed_by_user_id
+     where arr.status = any($1)
+     order by ${orderClause}
+     ${limitClause}`,
+    values
   );
   return result.rows.map(toRegistrationRequest);
 }

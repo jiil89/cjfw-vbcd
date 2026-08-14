@@ -1,0 +1,163 @@
+.admin-page {
+  min-height: 100%;
+  background: var(--canvas);
+  padding: var(--space-lg) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.admin-title {
+  margin: 0;
+  font-size: var(--fs-headline);
+  font-weight: var(--fw-headline);
+  line-height: var(--lh-headline);
+  letter-spacing: var(--ls-headline);
+  color: var(--ink);
+}
+
+.admin-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.admin-identity {
+  font-size: var(--fs-body-sm);
+  color: var(--ink-muted);
+}
+
+.admin-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.admin-section-title {
+  margin: 0;
+  font-size: var(--fs-card-title);
+  font-weight: var(--fw-card-title);
+  color: var(--ink);
+}
+
+.admin-empty-note {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  color: var(--ink-muted);
+}
+
+.admin-error-note {
+  color: var(--semantic-error);
+}
+
+.admin-request-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.admin-request-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.admin-request-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--fs-body-sm);
+}
+
+.admin-request-label {
+  color: var(--ink-muted);
+}
+
+.admin-request-value {
+  color: var(--ink);
+}
+
+.admin-request-meta {
+  margin-left: auto;
+  color: var(--ink-tertiary);
+}
+
+.admin-request-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.admin-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.admin-history-item {
+  font-size: var(--fs-body-sm);
+  color: var(--ink-muted);
+}
+
+/* 데스크톱/모바일 처리 완료 이력 배타 표시 — 860px 기준(7-wireframes.md 상단 명시).
+   데스크톱은 항상 펼침(plain section), 모바일은 <details> 기본 접힘. */
+.admin-history-mobile {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .admin-page {
+    padding: var(--space-md) var(--space-sm);
+  }
+
+  .admin-request-meta {
+    margin-left: 0;
+  }
+
+  .admin-request-actions {
+    width: 100%;
+  }
+
+  .admin-request-actions .btn {
+    flex: 1;
+  }
+
+  .admin-history-desktop {
+    display: none;
+  }
+
+  .admin-history-mobile {
+    display: block;
+  }
+
+  .admin-history-mobile summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .admin-history-mobile summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .admin-history-mobile summary::before {
+    content: "▾ ";
+  }
+
+  .admin-history-mobile .admin-history-list {
+    margin-top: var(--space-sm);
+  }
+}

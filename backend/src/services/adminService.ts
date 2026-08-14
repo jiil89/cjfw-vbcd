@@ -4,11 +4,12 @@
 // account_registration_requests를 직접 UPDATE하지 않는다.
 
 import {
-  findPendingRegistrationRequests,
+  findRegistrationRequestsByStatuses,
   findRegistrationRequestById,
   approveRegistrationRequestByAdmin,
   rejectRegistrationRequest,
   type RegistrationRequest,
+  type RegistrationRequestStatus,
 } from "../db/repositories/registrationRequestRepository";
 import { setPreferredRooms } from "../db/repositories/userPreferredRoomRepository";
 
@@ -36,9 +37,28 @@ export class AdminNotActiveError extends Error {
   }
 }
 
-/** 비밀번호/암호문은 repository의 SELECT 컬럼 자체에 포함되지 않으므로 여기서 다시 제거할 것이 없다. */
-export async function listPendingRegistrationRequests(): Promise<RegistrationRequest[]> {
-  return findPendingRegistrationRequests();
+const PROCESSED_STATUSES: RegistrationRequestStatus[] = ["auto_approved", "approved", "rejected"];
+
+/**
+ * `docs/swagger.json`의 `GET /admin/registration-requests?status=` 계약: status 생략 시
+ * pending만 반환한다. `status=approved` 등 처리 완료 상태 하나를 넘기면 그 상태만,
+ * 그 외 값이면 400으로 거부한다(라우트에서 처리). "처리 완료 이력" 전체(FE-4 와이어프레임
+ * "처리 완료 이력")를 한 번에 보고 싶을 때는 편의상 status를 생략 대신 처리 완료 3종
+ * 상태를 한 번에 묶어 반환한다(HTTP 다중 상태 쿼리 파라미터를 새로 설계하지 않기 위한
+ * 실용적 선택 — 오버엔지니어링 방지).
+ *
+ * 비밀번호/암호문은 repository의 SELECT 컬럼 자체에 포함되지 않으므로 여기서 다시 제거할 것이 없다.
+ */
+export async function listRegistrationRequests(
+  status?: RegistrationRequestStatus | "processed"
+): Promise<RegistrationRequest[]> {
+  if (status === undefined) {
+    return findRegistrationRequestsByStatuses(["pending"]);
+  }
+  if (status === "processed") {
+    return findRegistrationRequestsByStatuses(PROCESSED_STATUSES);
+  }
+  return findRegistrationRequestsByStatuses([status]);
 }
 
 /**

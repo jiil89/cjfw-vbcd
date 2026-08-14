@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { httpClient } from "../api/httpClient";
+import { useAuthStore } from "../stores/authStore";
 import type { LoginResponse } from "../types/user";
 
 // POST /auth/login — 성공 시 access_token(응답 바디)+user, refresh_token은 백엔드가
@@ -12,5 +13,18 @@ export function useLoginMutation() {
         method: "POST",
         body: JSON.stringify(body),
       }),
+  });
+}
+
+// POST /auth/logout — requireAuth 엔드포인트라 httpClient가 Authorization 헤더를 자동 첨부한다.
+// 서버가 Refresh Token을 폐기하고 나면(204) 클라이언트 세션(Zustand)도 즉시 비운다.
+export function useLogoutMutation() {
+  const clearSession = useAuthStore((state) => state.clearSession);
+  return useMutation({
+    mutationFn: () => httpClient<void>("/auth/logout", { method: "POST" }),
+    onSettled: () => {
+      // 서버 호출이 실패하더라도(네트워크 오류 등) 클라이언트 쪽 세션은 비워 로그아웃을 보장한다.
+      clearSession();
+    },
   });
 }

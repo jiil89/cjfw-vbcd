@@ -140,10 +140,10 @@
           {
             "name": "status",
             "in": "query",
-            "description": "상태 필터. 생략 시 pending만 반환",
+            "description": "상태 필터. 생략 시 pending만 반환. `processed`는 auto_approved/approved/rejected 3종을 처리 시각 최신순으로 묶어 반환하는 편의 값(FE-4 '처리 완료 이력')이며 최근 50건으로 제한된다.",
             "schema": {
               "type": "string",
-              "enum": ["pending", "auto_approved", "approved", "rejected"]
+              "enum": ["pending", "auto_approved", "approved", "rejected", "processed"]
             }
           }
         ],
@@ -665,6 +665,11 @@
             "nullable": true,
             "description": "수동 승인/거부를 처리한 Admin의 User ID (자동 승인 시 null)"
           },
+          "processed_by_email_alias": {
+            "type": "string",
+            "nullable": true,
+            "description": "수동 승인/거부를 처리한 Admin의 사내 계정 ID(표시용). 자동 승인 시 null — 프론트는 이 경우 \"system\"으로 표시한다(FE-4 와이어프레임)."
+          },
           "processed_by_system": {
             "type": "boolean",
             "description": "화이트리스트에 의해 시스템이 자동 승인했는지 여부"
@@ -675,6 +680,11 @@
             "format": "uuid",
             "nullable": true,
             "description": "승인 완료 시 생성된 User의 ID"
+          },
+          "preferred_room_ids": {
+            "type": "array",
+            "description": "회원가입 신청 시 선택한 선호 회의실 ID 목록. 배열 순서가 우선순위(첫 번째가 1순위).",
+            "items": { "type": "string", "format": "uuid" }
           },
           "created_at": { "type": "string", "format": "date-time" }
         }
