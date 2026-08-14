@@ -1,0 +1,75 @@
+.login-page {
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: var(--space-xxl) var(--space-md);
+  background: var(--canvas);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.login-title {
+  margin: 0;
+  font-size: var(--fs-headline);
+  font-weight: var(--fw-headline);
+  line-height: var(--lh-headline);
+  letter-spacing: var(--ls-headline);
+  color: var(--ink);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.login-status-banner {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--semantic-error-soft);
+  color: var(--semantic-error);
+  font-size: var(--fs-body-sm);
+}
+
+.login-submit {
+  align-self: center;
+  min-width: 200px;
+}
+
+.login-register-link {
+  margin: 0;
+  text-align: center;
+  font-size: var(--fs-body-sm);
+  color: var(--ink-muted);
+}
+
+.login-register-link a {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* 와이어프레임: 원래도 좁은 단일 카드형 화면이라 데스크톱과 거의 동일 —
+   카드 폭만 화면 전체(여백만 남기고)로 늘어난다. 별도 재배치 없음. */
+@media (max-width: 860px) {
+  .login-page {
+    padding: var(--space-lg) var(--space-sm);
+  }
+
+  .login-card {
+    max-width: none;
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .login-submit {
+    width: 100%;
+    align-self: stretch;
+  }
+}

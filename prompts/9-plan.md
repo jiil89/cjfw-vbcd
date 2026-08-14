@@ -275,9 +275,9 @@ flowchart LR
 - **작업 내용**: `7-wireframes.md` 2번 기준. 사내 계정 ID + 앱 로그인 비밀번호 입력, 로그인 성공 시 세션 저장 후 챗봇 UI(또는 Admin 권한이면 Admin 패널)로 리다이렉트.
 - **선행 Task**: FE-1, BE-2
 - **완료 조건**:
-  - [ ] 로그인 성공 시 Access Token이 Zustand 스토어(메모리)에만 저장되고 `localStorage`에 저장되지 않음
-  - [ ] 승인 대기/거부/자격증명 오류 상태 메시지가 각각 구분되어 표시됨
-  - [ ] Admin 권한 사용자는 Admin 패널로, 일반 사용자는 챗봇 UI로 정확히 라우팅됨
+  - [x] 로그인 성공 시 Access Token이 Zustand 스토어(메모리)에만 저장되고 `localStorage`에 저장되지 않음 (`LoginPage.tsx`가 FE-1의 `authStore.setSession`만 사용) — 실제 브라우저에서 로그인 후 `localStorage.length === 0`으로 실측 확인
+  - [x] 승인 대기/거부/자격증명 오류 상태 메시지가 각각 구분되어 표시됨 (`error.code`로 분기, 와이어프레임 문구 그대로 재현) — 테스트 계정 4개(자동승인/수동승인/pending/rejected)로 실제 브라우저에서 3가지 실패 상태 + 정상 로그인까지 전부 실측 확인
+  - [x] Admin 권한 사용자는 Admin 패널로, 일반 사용자는 챗봇 UI로 정확히 라우팅됨 — 실제 브라우저에서 admin 계정 로그인 시 `/admin`, 일반 계정 로그인 시 `/chat`으로 리다이렉트되는 것까지 실측 확인. 테스트 계정은 모두 DB에서 정리, 백엔드/프론트 dev 서버 모두 종료함
 
 ### FE-4. Admin 승인 패널
 
