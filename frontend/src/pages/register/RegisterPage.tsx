@@ -27,6 +27,8 @@ export function RegisterPage() {
   const confirmFilled = appPasswordConfirm.length > 0;
   const passwordsMatch = confirmFilled && appPassword === appPasswordConfirm;
   const passwordsMismatch = confirmTouched && confirmFilled && !passwordsMatch;
+  const canSubmit =
+    emailAlias.trim() !== "" && corporatePassword !== "" && appPassword !== "" && appPassword === appPasswordConfirm;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -153,7 +155,7 @@ export function RegisterPage() {
               </p>
             )}
 
-            <Button type="submit" className="register-submit" loading={registerMutation.isPending}>
+            <Button type="submit" className="register-submit" loading={registerMutation.isPending} disabled={!canSubmit}>
               등록 신청
             </Button>
           </form>

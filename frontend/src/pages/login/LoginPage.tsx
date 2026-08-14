@@ -88,7 +88,12 @@ export function LoginPage() {
               </div>
             )}
 
-            <Button type="submit" className="login-submit" loading={loginMutation.isPending}>
+            <Button
+              type="submit"
+              className="login-submit"
+              loading={loginMutation.isPending}
+              disabled={emailAlias.trim() === "" || appPassword === ""}
+            >
               로그인
             </Button>
           </form>

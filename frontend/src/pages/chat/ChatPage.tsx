@@ -80,6 +80,27 @@ function floorSortIndex(floorLabel: string | null): number {
   return index === -1 ? FLOOR_ORDER.length : index;
 }
 
+interface ChatMessageGroupData {
+  role: "agent" | "user";
+  messages: ChatUiMessage[];
+}
+
+/** chat-screen.dc.html "메시지 그룹핑": 같은 발화자의 연속 메시지를 하나로 묶는다 —
+ * 시간 간격은 안 보고 발화자 연속 여부만 본다(대화가 대부분 연속 입력이라 간격 기준을
+ * 넣으면 그룹이 너무 자주 쪼개진다). 아바타/시간은 그룹당 한 번만 표시한다. */
+function groupMessages(messages: ChatUiMessage[]): ChatMessageGroupData[] {
+  const groups: ChatMessageGroupData[] = [];
+  for (const message of messages) {
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup && lastGroup.role === message.role) {
+      lastGroup.messages.push(message);
+    } else {
+      groups.push({ role: message.role, messages: [message] });
+    }
+  }
+  return groups;
+}
+
 /** roomList를 floorLabel 기준으로 묶고, 지원 층 순서(FLOOR_ORDER)로 정렬한다. */
 function groupRoomsByFloor(rooms: Room[]): Array<{ floorLabel: string; rooms: Room[] }> {
   const byFloor = new Map<string, Room[]>();
@@ -111,6 +132,7 @@ export function ChatPage() {
     },
   ]);
   const [draft, setDraft] = useState("");
+  const [isPanelSheetOpen, setIsPanelSheetOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -170,6 +192,17 @@ export function ChatPage() {
 
   const avatarInitial = user?.email_alias?.[0]?.toUpperCase() ?? "?";
 
+  // design_recom "확정 후 상태": 지나간 메시지의 카드는 더 이상 조작 가능하면 안 된다 —
+  // 현재 대화에서 카드가 붙은 가장 최근 어시스턴트 메시지 하나만 실제로 클릭 가능하게 하고,
+  // 그 이전 카드들은 시각적으로 잠근다(ProposalCard의 disabled 처리).
+  const latestActionableAgentMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m.role === "agent" && !m.pending && m.proposal) return m.id;
+    }
+    return null;
+  }, [messages]);
+
   return (
     <div className="chat-page">
       <header className="chat-topbar">
@@ -184,14 +217,24 @@ export function ChatPage() {
             <span className="chat-avatar">{avatarInitial}</span>
             <span className="chat-user-name">{user?.email_alias}</span>
           </div>
-          {user?.is_admin && (
-            <Link to="/admin" className="btn btn-ghost btn-sm">
-              <span className="btn-label">Admin 패널</span>
-            </Link>
-          )}
-          <Button variant="ghost" size="sm" onClick={handleLogout} loading={logoutMutation.isPending}>
-            로그아웃
-          </Button>
+          {/* chat-screen.dc.html: Admin/로그아웃은 데스크톱 헤더에만 두고, 모바일에서는
+              헤더 폭을 아끼기 위해 "내 정보" 시트로 옮긴다. */}
+          <div className="chat-header-desktop-actions">
+            {user?.is_admin && (
+              <Link to="/admin" className="btn btn-ghost btn-sm">
+                <span className="btn-label">Admin 패널</span>
+              </Link>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleLogout} loading={logoutMutation.isPending}>
+              로그아웃
+            </Button>
+          </div>
+          <button type="button" className="chat-panel-trigger" onClick={() => setIsPanelSheetOpen(true)}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            내 정보
+          </button>
         </div>
       </header>
 
@@ -200,8 +243,13 @@ export function ChatPage() {
           <div className="chat-thread" ref={threadRef}>
             <div className="chat-day-divider">{formatDayDivider(new Date())}</div>
 
-            {messages.map((message) => (
-              <ChatMessageRow key={message.id} message={message} onAction={sendMessage} userAvatarInitial={avatarInitial} />
+            {groupMessages(messages).map((group) => (
+              <ChatMessageGroup
+                key={group.messages[0].id}
+                group={group}
+                onAction={sendMessage}
+                latestActionableAgentMessageId={latestActionableAgentMessageId}
+              />
             ))}
           </div>
 
@@ -222,7 +270,7 @@ export function ChatPage() {
               <input
                 type="text"
                 className="chat-input"
-                placeholder="메시지를 입력하세요 (예: 내일 오전 10시 회의실 잡아줘)"
+                placeholder="내일 오전 10시 회의실 잡아줘"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 disabled={sendMutation.isPending}
@@ -233,61 +281,115 @@ export function ChatPage() {
                 aria-label="보내기"
                 disabled={sendMutation.isPending || draft.trim() === ""}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M22 2 11 13" />
                   <path d="M22 2 15 22 11 13 2 9z" />
                 </svg>
               </button>
             </div>
+            <p className="chat-composer-hint">Enter로 보내기</p>
           </form>
         </section>
 
         <aside className="chat-rail">
-          <TodayReservationsRail groups={todayQuery.data} isLoading={todayQuery.isLoading} />
-          <PreferredRoomsRail rooms={prefQuery.data} isLoading={prefQuery.isLoading} />
-          <div className="chat-rule-note">
-            같은 회의실은 하루 <b>최대 2시간</b>까지만 예약할 수 있어요. 더 필요하면 다른 회의실로 이어서 잡아드려요.
-          </div>
+          <ChatRailContent
+            todayGroups={todayQuery.data}
+            todayLoading={todayQuery.isLoading}
+            preferredRooms={prefQuery.data}
+            preferredLoading={prefQuery.isLoading}
+            onAction={sendMessage}
+          />
         </aside>
+
+        {isPanelSheetOpen && (
+          <ChatPanelSheet
+            onClose={() => setIsPanelSheetOpen(false)}
+            todayGroups={todayQuery.data}
+            todayLoading={todayQuery.isLoading}
+            preferredRooms={prefQuery.data}
+            preferredLoading={prefQuery.isLoading}
+            onAction={(text) => {
+              setIsPanelSheetOpen(false);
+              sendMessage(text);
+            }}
+            isAdmin={Boolean(user?.is_admin)}
+            onLogout={handleLogout}
+            logoutPending={logoutMutation.isPending}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-function ChatMessageRow({
-  message,
+function ChatMessageGroup({
+  group,
   onAction,
-  userAvatarInitial,
+  latestActionableAgentMessageId,
 }: {
-  message: ChatUiMessage;
+  group: ChatMessageGroupData;
   onAction: (text: string) => void;
-  userAvatarInitial: string;
+  latestActionableAgentMessageId: string | null;
 }) {
-  const isAgent = message.role === "agent";
+  const isAgent = group.role === "agent";
+  const lastMessage = group.messages[group.messages.length - 1];
   return (
-    <div className={`chat-row ${isAgent ? "chat-row-agent" : "chat-row-user"}`}>
-      <span className="chat-avatar" aria-hidden="true">
-        {isAgent ? "A" : userAvatarInitial}
-      </span>
+    <div className={`chat-row-group ${isAgent ? "chat-row-group-agent" : "chat-row-group-user"}`}>
+      {isAgent && (
+        <span className="chat-avatar chat-group-avatar" aria-hidden="true">
+          A
+        </span>
+      )}
       <div className="chat-bubble-stack">
-        <div className={`chat-bubble ${message.isError ? "chat-bubble-error" : ""}`}>
-          {message.pending ? (
-            <span className="chat-bubble-pending">
-              <span className="chat-bubble-spinner" aria-hidden="true" />
-              확인 중입니다…
-            </span>
-          ) : (
-            message.text
-          )}
-        </div>
-        {!message.pending && message.proposal && <ProposalCard proposal={message.proposal} onAction={onAction} />}
-        <span className="chat-timestamp">{formatTimestamp(message.timestamp)}</span>
+        {group.messages.map((message) => (
+          <div className="chat-bubble-item" key={message.id}>
+            <div className={`chat-bubble ${message.isError ? "chat-bubble-error" : ""}`}>
+              {message.pending ? (
+                <span className="chat-bubble-pending">
+                  <span className="chat-bubble-spinner" aria-hidden="true" />
+                  확인 중입니다…
+                </span>
+              ) : (
+                message.text
+              )}
+            </div>
+            {!message.pending && message.proposal && (
+              <ProposalCard
+                proposal={message.proposal}
+                onAction={onAction}
+                locked={message.id !== latestActionableAgentMessageId}
+              />
+            )}
+          </div>
+        ))}
+        <span className="chat-timestamp">{formatTimestamp(lastMessage.timestamp)}</span>
       </div>
     </div>
   );
 }
 
-function ProposalCard({ proposal, onAction }: { proposal: ChatProposal; onAction: (text: string) => void }): ReactNode {
+// design_recom "확정 후 상태": 지나간 메시지의 카드는 잠가서(클릭 불가 + 흐리게) 더 이상
+// 조작할 수 없게 한다 — 실제 액션은 새 메시지로만 이어가야 히스토리가 신뢰를 유지한다.
+function ProposalCard({
+  proposal,
+  onAction,
+  locked,
+}: {
+  proposal: ChatProposal;
+  onAction: (text: string) => void;
+  locked: boolean;
+}): ReactNode {
+  const content = renderProposalContent(proposal, onAction);
+  if (!content) return null;
+  if (!locked) return content;
+  return (
+    <div className="chat-proposal-locked" aria-disabled="true">
+      {content}
+    </div>
+  );
+}
+
+function renderProposalContent(proposal: ChatProposal, onAction: (text: string) => void): ReactNode {
   // 도구 호출이 실패하면 orchestrator.ts의 errorResult()가 { error: string } 형태로
   // proposal.data에 그대로 실린다(어떤 tool이든 동일). 이 경우 각 case가 기대하는 성공
   // 응답 모양(room/segments/preferred 등)이 없어 그대로 destructure하면 크래시한다 —
@@ -665,12 +767,27 @@ function ReservationPickerCard({
   );
 }
 
-function TodayReservationsRail({ groups, isLoading }: { groups: MyReservationGroup[] | undefined; isLoading: boolean }) {
+function TodayReservationsRail({
+  groups,
+  isLoading,
+  onAction,
+}: {
+  groups: MyReservationGroup[] | undefined;
+  isLoading: boolean;
+  onAction: (text: string) => void;
+}) {
   return (
     <div>
       <div className="chat-rail-title">오늘 예약</div>
       {isLoading && <p className="chat-rail-empty">불러오는 중…</p>}
-      {groups && groups.length === 0 && <p className="chat-rail-empty">오늘 예약이 없어요.</p>}
+      {groups && groups.length === 0 && (
+        <div className="chat-rail-empty-row">
+          <span>예약이 없어요</span>
+          <button type="button" className="chat-rail-empty-action" onClick={() => onAction("회의실 예약하고 싶어")}>
+            예약 잡기
+          </button>
+        </div>
+      )}
       {groups?.map((group) => (
         <Card key={group.reservationRequestId ?? group.segments[0].reservationId} radius="lg" className="chat-today-card">
           <div className="chat-today-card-title">{group.title}</div>
@@ -705,6 +822,80 @@ function PreferredRoomsRail({ rooms, isLoading }: { rooms: Room[] | undefined; i
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+interface ChatRailContentProps {
+  todayGroups: MyReservationGroup[] | undefined;
+  todayLoading: boolean;
+  preferredRooms: Room[] | undefined;
+  preferredLoading: boolean;
+  onAction: (text: string) => void;
+}
+
+/** 오른쪽 사이드바(데스크톱)와 모바일 "내 정보" 시트가 공유하는 내용 —
+ * chat-screen.dc.html: 오늘 예약 → 선호 회의실 → 알아두기 배너 순서. */
+function ChatRailContent({ todayGroups, todayLoading, preferredRooms, preferredLoading, onAction }: ChatRailContentProps) {
+  return (
+    <>
+      <TodayReservationsRail groups={todayGroups} isLoading={todayLoading} onAction={onAction} />
+      <PreferredRoomsRail rooms={preferredRooms} isLoading={preferredLoading} />
+      <div className="chat-info-banner">
+        같은 회의실은 하루 <b>최대 2시간</b>까지만 예약할 수 있어요. 더 필요하면 다른 회의실로 이어서 잡아드려요.
+      </div>
+    </>
+  );
+}
+
+interface ChatPanelSheetProps extends ChatRailContentProps {
+  onClose: () => void;
+  isAdmin: boolean;
+  onLogout: () => void;
+  logoutPending: boolean;
+}
+
+/** chat-screen.dc.html "모바일 바텀시트" — 860px 이하에서 우측 패널 대신 쓰는 진입점.
+ * 스크림 클릭/Esc로 닫히고, 열려있는 동안 배경 스크롤을 잠근다. */
+function ChatPanelSheet({
+  onClose,
+  isAdmin,
+  onLogout,
+  logoutPending,
+  ...railProps
+}: ChatPanelSheetProps) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  return (
+    <div className="chat-sheet-root">
+      <div className="chat-sheet-scrim" onClick={onClose} aria-hidden="true" />
+      <div className="chat-sheet" role="dialog" aria-modal="true" aria-label="내 정보">
+        <div className="chat-sheet-handle" aria-hidden="true" />
+        <div className="chat-sheet-body">
+          <ChatRailContent {...railProps} />
+          <div className="chat-sheet-actions">
+            {isAdmin && (
+              <Link to="/admin" className="btn btn-ghost chat-sheet-action-btn">
+                <span className="btn-label">Admin 패널</span>
+              </Link>
+            )}
+            <Button variant="ghost" className="chat-sheet-action-btn" onClick={onLogout} loading={logoutPending}>
+              로그아웃
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

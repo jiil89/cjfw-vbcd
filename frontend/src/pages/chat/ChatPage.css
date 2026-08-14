@@ -58,6 +58,42 @@
   gap: var(--space-sm);
 }
 
+.chat-header-desktop-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* chat-screen.dc.html: 모바일에서는 헤더 폭을 아끼려고 Admin/로그아웃을 숨기고
+   "내 정보" 버튼 하나로 대체한다(실제 내용은 하단 시트로 이동). */
+.chat-panel-trigger {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chat-panel-trigger:hover {
+  border-color: var(--ink-tertiary);
+}
+
+@media (max-width: 860px) {
+  .chat-header-desktop-actions {
+    display: none;
+  }
+
+  .chat-panel-trigger {
+    display: inline-flex;
+  }
+}
+
 .chat-user-chip {
   display: flex;
   align-items: center;
@@ -99,13 +135,13 @@
 }
 
 /* Agent 아바타만 Fin Orange — 이 앱에서 AI 요소를 나타내는 유일한 배지(DESIGN.md 원칙) */
-.chat-row-agent .chat-avatar {
+.chat-row-group-agent .chat-avatar {
   background: var(--fin-orange);
   color: #ffffff;
   margin-top: 2px;
 }
 
-.chat-row-user .chat-avatar {
+.chat-row-group-user .chat-avatar {
   margin-top: 2px;
 }
 
@@ -141,7 +177,15 @@
   padding: var(--space-lg) var(--space-lg) var(--space-sm);
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-md);
+}
+
+/* chat-screen.dc.html "대화 컬럼": 넓은 화면에서 줄 길이가 과도하게 늘어지지 않게 가운데
+   정렬된 760px 폭으로 제한한다. */
+.chat-thread > * {
+  width: 100%;
+  max-width: 760px;
 }
 
 .chat-day-divider {
@@ -161,19 +205,35 @@
   background: var(--hairline-soft);
 }
 
-.chat-row {
+/* ---- 메시지 그룹(chat-screen.dc.html "메시지 그룹핑") ----
+   같은 발화자의 연속 메시지를 한 그룹으로 묶어 아바타/시간을 그룹당 한 번만 보여준다. */
+
+.chat-row-group {
   display: flex;
   gap: var(--space-xs);
-  max-width: 78%;
 }
 
-.chat-row-agent {
-  align-self: flex-start;
+.chat-row-group-agent {
+  justify-content: flex-start;
 }
 
-.chat-row-user {
-  align-self: flex-end;
-  flex-direction: row-reverse;
+/* 사용자 메시지는 우측 정렬+검은 배경으로 이미 발화자가 구분되므로 아바타를 달지 않는다. */
+.chat-row-group-user {
+  justify-content: flex-end;
+}
+
+.chat-row-group .chat-bubble-stack {
+  max-width: 68%;
+}
+
+@media (max-width: 860px) {
+  .chat-row-group .chat-bubble-stack {
+    max-width: 80%;
+  }
+}
+
+.chat-group-avatar {
+  margin-top: 2px;
 }
 
 .chat-bubble-stack {
@@ -181,6 +241,16 @@
   flex-direction: column;
   gap: var(--space-xxs);
   min-width: 0;
+}
+
+.chat-bubble-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+
+.chat-row-group-user .chat-bubble-stack {
+  align-items: flex-end;
 }
 
 /* 그림자 없음 — 표면 변화(surface-2/primary-bg)로만 구분(DESIGN.md 원칙) */
@@ -191,13 +261,13 @@
   white-space: pre-wrap;
 }
 
-.chat-row-agent .chat-bubble {
+.chat-row-group-agent .chat-bubble {
   background: var(--surface-2);
   color: var(--ink);
   border-top-left-radius: var(--radius-xs);
 }
 
-.chat-row-user .chat-bubble {
+.chat-row-group-user .chat-bubble {
   background: var(--primary-bg);
   color: var(--primary-fg);
   border-top-right-radius: var(--radius-xs);
@@ -247,7 +317,7 @@
   padding: 0 3px;
 }
 
-.chat-row-user .chat-timestamp {
+.chat-row-group-user .chat-timestamp {
   text-align: right;
 }
 
@@ -635,6 +705,14 @@
   color: var(--ink-muted);
 }
 
+/* ---- 지나간 카드 잠금 (design_recom "확정 후 상태") ---- */
+
+.chat-proposal-locked {
+  pointer-events: none;
+  opacity: 0.55;
+  filter: saturate(0.7);
+}
+
 /* ---- 예약 확정/변경/취소 상태 라벨 ---- */
 
 .chat-status-line {
@@ -686,21 +764,32 @@
   display: flex;
   gap: var(--space-xs);
   align-items: center;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
-  padding: 6px 6px 6px 14px;
-  background: var(--surface-1);
 }
 
 .chat-input {
   flex: 1;
   min-width: 0;
-  border: none;
-  background: transparent;
+  height: 46px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-md);
+  background: var(--surface-1);
   font-size: 14.5px;
   font-family: var(--font-sans);
   color: var(--ink);
   outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.chat-input:hover:not(:disabled) {
+  border-color: var(--ink-tertiary);
+}
+
+/* chat-screen.dc.html: 포커스 링은 반드시 입력 자체에 걸어 키보드 사용자가 현재 필드를
+   알 수 있게 한다. */
+.chat-input:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--hairline-soft);
 }
 
 .chat-input::placeholder {
@@ -714,16 +803,16 @@
 .chat-send-btn {
   appearance: none;
   cursor: pointer;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full);
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: var(--radius-md);
   background: var(--primary-bg);
   color: var(--primary-fg);
   border: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: none;
   transition: opacity 120ms ease;
 }
 
@@ -739,6 +828,12 @@
 .chat-send-btn:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+
+.chat-composer-hint {
+  margin: var(--space-xxs) 0 0;
+  font-size: 11.5px;
+  color: var(--ink-tertiary);
 }
 
 /* ---- 오른쪽 사이드바(rail) ---- */
@@ -765,6 +860,35 @@
   margin: 0;
   font-size: 12.5px;
   color: var(--ink-muted);
+}
+
+/* chat-screen.dc.html "오늘 예약 빈 상태": 세로 공간을 잡지 않는 한 줄 카드 + 다음 행동 제안. */
+.chat-rail-empty-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  background: var(--surface-1);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--radius-md);
+  padding: 11px 12px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.chat-rail-empty-action {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chat-rail-empty-action:hover {
+  text-decoration: underline;
 }
 
 .chat-today-card {
@@ -834,14 +958,116 @@
   color: var(--ink-tertiary);
 }
 
-.chat-rule-note {
-  font-size: 12px;
+/* chat-screen.dc.html "알아두기(정보 배너)" — 좌측 세로 레일 + 앰버 톤. */
+.chat-info-banner {
+  position: relative;
+  font-size: 12.5px;
+  line-height: 1.55;
   color: var(--ink-muted);
   background: var(--semantic-warn-soft);
   border-radius: var(--radius-md);
-  padding: 9px 10px;
+  padding: 11px 12px 11px 15px;
 }
 
-.chat-rule-note b {
-  color: var(--semantic-warn);
+.chat-info-banner::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: var(--radius-full);
+  background: var(--semantic-warn);
+}
+
+.chat-info-banner b {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ---- 모바일 "내 정보" 바텀시트 (chat-screen.dc.html 10번) ---- */
+
+.chat-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .chat-sheet-root {
+    display: block;
+  }
+}
+
+.chat-sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 28, 27, 0.28);
+  animation: chat-sheet-scrim-in 180ms ease;
+}
+
+@keyframes chat-sheet-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.chat-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+  border-top: 1px solid var(--hairline-soft);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+  animation: chat-sheet-slide-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@keyframes chat-sheet-slide-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-sheet-scrim,
+  .chat-sheet {
+    animation: none;
+  }
+}
+
+.chat-sheet-handle {
+  width: 34px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--hairline);
+  margin: 10px auto;
+  flex: none;
+}
+
+.chat-sheet-body {
+  overflow-y: auto;
+  padding: 6px var(--space-md) calc(var(--space-lg) + var(--space-md));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.chat-sheet-body .chat-today-card,
+.chat-sheet-body .chat-rail-empty-row,
+.chat-sheet-body .chat-pref-list li {
+  background: var(--surface-2);
+}
+
+.chat-sheet-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.chat-sheet-action-btn {
+  flex: 1;
 }

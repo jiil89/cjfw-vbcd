@@ -51,13 +51,31 @@
 // 상위 계층은 userId만 넘기고, encryptedPassword 조회 + decryptCorporatePassword 호출은
 // 전부 이 파일 안에서 끝난다.
 
-import { chromium as playwrightChromium, type Browser } from "playwright";
+import { chromium as playwrightChromium, type Browser, type Page } from "playwright";
 import { config } from "../config/env";
 import { findUserById } from "../db/repositories/userRepository";
 import { decryptCorporatePassword } from "../security/corporatePassword";
 import { getCachedCjSession, setCachedCjSession } from "./sessionCache";
 
 const LOGIN_NAV_TIMEOUT_MS = 30_000;
+
+// [2026-08-14 실사용 검증 완료 — SaveReserve Result:0 미해결 이슈의 진짜 원인]
+// cjwappr.cj.net의 예약 관련 ASMX들(getEmptyRoomInfo/checkRoom/SaveReserve 등)은 쿠키만으로는
+// 신청자 신원을 못 찾는 레거시 ASP.NET WebForms 서버측 Session 상태에 의존한다 — 로그인 직후
+// #bntConf 클릭만으로는 이 Session이 채워지지 않고, 실제 예약 폼 페이지(reserve_insmod.aspx)를
+// 한 번이라도 방문해야(Page_Load에서 채워지는 것으로 추정) 이후 호출들이 신청자 본인 정보를
+// 정상적으로 찾는다. 방문 전에는 getEmptyRoomInfo의 Table2(본인 연락처)/Table3(승인자 목록)이
+// 계속 빈 배열로 오고, 그 상태에서 SaveReserve를 호출하면 항상 `{"Result":0,"Seq":null}`로
+// 거부된다 — 필드값 문제가 아니라 이 세션 워밍업 단계가 통째로 빠져 있었던 것.
+// 실사용 검증: 로그인 직후 이 워밍업 없이 SaveReserve → 항상 Result:0. 워밍업 한 번(회의실을
+// 특정하지 않아도 무방 — room_code를 비워도 동일하게 작동함을 확인) 후에는 같은 세션으로
+// 여러 회의실(3F-4, 3F-9 등)의 SaveReserve가 전부 Result:1(성공)로 정상 동작함을 확인했다.
+// area_code/sub_area_code는 이 프로젝트가 지원하는 유일한 사업장·층 조합(상암S시티 예시로
+// 도메인 정의서 8번/9번에 이미 등장하는 상수, 6번 "1차 범위는 상암S시티 고정")을 그대로 쓴다 —
+// 이 워밍업은 실제 예약 대상 회의실과 무관하며 세션 상태만 채우는 용도라 특정 회의실코드가
+// 필요 없다.
+const RESERVE_SESSION_WARMUP_AREA_CODE = "804";
+const RESERVE_SESSION_WARMUP_SUBAREA_CODE = "1128";
 
 // cjwappr.cj.net API 호출에 필요한 쿠키만 골라낸다: cjwappr.cj.net 전용 쿠키(AP, NCF 등)와
 // 여러 cj.net 서브도메인이 공유하는 상위 도메인 쿠키(.cj.net, 예: cAccess_token, CJW).
@@ -91,6 +109,48 @@ async function launchBrowser(): Promise<Browser> {
     });
   }
   return playwrightChromium.launch({ headless: true });
+}
+
+const WARMUP_NAV_TIMEOUT_MS = 15_000;
+
+/**
+ * reserve_insmod.aspx를 한 번 방문해 서버측 예약 세션 상태를 채운다(파일 상단 주석 참고).
+ * `#bntConf` 클릭 이후 `reserve_main.aspx`가 별도 논리 페이지(Playwright 기준)로 뜨는 경우가
+ * 있어 `context.pages()`에서 그 프레임을 다시 찾는다. 이 단계가 실패해도(타임아웃 등) 로그인
+ * 자체를 막지는 않는다 — 실패하면 이후 SaveReserve가 그때 가서 Result:0으로 알려준다.
+ */
+async function warmUpReservationSession(page: Page): Promise<void> {
+  try {
+    const context = page.context();
+
+    // #bntConf 클릭 직후에는 reserve_main.aspx 프레임이 아직 안 뜬 상태일 수 있어(쿠키
+    // 폴링은 AP 쿠키가 잡히는 즉시 끝나므로 반드시 화면 렌더링까지 기다려주진 않는다),
+    // 프레임이 나타날 때까지 잠깐 폴링한다.
+    const FRAME_POLL_INTERVAL_MS = 500;
+    const FRAME_POLL_MAX_ATTEMPTS = 10;
+    let hostPage = context.pages().find((p) => p.url().includes("23_service.aspx")) ?? page;
+    let reserveFrame = hostPage.frames().find((frame) => frame.url().includes("reserve_main.aspx"));
+    for (let attempt = 0; !reserveFrame && attempt < FRAME_POLL_MAX_ATTEMPTS; attempt += 1) {
+      await page.waitForTimeout(FRAME_POLL_INTERVAL_MS);
+      hostPage = context.pages().find((p) => p.url().includes("23_service.aspx")) ?? page;
+      reserveFrame = hostPage.frames().find((frame) => frame.url().includes("reserve_main.aspx"));
+    }
+    if (!reserveFrame) {
+      console.error("[cj-automation/session] 예약 세션 워밍업 실패: reserve_main.aspx 프레임을 찾지 못함");
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const warmupUrl =
+      `${config.cjBaseUrl}/NConf/conferenceRoom/reserve_insmod.aspx` +
+      `?area_code=${RESERVE_SESSION_WARMUP_AREA_CODE}&sub_area_code=${RESERVE_SESSION_WARMUP_SUBAREA_CODE}` +
+      `&reserve_date=${today}&room_code=&start_time=&end_time=&time_count=1&adminyn=N`;
+
+    await reserveFrame.goto(warmupUrl, { waitUntil: "domcontentloaded", timeout: WARMUP_NAV_TIMEOUT_MS });
+    await hostPage.waitForTimeout(1_500);
+  } catch (error) {
+    console.error("[cj-automation/session] 예약 세션 워밍업 중 오류(무시하고 진행)", error);
+  }
 }
 
 export class CjLoginError extends Error {
@@ -179,7 +239,14 @@ export async function loginWithCredentials(
       );
     }
 
-    const cookieHeader = cjwapprCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+    // 3. 예약 ASMX들이 의존하는 서버측 Session을 채우기 위해 reserve_insmod.aspx를 한 번
+    //    방문한다(파일 상단 주석 참고). 이 페이지는 파라미터가 없거나 이상해도 보통
+    //    ErrorPage.aspx로 리다이렉트되지만, 방문 자체가 목적이므로 실패해도 무시한다.
+    await warmUpReservationSession(page);
+
+    const cookiesAfterWarmup = await context.cookies();
+    const finalCookies = cookiesAfterWarmup.filter((cookie) => isRelevantCookieForCjwappr(cookie.domain));
+    const cookieHeader = finalCookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 
     return { cookieHeader, baseUrl: config.cjBaseUrl };
   } finally {
