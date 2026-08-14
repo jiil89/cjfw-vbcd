@@ -2,13 +2,13 @@
 -- CJ프레시웨이 회의실 예약 웹 챗봇 Agent — 최종 통합 스키마
 -- =============================================================================
 --
--- 이 파일은 supabase/migrations/ 아래 12개 마이그레이션 파일(2026-08-13 하루 동안
+-- 이 파일은 supabase/migrations/ 아래 13개 마이그레이션 파일(2026-08-13~14 이틀 동안
 -- 이력형으로 누적된 CREATE/ALTER)을 시간순으로 전부 적용한 "최종 결과 상태"를
 -- 처음부터 다시 깔끔하게 작성한 참고용 통합본이다.
 --
 -- 주의:
 --   - 이 파일은 마이그레이션 도구로 실행되는 실제 마이그레이션 파일이 아니다.
---     실제 마이그레이션 이력은 여전히 supabase/migrations/ 의 12개 파일이 정본이며,
+--     실제 마이그레이션 이력은 여전히 supabase/migrations/ 의 13개 파일이 정본이며,
 --     이 파일은 그 이력을 건드리지 않는 별도의 "현재 스키마 스냅샷" 참고 문서다.
 --   - 예: users.app_password_hash는 20260813001100 마이그레이션에서 나중에 추가됐지만,
 --     여기서는 처음부터 완성형 CREATE TABLE에 포함시켜 작성한다.
@@ -170,6 +170,10 @@ create table if not exists public.account_registration_requests (
   -- 승인 완료 시 생성된 User row와 연결 (감사 추적용)
   resulting_user_id uuid references public.users(id) on delete set null,
 
+  -- 회원가입 신청 시 선택한 선호 회의실 ID 배열(순서 = 우선순위, 인덱스 0이 1순위).
+  -- 승인 시 애플리케이션 코드가 이 값을 읽어 user_preferred_rooms로 옮긴다.
+  preferred_room_ids uuid[] not null default '{}',
+
   created_at timestamptz not null default now(),
 
   constraint account_registration_requests_processed_consistency check (
@@ -190,6 +194,8 @@ comment on column public.account_registration_requests.encrypted_password is
   '애플리케이션 레벨 AES로 암호화된 사내 계정 비밀번호. 승인 시 users.encrypted_password로 복사된다. 평문 저장/로깅 금지.';
 comment on column public.account_registration_requests.app_password_hash is
   '회원가입 시 설정한 앱 로그인 비밀번호 해시(단방향). 승인 시 users.app_password_hash로 복사된다.';
+comment on column public.account_registration_requests.preferred_room_ids is
+  '회원가입 신청 시 선택한 선호 회의실 ID 배열. 순서가 우선순위(인덱스 0 = 1순위). 승인 시 user_preferred_rooms로 옮겨진다.';
 
 
 -- -----------------------------------------------------------------------------

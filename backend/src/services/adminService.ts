@@ -10,6 +10,7 @@ import {
   rejectRegistrationRequest,
   type RegistrationRequest,
 } from "../db/repositories/registrationRequestRepository";
+import { setPreferredRooms } from "../db/repositories/userPreferredRoomRepository";
 
 export class RegistrationRequestNotFoundError extends Error {
   code = "NOT_FOUND";
@@ -85,6 +86,11 @@ export async function approveRegistrationRequestAsAdmin(
   const updated = await findRegistrationRequestById(requestId);
   if (!updated) {
     throw new RegistrationRequestNotFoundError();
+  }
+  // 신청 단계에서 골라둔 선호 회의실(preferred_room_ids)을 이제 막 생성된 사용자에게 옮긴다.
+  // resultingUserId는 RPC가 방금 새로 만든 users row라서 항상 존재한다.
+  if (updated.resultingUserId) {
+    await setPreferredRooms(updated.resultingUserId, updated.preferredRoomIds);
   }
   return updated;
 }

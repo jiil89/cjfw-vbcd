@@ -159,6 +159,8 @@ flowchart LR
   - [x] 로그아웃 시 DB-3의 폐기 테이블에 해당 Refresh Token이 무효 처리됨
   - [x] 승인 대기/거부/자격증명 오류 각각의 로그인 실패 상태 메시지가 올바르게 구분되어 반환됨 (curl 시나리오 5단계로 로컬 검증 완료)
 
+  **[2026-08-14 FE-2 착수 전 보강]** 회원가입이 `preferred_room_ids`(선호 회의실 우선순위 배열)를 받지 않던 누락을 발견해 채움: 마이그레이션(`20260814000000_registration_preferred_rooms.sql`)으로 `account_registration_requests.preferred_room_ids uuid[]` 추가, `registrationService`/`adminService`가 자동승인·수동승인 양쪽 경로 모두에서 승인 시점에 `user_preferred_rooms`로 옮겨 심도록 구현(`userPreferredRoomRepository.setPreferredRooms`). 공개 `GET /rooms`(+`GET /rooms/:id`) 엔드포인트도 이번에 신규 추가(`routes/rooms.routes.ts`, `docs/swagger.json`에는 이미 명세돼 있었음) — `min_capacity`/`floor_label` 필터만 지원, swagger가 명세한 `date`+`start_time`+`end_time` 실시간 가용성 결합은 **범위 밖으로 명시적으로 보류**(익명 사용자가 어느 CJ 계정으로 조회할지 미결정이라 `date` 파라미터 전달 시 400으로 명확히 거부). curl로 회원가입(pending/auto_approved 양쪽)→`user_preferred_rooms` 우선순위 저장까지 실측 검증 완료.
+
 ### BE-3. Admin 승인 API
 
 - **작업 내용**: `routes/admin.routes.ts`, `adminService.ts` — 대기중 등록 요청 목록 조회, 승인/거부 처리(DB-1의 안전한 RPC 호출), Admin 권한 검증 미들웨어(`requireAdmin`).
@@ -260,11 +262,13 @@ flowchart LR
 - **작업 내용**: `7-wireframes.md` 1번 와이어프레임 기준. 사내 계정 ID/PW, 선호 회의실 우선순위(추가/삭제), 앱 로그인 비밀번호+확인 폼. 데스크톱/모바일(≤860px) 레이아웃 모두 구현.
 - **선행 Task**: FE-1, BE-2(회원가입 API)
 - **완료 조건**:
-  - [ ] 와이어프레임의 모든 입력 필드가 구현되고, 두 비밀번호(사내계정/앱로그인) 입력란이 명확히 구분 표기됨
-  - [ ] 선호 회의실 추가/삭제가 동작하고 `rooms` 목록을 anon 공개 조회로 가져옴
-  - [ ] 제출 후 접수 확인 화면(자동승인/관리자승인 분기 안내)이 표시됨
-  - [ ] 860px 이하에서 와이어프레임의 모바일 레이아웃(1컬럼)으로 전환됨
-  - [ ] 제출 실패(중복 ID 등) 시 에러 메시지가 명확히 표시됨
+  - [x] 와이어프레임의 모든 입력 필드가 구현되고, 두 비밀번호(사내계정/앱로그인) 입력란이 명확히 구분 표기됨 (`RegisterPage.tsx`, 각 필드에 helpText로 용도 구분 문구 표시). 실제 브라우저(Playwright)로 렌더링 확인
+  - [x] 선호 회의실 추가/삭제가 동작하고 `rooms` 목록을 anon 공개 조회로 가져옴 (`PreferredRoomPicker.tsx` + `useRoomsQuery`) — 실제 브라우저에서 [+ 추가] 클릭 시 실제 26개 회의실이 드롭다운에 뜨는 것까지 실측 확인. 와이어프레임은 행별 개별 삭제 버튼이지만, 이 구현은 "맨 뒤에 추가/맨 뒤 삭제" 방식으로 단순화(우선순위 추가·삭제·비워두기 기능은 동일하게 충족, 오버엔지니어링 방지 목적 — 코드 주석에 근거 명시)
+  - [x] 제출 후 접수 확인 화면(자동승인/관리자승인 분기 안내)이 표시됨 — pending 분기는 실제 브라우저로 end-to-end 실측(제출 → "관리자 승인 후 이용" 안내 화면). auto_approved 분기는 동일 컴포넌트의 삼항 조건 코드 검토 + 오늘 백엔드 보강 작업 때 이미 실측한 `status: "auto_approved"` 응답 형태로 교차 확인(별도 화이트리스트 계정 재검증은 생략)
+  - [x] 860px 이하에서 와이어프레임의 모바일 레이아웃(1컬럼)으로 전환됨 — 390px 뷰포트 스크린샷으로 전체폭 필드/버튼 1컬럼 배치 실측 확인
+  - [x] 제출 실패(중복 ID 등) 시 에러 메시지가 명확히 표시됨 — 동일 ID로 재제출 시 "이미 등록되었거나 처리 대기 중인 사내 계정 ID입니다." alert 표시를 실제 브라우저로 확인
+
+  **참고**: 이 과정에서 회원가입/`GET /rooms` 백엔드 보강(BE-2 절 참고)도 함께 실사용 검증됨. 테스트 계정(`fe2.playwright.test`)은 검증 후 DB에서 삭제, 띄운 백엔드/프론트 dev 서버 모두 종료함.
 
 ### FE-3. 로그인 페이지
 

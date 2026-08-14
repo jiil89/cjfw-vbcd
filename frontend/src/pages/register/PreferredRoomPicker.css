@@ -1,0 +1,110 @@
+/* 선호 회의실 우선순위 선택 UI — TextInput.css의 .text-input 토큰 규칙(테두리/라운드/패딩/포커스)을
+   <select>에도 그대로 적용해 다른 입력 필드와 시각적으로 동일하게 맞춘다. 새 색상/spacing 값은
+   만들지 않는다. */
+
+.room-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.room-picker-legend {
+  padding: 0;
+  font-size: var(--fs-body-sm);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.room-picker-hint {
+  margin: calc(-1 * var(--space-xxs)) 0 0;
+  font-size: var(--fs-caption);
+  color: var(--ink-muted);
+}
+
+.room-picker-error {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--semantic-error);
+}
+
+.room-picker-loading,
+.room-picker-empty {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  color: var(--ink-subtle);
+}
+
+.room-picker-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.room-picker-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.room-picker-row-label {
+  flex: none;
+  width: 48px;
+  font-size: var(--fs-body-sm);
+  color: var(--ink-muted);
+}
+
+.room-picker-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-1);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  min-height: 44px; /* 터치 타깃 규칙: form input >= 44px, DESIGN.md와 동일 */
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.room-picker-select:hover:not(:disabled) {
+  border-color: var(--ink-tertiary);
+}
+
+.room-picker-select:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.room-picker-select:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.room-picker-select:disabled {
+  cursor: not-allowed;
+  background: var(--surface-2);
+  color: var(--ink-tertiary);
+}
+
+.room-picker-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+/* 모바일: 행 안에서 라벨+셀렉트를 유지하되(와이어프레임 "1순위 [선택 ▾]" 그대로),
+   추가/삭제 버튼은 이미 flex라 자동으로 줄바꿈되지 않고 전체폭 행 아래에 위치한다. */
+@media (max-width: 860px) {
+  .room-picker-actions {
+    flex-direction: column;
+  }
+
+  .room-picker-actions .btn {
+    width: 100%;
+  }
+}

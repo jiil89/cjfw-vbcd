@@ -9,6 +9,7 @@ import { adminRouter } from "./routes/admin.routes";
 import { authRouter } from "./routes/auth.routes";
 import { chatRouter } from "./routes/chat.routes";
 import { registrationRouter } from "./routes/registration.routes";
+import { roomsRouter } from "./routes/rooms.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -39,6 +40,9 @@ export function createApp(): Express {
   // BE-2: 회원가입/로그인/JWT
   app.use("/auth", registrationRouter);
   app.use("/auth", authRouter);
+
+  // FE-2 선행 작업: 회의실 목록 공개(anon) 조회
+  app.use("/rooms", roomsRouter);
 
   // BE-3: Admin 승인 API
   app.use("/admin", adminRouter);

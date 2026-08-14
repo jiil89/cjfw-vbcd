@@ -68,6 +68,32 @@ export async function findBookableRooms(): Promise<Room[]> {
   return result.rows.map(toRoom);
 }
 
+export interface FindBookableRoomsFilter {
+  minCapacity?: number;
+  floorLabel?: string;
+}
+
+/** FE-2: `GET /rooms` 공개 조회용 — 인원수/층 조건으로 필터링한다(docs/swagger.json 참고). */
+export async function findBookableRoomsFiltered(filter: FindBookableRoomsFilter): Promise<Room[]> {
+  const conditions: string[] = ["is_bookable = true"];
+  const values: unknown[] = [];
+
+  if (filter.minCapacity != null) {
+    values.push(filter.minCapacity);
+    conditions.push(`capacity >= $${values.length}`);
+  }
+  if (filter.floorLabel != null) {
+    values.push(filter.floorLabel);
+    conditions.push(`floor_label = $${values.length}`);
+  }
+
+  const result = await pool.query<RoomRow>(
+    `select ${ROOM_COLUMNS} from public.rooms where ${conditions.join(" and ")} order by floor_label, room_name`,
+    values
+  );
+  return result.rows.map(toRoom);
+}
+
 /** BE-6: 이력 기반 추천(get_user_frequent_rooms)에서 얻은 room_id 목록으로 Room 상세를 조회한다.
  * 입력 순서를 그대로 보존해서 반환한다(추천 우선순위 유지). */
 export async function findRoomsByIds(roomIds: string[]): Promise<Room[]> {

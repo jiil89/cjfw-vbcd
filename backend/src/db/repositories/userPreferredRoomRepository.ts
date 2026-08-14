@@ -38,6 +38,24 @@ function toRoom(row: PreferredRoomRow): Room {
   };
 }
 
+/**
+ * 회원가입 승인 시점에 신청 단계에서 골라둔 선호 회의실을 새 사용자에게 심는다.
+ * 배열 순서를 우선순위(1이 최우선)로 그대로 반영한다. 존재하지 않는 room_id가 섞여 있으면
+ * `user_preferred_rooms.room_id`의 FK 제약이 그 행에서 실패하므로, 호출 전에 room_id들이
+ * 실제 `rooms`에 존재하는지 상위 계층(registrationService/adminService)이 이미 검증한 상태여야 한다.
+ * roomIds가 빈 배열이면 아무것도 하지 않는다(신청 시 선호 회의실을 고르지 않은 경우).
+ */
+export async function setPreferredRooms(userId: string, roomIds: string[]): Promise<void> {
+  if (roomIds.length === 0) {
+    return;
+  }
+  const values = roomIds.map((_, index) => `($1, $${index + 2}, ${index + 1})`).join(", ");
+  await pool.query(
+    `insert into public.user_preferred_rooms (user_id, room_id, priority) values ${values}`,
+    [userId, ...roomIds]
+  );
+}
+
 /** 사용자가 가입 시 등록한 선호 회의실을 우선순위(1이 최우선) 순서로 반환한다. */
 export async function findPreferredRoomsByUserId(userId: string): Promise<Room[]> {
   const result = await pool.query<PreferredRoomRow>(

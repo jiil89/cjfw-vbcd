@@ -1,0 +1,110 @@
+.register-page {
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: var(--space-xxl) var(--space-md);
+  background: var(--canvas);
+}
+
+.register-card {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.register-title {
+  margin: 0;
+  font-size: var(--fs-headline);
+  font-weight: var(--fw-headline);
+  line-height: var(--lh-headline);
+  letter-spacing: var(--ls-headline);
+  color: var(--ink);
+}
+
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.register-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.register-section:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.register-section-title {
+  margin: 0;
+  font-size: var(--fs-eyebrow);
+  font-weight: var(--fw-eyebrow);
+  color: var(--ink-muted);
+}
+
+.register-error-banner {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--semantic-error-soft);
+  color: var(--semantic-error);
+  font-size: var(--fs-body-sm);
+}
+
+.register-submit {
+  align-self: center;
+  min-width: 200px;
+}
+
+.register-login-link {
+  margin: 0;
+  text-align: center;
+  font-size: var(--fs-body-sm);
+  color: var(--ink-muted);
+}
+
+.register-login-link a {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.register-confirmation {
+  text-align: center;
+  align-items: center;
+}
+
+.register-confirmation-lead {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--ink);
+}
+
+.register-confirmation-branch {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  color: var(--ink-muted);
+}
+
+@media (max-width: 860px) {
+  .register-page {
+    padding: var(--space-lg) var(--space-sm);
+  }
+
+  .register-card {
+    max-width: none;
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .register-submit {
+    width: 100%;
+    align-self: stretch;
+  }
+}

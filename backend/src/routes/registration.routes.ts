@@ -7,7 +7,7 @@ import { registerAccount, EmailAliasTakenError } from "../services/registrationS
 export const registrationRouter = Router();
 
 registrationRouter.post("/register", async (req, res) => {
-  const { email_alias, corporate_password, app_password } = req.body ?? {};
+  const { email_alias, corporate_password, app_password, preferred_room_ids } = req.body ?? {};
 
   if (
     typeof email_alias !== "string" ||
@@ -26,11 +26,22 @@ registrationRouter.post("/register", async (req, res) => {
     return;
   }
 
+  if (
+    preferred_room_ids !== undefined &&
+    (!Array.isArray(preferred_room_ids) || preferred_room_ids.some((id) => typeof id !== "string"))
+  ) {
+    res.status(400).json({
+      error: { code: "INVALID_REQUEST", message: "preferred_room_ids는 문자열 배열이어야 합니다." },
+    });
+    return;
+  }
+
   try {
     const result = await registerAccount({
       emailAlias: email_alias,
       corporatePassword: corporate_password,
       appPassword: app_password,
+      preferredRoomIds: preferred_room_ids ?? [],
     });
 
     res.status(201).json({

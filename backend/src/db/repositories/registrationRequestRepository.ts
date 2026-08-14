@@ -12,6 +12,7 @@ export interface RegistrationRequest {
   processedBySystem: boolean;
   processedAt: string | null;
   resultingUserId: string | null;
+  preferredRoomIds: string[];
   createdAt: string;
 }
 
@@ -23,11 +24,12 @@ interface RegistrationRequestRow {
   processed_by_system: boolean;
   processed_at: string | null;
   resulting_user_id: string | null;
+  preferred_room_ids: string[];
   created_at: string;
 }
 
 const REGISTRATION_REQUEST_COLUMNS =
-  "id, email_alias, status, processed_by_user_id, processed_by_system, processed_at, resulting_user_id, created_at";
+  "id, email_alias, status, processed_by_user_id, processed_by_system, processed_at, resulting_user_id, preferred_room_ids, created_at";
 
 function toRegistrationRequest(row: RegistrationRequestRow): RegistrationRequest {
   return {
@@ -38,6 +40,7 @@ function toRegistrationRequest(row: RegistrationRequestRow): RegistrationRequest
     processedBySystem: row.processed_by_system,
     processedAt: row.processed_at,
     resultingUserId: row.resulting_user_id,
+    preferredRoomIds: row.preferred_room_ids,
     createdAt: row.created_at,
   };
 }
@@ -73,13 +76,14 @@ export async function insertPendingRegistrationRequest(params: {
   emailAlias: string;
   encryptedPassword: string;
   appPasswordHash: string;
+  preferredRoomIds: string[];
 }): Promise<RegistrationRequest> {
   const result = await pool.query<RegistrationRequestRow>(
     `insert into public.account_registration_requests
-       (email_alias, encrypted_password, app_password_hash, status)
-     values ($1, $2, $3, 'pending')
+       (email_alias, encrypted_password, app_password_hash, preferred_room_ids, status)
+     values ($1, $2, $3, $4, 'pending')
      returning ${REGISTRATION_REQUEST_COLUMNS}`,
-    [params.emailAlias, params.encryptedPassword, params.appPasswordHash]
+    [params.emailAlias, params.encryptedPassword, params.appPasswordHash, params.preferredRoomIds]
   );
   return toRegistrationRequest(result.rows[0]);
 }
