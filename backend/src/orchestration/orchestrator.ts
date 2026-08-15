@@ -20,6 +20,7 @@ import { config } from "../config/env";
 import {
   appendMessage,
   getOrCreateSession,
+  saveSession,
   isResolvedTarget,
   setOfferedSlots,
   setPendingConfirmation,
@@ -765,7 +766,7 @@ function collapseDuplicateLines(text: string): string {
  * 이 함수는 그 상태를 읽고 갱신할 뿐 자체적으로 전역 상태를 만들지 않는다.
  */
 export async function handleUserMessage(userId: string, userMessage: string): Promise<OrchestratorReply> {
-  const session = getOrCreateSession(userId);
+  const session = await getOrCreateSession(userId);
   session.turnIndex += 1;
 
   appendMessage(session, { role: "user", content: userMessage });
@@ -853,6 +854,11 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
   } else {
     finalReply = collapseDuplicateLines(finalReply);
   }
+
+  // 턴 안에서의 mutate(appendMessage, setPendingConfirmation 등)는 전부 메모리 위에서
+  // 일어나고, 실제 DB 저장은 턴이 끝나는 이 시점 한 번뿐이다 — 매 mutate마다 DB를
+  // 치지 않는다(sessionStore.ts saveSession 주석 참고).
+  await saveSession(session);
 
   return { reply: finalReply, proposal: lastToolResult };
 }

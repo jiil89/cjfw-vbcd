@@ -423,6 +423,23 @@ comment on table public.refresh_tokens is
 comment on column public.refresh_tokens.token_hash is
   'Refresh Token 원문의 해시값(예: SHA-256). 평문 토큰은 DB에 저장하지 않는다.';
 
+-- [20260816 추가] 챗봇 오케스트레이션 세션(대화 이력 + 확인대기 상태). 상세 근거는
+-- supabase/migrations/20260816000000_chat_sessions.sql 참고 — 서버리스 배포 시 함수
+-- 인스턴스가 바뀌어도 대화 기억이 유지되도록 in-memory Map을 대체한다.
+create table if not exists public.chat_sessions (
+  user_id uuid primary key references public.users(id) on delete cascade,
+  state jsonb not null,
+  last_activity_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.chat_sessions is
+  '사용자별 챗봇 오케스트레이션 세션(대화 이력 + 확인대기 상태). Vercel 서버리스에서 함수
+   인스턴스가 바뀌어도 대화 기억이 유지되도록 sessionStore.ts의 in-memory Map을 대체한다.';
+comment on column public.chat_sessions.state is
+  'OrchestrationSession 전체를 그대로 직렬화한 jsonb (messages/pendingConfirmation/offeredSlots 등).';
+
 
 -- -----------------------------------------------------------------------------
 -- 7. 계정 등록 요청 승인/거부 함수
@@ -640,6 +657,7 @@ alter table public.reservation_requests enable row level security;
 alter table public.reservations enable row level security;
 alter table public.alternative_suggestions enable row level security;
 alter table public.refresh_tokens enable row level security;
+alter table public.chat_sessions enable row level security;
 
 -- rooms: 회원가입 웹페이지가 "선호 회의실" 선택 UI를 보여주기 위해 예약 가능한 회의실 목록을
 -- anon key로 읽을 수 있어야 한다. 민감정보가 아니므로 공개 조회를 허용한다.
@@ -673,7 +691,7 @@ create policy account_registration_requests_public_insert
 -- 키 분리 + 백엔드 자체의 Admin 인증(JWT + is_admin 검증)으로 보장한다.
 
 -- users, admin_whitelist, user_preferred_rooms, reservation_requests, reservations,
--- alternative_suggestions, refresh_tokens: anon/authenticated용 정책을 전혀 만들지 않는다.
+-- alternative_suggestions, refresh_tokens, chat_sessions: anon/authenticated용 정책을 전혀 만들지 않는다.
 -- RLS가 켜져 있고 정책이 없으면 기본값은 "모두 거부"이므로, 이 테이블들은 anon/authenticated
 -- 키로는 어떤 행도 읽거나 쓸 수 없다. service role key를 쓰는 백엔드만 접근 가능하며,
 -- "사용자는 자기 자신의 데이터만" 원칙은 백엔드가 JWT의 user_id로 매번 WHERE 필터링하는

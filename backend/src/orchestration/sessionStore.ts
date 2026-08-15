@@ -2,12 +2,26 @@
 //
 // BE-7 완료조건: "세션 상태(진행 중인 예약 등)가 대화록 텍스트가 아니라 서버 상태로
 // 관리됨". 이 파일은 사용자별 대화 히스토리(비용 절감을 위해 개수 제한)와, 예약
-// 확정 전 필수로 거쳐야 하는 "확인 대기(pendingConfirmation)" 상태를 순수 서버
-// 메모리 객체로 관리한다 — LLM이 스스로 "확인했다"고 주장하는 텍스트를 신뢰하지 않고,
-// 이 객체의 존재/일치 여부로만 확정 실행을 허용한다 (orchestrator.ts에서 강제).
+// 확정 전 필수로 거쳐야 하는 "확인 대기(pendingConfirmation)" 상태를 관리한다 —
+// LLM이 스스로 "확인했다"고 주장하는 텍스트를 신뢰하지 않고, 이 객체의 존재/일치
+// 여부로만 확정 실행을 허용한다 (orchestrator.ts에서 강제).
 //
-// 이 파일은 다른 어떤 계층도 의존하지 않는 순수 상태 저장소다 (tools/db/cj-automation
-// 전혀 모름) — 유닛 테스트로 검증 가능하다.
+// [2026-08-16 변경] 원래는 모듈 전역 `Map`(순수 메모리)이었는데, Vercel 서버리스에서는
+// 함수 인스턴스가 바뀌면 그 메모리가 통째로 사라져 대화 기억이 유실된다(로컬은 프로세스가
+// 계속 떠있어 이 문제가 절대 드러나지 않았다). 그래서 턴 시작 시 DB에서 로드하고 턴이
+// 끝날 때 DB에 저장하는 방식으로 바꿨다 — 상태를 들고 있는 필드/판정 로직(§ 아래 함수들)은
+// 전부 그대로고, "어디에 보관하느냐"만 바뀐다.
+//
+// [의도된 예외] 이 파일은 `db/repositories/chatSessionRepository`를 직접 부른다 —
+// `orchestration → tools → db` 의존 방향(5-project-principle.md §2)을 우회하는 것처럼
+// 보이지만, 이건 예약 비즈니스 로직이 아니라 오케스트레이션 자신의 상태를 어디에
+// 영속화할지 정하는 순수 인프라 관심사라 tools/에 억지로 끼워넣지 않는다(로그인 시
+// CJ 세션을 예열하는 auth.routes.ts의 기존 예외와 같은 성격).
+// 세션의 "판정 로직"(validatePendingConfirmation, wasSlotOfferedBefore 등)은 여전히
+// 순수 함수라 DB/네트워크 없이 유닛 테스트할 수 있다 — DB를 만지는 건 로드/저장 두
+// 함수(getOrCreateSession, saveSession)뿐이다.
+
+import { loadChatSessionState, saveChatSessionState } from "../db/repositories/chatSessionRepository";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
@@ -75,8 +89,6 @@ const MAX_HISTORY_MESSAGES = 20;
 /** 무응답이 이 시간(ms) 이상 지속되면 다음 요청 처리 전에 세션을 리셋한다. */
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30분
 
-const sessions = new Map<string, OrchestrationSession>();
-
 function createEmptySession(userId: string): OrchestrationSession {
   const now = Date.now();
   return {
@@ -92,31 +104,49 @@ function createEmptySession(userId: string): OrchestrationSession {
   };
 }
 
+/** DB에서 읽어온 값은 구조적으로 신뢰하지 않는다 — 필드가 없거나(마이그레이션 전 데이터,
+ * 수동 조작 등) 타입이 안 맞으면 빈 세션으로 취급한다. 이 정도만 확인하고 나머지는
+ * OrchestrationSession으로 그대로 캐스팅한다(JSON 스키마 검증 라이브러리까지는 과함 —
+ * 이 값은 우리 서버가 쓴 것만 다시 읽는 내부 상태라 신뢰 수준이 사용자 입력과 다르다). */
+function isPlausibleSessionState(value: unknown): value is OrchestrationSession {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as { messages?: unknown }).messages) &&
+    typeof (value as { turnIndex?: unknown }).turnIndex === "number"
+  );
+}
+
 /** userId를 세션 키로 사용한다 — 이 서비스는 사용자당 챗봇 대화가 1개뿐이라는 전제
  * (도메인 정의서 1번: 1차 채널은 웹 챗봇 하나) 하에 오버엔지니어링을 피한 단순한 설계다. */
-export function getOrCreateSession(userId: string): OrchestrationSession {
-  const existing = sessions.get(userId);
-  if (!existing) {
-    const created = createEmptySession(userId);
-    sessions.set(userId, created);
-    return created;
+export async function getOrCreateSession(userId: string): Promise<OrchestrationSession> {
+  const raw = await loadChatSessionState(userId);
+  const loaded = isPlausibleSessionState(raw) ? raw : null;
+
+  if (!loaded) {
+    return createEmptySession(userId);
   }
 
-  const idleMs = Date.now() - existing.lastActivityAt;
+  const idleMs = Date.now() - loaded.lastActivityAt;
   if (idleMs > SESSION_TIMEOUT_MS) {
-    const fresh = createEmptySession(userId);
-    sessions.set(userId, fresh);
-    return fresh;
+    return createEmptySession(userId);
   }
 
-  return existing;
+  return loaded;
+}
+
+/** 이번 턴에 바뀐 세션을 저장한다. 턴 안에서의 각 mutate(appendMessage 등)는 메모리
+ * 객체를 그대로 조작할 뿐이고, 실제 영속화는 턴이 끝날 때 이 함수 호출 한 번으로
+ * 끝낸다 — 매 mutate마다 DB를 치지 않는다. */
+export async function saveSession(session: OrchestrationSession): Promise<void> {
+  await saveChatSessionState(session.userId, session, new Date(session.lastActivityAt));
 }
 
 /** 예약 완료/취소 등 "이번 용건이 끝났다"고 판단되는 시점에 컨텍스트를 리셋한다
  * (BE-7 요구사항: 예약 완료/취소 또는 무응답 타임아웃 시 컨텍스트 리셋). */
-export function resetSession(userId: string): OrchestrationSession {
+export async function resetSession(userId: string): Promise<OrchestrationSession> {
   const fresh = createEmptySession(userId);
-  sessions.set(userId, fresh);
+  await saveSession(fresh);
   return fresh;
 }
 
@@ -207,9 +237,4 @@ export function validatePendingConfirmation(
     };
   }
   return { ok: true, pending };
-}
-
-/** 테스트 전용 — 모듈 전역 Map을 초기화한다. */
-export function __resetAllSessionsForTest(): void {
-  sessions.clear();
 }

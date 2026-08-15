@@ -38,8 +38,18 @@ vi.mock("../../tools/reservationTargeting", () => ({
   ReservationNotFoundError: class ReservationNotFoundError extends Error {},
 }));
 
+// [2026-08-16] sessionStore.ts가 chatSessionRepository(DB)를 통해 세션을 로드/저장하도록
+// 바뀌어서, 여기서도 실제 DB 대신 메모리 기반 페이크로 대체한다(sessionStore.test.ts와
+// 같은 패턴).
+const fakeSessionDb = new Map<string, unknown>();
+vi.mock("../../db/repositories/chatSessionRepository", () => ({
+  loadChatSessionState: vi.fn(async (userId: string) => fakeSessionDb.get(userId) ?? null),
+  saveChatSessionState: vi.fn(async (userId: string, state: unknown) => {
+    fakeSessionDb.set(userId, JSON.parse(JSON.stringify(state)));
+  }),
+}));
+
 import { createReservation } from "../../tools/reservation.tool";
-import { __resetAllSessionsForTest } from "../sessionStore";
 import { handleUserMessage } from "../orchestrator";
 
 // businessRules.ts는 실제 모듈을 그대로 쓰므로(순수 함수, mock 불필요), 예약 가능
@@ -79,7 +89,7 @@ function textMessage(text: string) {
 
 describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", () => {
   beforeEach(() => {
-    __resetAllSessionsForTest();
+    fakeSessionDb.clear();
     vi.clearAllMocks();
   });
 
@@ -156,7 +166,7 @@ describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", ()
     // 실제로는 모델이 이전 tool 응답 content에서 읽어온 토큰을 그대로 재사용한다.
     // 여기서는 내부 sessionStore를 통해 그 토큰 값을 확보해 재사용한다.
     const { getOrCreateSession } = await import("../sessionStore");
-    const session = getOrCreateSession("user-2");
+    const session = await getOrCreateSession("user-2");
     capturedToken = session.pendingConfirmation?.token ?? "";
     expect(capturedToken).not.toBe("");
 

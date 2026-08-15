@@ -70,7 +70,11 @@
   - `CREDENTIAL_ENCRYPTION_KEY` (CJ 계정 비밀번호 암호화 키 — JWT 시크릿과 완전히 다른 키. 도메인 정의서 8번 Open Question대로, 이 키를 DB나 코드 저장소에 두지 않고 Vercel 환경변수로만 관리한다. KMS 도입 여부는 아직 미결정이지만, "암호문과 키를 같은 곳에 두지 않는다"는 원칙만은 지금부터 지킨다)
   - `OPENAI_API_KEY`, `OPENAI_MODEL` (기본값 `gpt-5-nano`, 도구 호출 정확도가 부족하면 `gpt-5-mini`로 교체 가능하도록 반드시 환경변수로 분리 — 코드에 모델명을 하드코딩하지 않는다)
 - **비밀 관리 원칙: JWT 시크릿, CJ 암호화 키, OpenAI 키를 서로 다른 환경변수로 완전히 분리한다.** 하나가 유출되어도 나머지 비밀의 안전에 영향을 주지 않아야 한다.
-- **Refresh Token은 폐기 가능해야 하므로 DB에 발급 이력을 남긴다.** 이 테이블(`refresh_tokens` 등)은 PRD 3번에 "아직 미착수 — 백엔드 인증 구현 시작할 때 함께 설계"로 명시되어 있다 — 지금 임의로 스키마를 먼저 만들지 않는다.
+- **Refresh Token은 폐기 가능해야 하므로 DB에 발급 이력을 남긴다.** `refresh_tokens` 테이블에 개별/전체 폐기 두 시나리오를 모두 지원한다(`4-prd.md` 3번, 스키마는 `supabase/migrations/20260813002000_refresh_tokens.sql`).
+- **[20260816 추가] 오케스트레이션 세션도 같은 이유로 DB에 둔다.** `orchestration/sessionStore.ts`가 원래 모듈 전역 `Map`(순수 메모리)이었는데, Vercel 서버리스는 함수 인스턴스가 바뀌면 그 메모리가 통째로 사라진다 — 로컬은 프로세스가 계속 떠있어 이 문제가 절대 드러나지 않았다(배포 후에야 터지는 종류의 버그였다). `chat_sessions` 테이블(사용자당 1행, `state jsonb`로 세션 전체를 통째로 저장)로 옮겼다.
+  - **경계**: DB를 만지는 건 로드(`getOrCreateSession`)/저장(`saveSession`) 두 함수뿐이고, 턴 안에서의 나머지 mutate(`appendMessage`, `setPendingConfirmation` 등)는 여전히 메모리 객체를 그대로 조작한다 — 매 mutate마다 DB를 치지 않고 턴이 끝날 때 한 번만 저장한다.
+  - **의도된 예외**: `sessionStore.ts`가 `db/repositories/chatSessionRepository`를 직접 부른다. `orchestration → tools → db` 의존 방향을 우회하는 것처럼 보이지만, 오케스트레이션 자신의 상태를 어디에 영속화할지는 예약 비즈니스 로직이 아니라 순수 인프라 관심사라 tools/에 억지로 끼워넣지 않는다(로그인 시 CJ 세션을 예열하는 `auth.routes.ts`의 기존 예외와 같은 성격).
+  - **동시성 락을 의도적으로 넣지 않았다.** 이 서비스는 사용자당 챗봇 대화가 1개라는 전제이고, 프론트도 응답 대기 중 입력을 막아 같은 탭에서는 동시 요청이 나가지 않는다. 남는 경우(같은 사용자가 탭/기기를 여러 개 동시에 쓰는 것)는 사내 소수 인원 대상 내부 도구에서 발생 확률이 낮고, 최악의 경우도 "메시지 하나가 씹힘" 수준이라(예약 오작동으로 이어지지 않음 — 그 안전장치는 `pendingConfirmation` 토큰 검증이라 세션 유실과 무관) 지금 넣지 않는다. 실사용에서 문제로 드러나면 그때 락(`SELECT ... FOR UPDATE`)을 추가한다.
 - **Access Token은 클라이언트 메모리(Zustand)에만 두고 `localStorage`에 저장하지 않는다.** Refresh Token은 httpOnly + Secure + SameSite 쿠키로만 저장한다 (PRD "인증/보안" 절 그대로).
   - **httpOnly 쿠키의 dev/prd 간 복잡성은 "쿠키를 포기"가 아니라 "같은 origin으로 배포"해서 없앤다.** 프론트/백엔드가 서로 다른 origin이면 `SameSite=None`이 강제되어 서드파티 쿠키 차단(Safari ITP 등)에 걸릴 수 있는데, 이 프로젝트는 어차피 프론트·백엔드 모두 Vercel이므로 아래처럼 처음부터 same-origin으로 맞춘다.
     - **Prd**: 프론트와 백엔드를 같은 Vercel 프로젝트/도메인으로 배포하고 백엔드는 `/api/*` 경로로 rewrite한다 → 쿠키가 same-origin이라 `SameSite=Lax`로 충분하고, 서드파티 쿠키 이슈 자체가 없다.
