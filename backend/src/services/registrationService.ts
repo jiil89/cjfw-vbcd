@@ -1,4 +1,4 @@
-// 회원가입 신청 처리. 5-project-principle.md §1: 사내 계정 비밀번호와 앱 로그인
+// 회원가입 신청 처리. 5-project-principle.md §1: CJ WORLD PW와 앱 로그인
 // 비밀번호는 각각 다른 security/ 모듈을 통해서만 다룬다 — 이 파일이 직접 암호화/해시
 // 로직을 구현하지 않는다.
 
@@ -17,7 +17,7 @@ import { setPreferredRooms } from "../db/repositories/userPreferredRoomRepositor
 export class EmailAliasTakenError extends Error {
   code = "EMAIL_ALIAS_TAKEN";
   constructor() {
-    super("이미 등록되었거나 처리 대기 중인 사내 계정 ID입니다.");
+    super("이미 등록되었거나 처리 대기 중인 CJ WORLD ID입니다.");
     this.name = "EmailAliasTakenError";
   }
 }

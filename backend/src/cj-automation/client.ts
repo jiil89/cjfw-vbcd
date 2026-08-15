@@ -362,7 +362,7 @@ export interface SaveReserveParams {
    * 회의실 마스터데이터의 `REQUIRED_APPROVAL` 값을 그대로 전달하는 필드 — 0=승인 불필요,
    * 1=승인 필요. 이 프로젝트가 다루는 일반 회의실은 전부 승인 불필요이므로 0 고정. */
   gubun: 0 | 1;
-  /** 참석자(TO) 목록 — 사내 계정 alias를 쉼표로 이어붙인 문자열. 참석자 없으면 빈 문자열. */
+  /** 참석자(TO) 목록 — CJ WORLD ID(alias)를 쉼표로 이어붙인 문자열. 참석자 없으면 빈 문자열. */
   reqList: string;
   /** 참조자(CC) 목록 — reqList와 동일 형식. */
   optList: string;

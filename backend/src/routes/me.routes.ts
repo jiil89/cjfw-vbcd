@@ -8,6 +8,16 @@ import { Router, type Response } from "express";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/requireAuth";
 import { findPreferredRoomsByUserId } from "../db/repositories/userPreferredRoomRepository";
 import { getMyReservations } from "../tools/myReservations.tool";
+import {
+  changeAppPassword,
+  changeCjWorldPassword,
+  CjWorldPasswordInvalidError,
+  CurrentAppPasswordMismatchError,
+  UserNotFoundError,
+} from "../services/passwordService";
+
+/** 새 앱 로그인 비밀번호 최소 길이. */
+const MIN_APP_PASSWORD_LENGTH = 8;
 
 export const meRouter = Router();
 
@@ -28,6 +38,80 @@ meRouter.get("/reservations/today", requireAuth, async (req: AuthenticatedReques
     console.error("[routes/me] 오늘 예약 조회 실패", error);
     res.status(502).json({
       error: { code: "CJ_INTEGRATION_ERROR", message: "예약 조회 중 오류가 발생했습니다." },
+    });
+  }
+});
+
+// CJ WORLD PW 재등록 — 사용자가 CJ에서 비밀번호를 바꾸면 우리가 보관 중인 값이 낡아져
+// 조회/예약이 전부 실패한다. 그때 스스로 복구할 수 있는 유일한 경로다.
+// 실제 CJ 로그인으로 검증하므로 응답이 수 초 걸릴 수 있다(브라우저 자동화).
+meRouter.patch("/cj-world-password", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const { new_cj_world_password } = req.body ?? {};
+
+  if (typeof new_cj_world_password !== "string" || new_cj_world_password === "") {
+    res.status(400).json({
+      error: { code: "INVALID_REQUEST", message: "new_cj_world_password는 필수입니다." },
+    });
+    return;
+  }
+
+  try {
+    await changeCjWorldPassword(req.user!.userId, new_cj_world_password);
+    res.status(204).end();
+  } catch (error) {
+    if (error instanceof CjWorldPasswordInvalidError) {
+      res.status(400).json({ error: { code: error.code, message: error.message } });
+      return;
+    }
+    if (error instanceof UserNotFoundError) {
+      res.status(404).json({ error: { code: error.code, message: error.message } });
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.error("[routes/me] CJ WORLD PW 변경 실패", error);
+    res.status(502).json({
+      error: { code: "CJ_INTEGRATION_ERROR", message: "CJ 시스템 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." },
+    });
+  }
+});
+
+// 앱 로그인 비밀번호 변경 — 현재 비밀번호 확인 후 교체하고, 기존 세션(refresh 토큰)을 끊는다.
+meRouter.patch("/app-password", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const { current_app_password, new_app_password } = req.body ?? {};
+
+  if (typeof current_app_password !== "string" || typeof new_app_password !== "string") {
+    res.status(400).json({
+      error: { code: "INVALID_REQUEST", message: "current_app_password, new_app_password는 필수입니다." },
+    });
+    return;
+  }
+
+  if (new_app_password.length < MIN_APP_PASSWORD_LENGTH) {
+    res.status(400).json({
+      error: {
+        code: "INVALID_REQUEST",
+        message: `새 비밀번호는 ${MIN_APP_PASSWORD_LENGTH}자 이상이어야 합니다.`,
+      },
+    });
+    return;
+  }
+
+  try {
+    await changeAppPassword(req.user!.userId, current_app_password, new_app_password);
+    res.status(204).end();
+  } catch (error) {
+    if (error instanceof CurrentAppPasswordMismatchError) {
+      res.status(400).json({ error: { code: error.code, message: error.message } });
+      return;
+    }
+    if (error instanceof UserNotFoundError) {
+      res.status(404).json({ error: { code: error.code, message: error.message } });
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.error("[routes/me] 앱 비밀번호 변경 실패", error);
+    res.status(500).json({
+      error: { code: "INTERNAL_ERROR", message: "비밀번호 변경 중 오류가 발생했습니다." },
     });
   }
 });

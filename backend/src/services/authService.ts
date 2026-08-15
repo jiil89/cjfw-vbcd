@@ -109,7 +109,7 @@ export class RefreshTokenInvalidError extends Error {
 export class InvalidCredentialsError extends Error {
   code = "INVALID_CREDENTIALS";
   constructor() {
-    super("사내 계정 ID 또는 비밀번호가 일치하지 않습니다.");
+    super("CJ WORLD ID 또는 비밀번호가 일치하지 않습니다.");
     this.name = "InvalidCredentialsError";
   }
 }

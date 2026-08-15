@@ -1,6 +1,6 @@
-// CJ 사내 계정 비밀번호 전용 암호화/복호화 모듈.
+// CJ WORLD PW 전용 암호화/복호화 모듈.
 //
-// 5-project-principle.md §1/§3: 사내 계정 비밀번호(encryptedPassword)는 CJ 자동화
+// 5-project-principle.md §1/§3: CJ WORLD PW(encryptedPassword)는 CJ 자동화
 // 로그인에 다시 사용해야 하므로 "복호화 가능한" 암호화여야 한다. 앱 로그인 비밀번호
 // (appPasswordHash, security/appPassword.ts)와 절대 같은 함수/파일에서 다루지 않는다.
 //
@@ -23,7 +23,7 @@ function deriveEncryptionKey(): Buffer {
 const encryptionKey = deriveEncryptionKey();
 
 /**
- * CJ 사내 계정 비밀번호(평문)를 복호화 가능한 형태로 암호화한다.
+ * CJ WORLD PW(평문)를 복호화 가능한 형태로 암호화한다.
  * 결과 문자열 형식: base64(iv) + "." + base64(authTag) + "." + base64(ciphertext)
  */
 export function encryptCorporatePassword(plain: string): string {

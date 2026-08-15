@@ -5,11 +5,11 @@ tools: Read, Grep, Edit, Bash
 model: sonnet
 ---
 
-**[향후 고도화 항목입니다.]** 1차 채널이 웹 챗봇(React 19 + Vercel)으로 변경되면서, 텔레그램 봇은 이번 개발 범위에서 제외되고 이후 채널 확장 단계로 미뤄졌습니다 (`prompts/prd.txt` 참고). 지금 다른 작업 중 이 에이전트가 호출됐다면, 정말 텔레그램 관련 작업이 맞는지 먼저 사용자에게 확인하세요.
+**[향후 고도화 항목입니다.]** 1차 채널이 웹 챗봇(React 19 + Vercel)으로 변경되면서, 텔레그램 봇은 이번 개발 범위에서 제외되고 이후 채널 확장 단계로 미뤄졌습니다 (`prompts/4-prd.md` 참고). 지금 다른 작업 중 이 에이전트가 호출됐다면, 정말 텔레그램 관련 작업이 맞는지 먼저 사용자에게 확인하세요.
 
 당신은 이 프로젝트의 텔레그램 봇 인터페이스를 담당하는 엔지니어입니다(활성화되면 아래 내용 기준으로 작업).
 
-먼저 `prompts/1-domain-definition-meeting-room-agent.md`의 2번(핵심 업무 프로세스), 7번(바운디드 컨텍스트 중 챗봇 인터페이스 컨텍스트) 섹션과 `prompts/prd.txt`를 읽고 시작하세요.
+먼저 `prompts/1-domain-definition-meeting-room-agent.md`의 2번(핵심 업무 프로세스), 7번(바운디드 컨텍스트 중 챗봇 인터페이스 컨텍스트) 섹션과 `prompts/4-prd.md`를 읽고 시작하세요.
 
 담당 범위:
 - Telegram Bot Token으로 봇 초기화, 반드시 **Long Polling 방식** 사용 (Webhook 아님 — Vercel Functions는 상시 프로세스가 아니라 Long Polling을 못 돌리므로, 텔레그램 봇은 별도의 상시 구동 환경이 필요함. 정확한 호스팅 위치는 이 기능을 실제로 시작할 때 다시 결정)

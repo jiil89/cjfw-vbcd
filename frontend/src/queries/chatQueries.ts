@@ -31,3 +31,26 @@ export function usePreferredRoomsQuery() {
     queryFn: () => httpClient<Room[]>("/me/preferred-rooms"),
   });
 }
+
+// PATCH /me/cj-world-password — 서버가 새 비밀번호로 CJ에 실제 로그인해서 검증한 뒤에만
+// 저장하므로(오타로 잠기는 걸 막는다) 응답이 수 초 걸릴 수 있다.
+export function useChangeCjWorldPasswordMutation() {
+  return useMutation({
+    mutationFn: (body: { new_cj_world_password: string }) =>
+      httpClient<void>("/me/cj-world-password", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+  });
+}
+
+// PATCH /me/app-password — 성공하면 서버가 refresh 토큰을 전부 폐기한다(기존 세션 종료).
+export function useChangeAppPasswordMutation() {
+  return useMutation({
+    mutationFn: (body: { current_app_password: string; new_app_password: string }) =>
+      httpClient<void>("/me/app-password", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+  });
+}

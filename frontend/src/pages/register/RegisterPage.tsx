@@ -75,14 +75,14 @@ export function RegisterPage() {
             <section className="register-section">
               <h2 className="register-section-title">
                 <span className="register-section-number">1</span>
-                사내 계정
+                CJ WORLD 계정
               </h2>
               <p className="register-section-warning">
-                실제로 존재하는 CJ 사내 계정인지는 별도로 확인하지 않아요. 잘못된 ID·비밀번호를 입력하면
+                실제로 존재하는 CJ WORLD 계정인지는 별도로 확인하지 않아요. 잘못된 ID·비밀번호를 입력하면
                 승인되어도 회의실 예약 기능이 동작하지 않습니다.
               </p>
               <TextInput
-                label="계정 ID"
+                label="CJ WORLD ID"
                 name="email_alias"
                 autoComplete="username"
                 required
@@ -91,12 +91,12 @@ export function RegisterPage() {
                 onChange={(event) => setEmailAlias(event.target.value)}
               />
               <TextInput
-                label="계정 비밀번호"
+                label="CJ WORLD PW"
                 name="corporate_password"
                 type="password"
                 autoComplete="new-password"
                 required
-                helpText="예약 자동화 로그인에만 쓰이고 암호화 저장됩니다."
+                helpText="예약 자동화 로그인에만 쓰이고 암호화 저장됩니다. 나중에 CJ WORLD PW를 바꾸시면 앱에도 다시 등록해야 예약이 계속 됩니다."
                 value={corporatePassword}
                 onChange={(event) => setCorporatePassword(event.target.value)}
               />
@@ -122,7 +122,7 @@ export function RegisterPage() {
                 <span className="register-section-number">3</span>
                 앱 로그인 비밀번호
               </h2>
-              <p className="register-section-hint">사내 계정 비밀번호와 다른 값을 쓰세요. 해시로 저장됩니다.</p>
+              <p className="register-section-hint">CJ WORLD PW와 다른 값을 쓰세요. 해시로 저장됩니다.</p>
               <div className="register-password-row">
                 <TextInput
                   label="비밀번호"

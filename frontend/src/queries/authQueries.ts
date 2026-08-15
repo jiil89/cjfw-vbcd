@@ -16,6 +16,19 @@ export function useLoginMutation() {
   });
 }
 
+// POST /auth/cj-world-password — 로그인 전 복구 경로. CJ WORLD PW가 바뀌면 로그인 자체가
+// 거부되므로(CJ_LOGIN_FAILED) 앱 안의 변경 화면에 도달할 수 없다. 그래서 앱 로그인 비밀번호로
+// 본인을 확인하고 새 CJ WORLD PW를 다시 등록하는 경로를 로그인 화면에서 제공한다.
+export function useRecoverCjWorldPasswordMutation() {
+  return useMutation({
+    mutationFn: (body: { email_alias: string; app_password: string; new_cj_world_password: string }) =>
+      httpClient<void>("/auth/cj-world-password", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+  });
+}
+
 // POST /auth/logout — requireAuth 엔드포인트라 httpClient가 Authorization 헤더를 자동 첨부한다.
 // 서버가 Refresh Token을 폐기하고 나면(204) 클라이언트 세션(Zustand)도 즉시 비운다.
 export function useLogoutMutation() {

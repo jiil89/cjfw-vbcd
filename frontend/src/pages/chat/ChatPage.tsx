@@ -6,6 +6,8 @@ import { HttpError } from "../../api/httpClient";
 import { useAuthStore } from "../../stores/authStore";
 import { useLogoutMutation } from "../../queries/authQueries";
 import {
+  useChangeAppPasswordMutation,
+  useChangeCjWorldPasswordMutation,
   usePreferredRoomsQuery,
   useSendChatMessageMutation,
   useTodayReservationsQuery,
@@ -868,10 +870,164 @@ function ChatRailContent({ todayGroups, todayLoading, preferredRooms, preferredL
     <>
       <TodayReservationsRail groups={todayGroups} isLoading={todayLoading} onAction={onAction} />
       <PreferredRoomsRail rooms={preferredRooms} isLoading={preferredLoading} />
+      <PasswordSettingsRail />
       <div className="chat-info-banner">
         같은 회의실은 하루 <b>최대 2시간</b>까지만 예약할 수 있어요. 더 필요하면 다른 회의실로 이어서 잡아드려요.
       </div>
     </>
+  );
+}
+
+/** 비밀번호 변경 — CJ WORLD PW 재등록과 앱 로그인 비밀번호 변경 두 가지.
+ * 성격이 완전히 다른 값이라(하나는 CJ 시스템 인증용, 하나는 이 앱 로그인용) 한 폼에 섞지 않고
+ * 각각 따로 펼쳐서 입력받는다. */
+function PasswordSettingsRail() {
+  const [openForm, setOpenForm] = useState<"cj" | "app" | null>(null);
+
+  return (
+    <div>
+      <div className="chat-rail-title">비밀번호</div>
+      <div className="chat-pw-list">
+        <button
+          type="button"
+          className="chat-pw-toggle"
+          aria-expanded={openForm === "cj"}
+          onClick={() => setOpenForm((prev) => (prev === "cj" ? null : "cj"))}
+        >
+          CJ WORLD PW 재등록
+          <span className="chat-pw-chevron" aria-hidden="true">
+            {openForm === "cj" ? "−" : "+"}
+          </span>
+        </button>
+        {openForm === "cj" && <CjWorldPasswordForm onDone={() => setOpenForm(null)} />}
+
+        <button
+          type="button"
+          className="chat-pw-toggle"
+          aria-expanded={openForm === "app"}
+          onClick={() => setOpenForm((prev) => (prev === "app" ? null : "app"))}
+        >
+          앱 로그인 비밀번호 변경
+          <span className="chat-pw-chevron" aria-hidden="true">
+            {openForm === "app" ? "−" : "+"}
+          </span>
+        </button>
+        {openForm === "app" && <AppPasswordForm onDone={() => setOpenForm(null)} />}
+      </div>
+    </div>
+  );
+}
+
+function CjWorldPasswordForm({ onDone }: { onDone: () => void }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const [doneText, setDoneText] = useState<string | null>(null);
+  const mutation = useChangeCjWorldPasswordMutation();
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (newPassword === "" || mutation.isPending) return;
+    setErrorText(null);
+    setDoneText(null);
+    mutation.mutate(
+      { new_cj_world_password: newPassword },
+      {
+        onSuccess: () => {
+          setNewPassword("");
+          setDoneText("등록했어요. 이제 예약이 정상 동작합니다.");
+          window.setTimeout(onDone, 1800);
+        },
+        onError: (error) => {
+          setErrorText(
+            error instanceof HttpError ? error.message : "변경 중 오류가 발생했어요. 잠시 후 다시 시도해주세요."
+          );
+        },
+      }
+    );
+  }
+
+  return (
+    <form className="chat-pw-form" onSubmit={handleSubmit}>
+      <p className="chat-pw-hint">
+        CJ WORLD에서 비밀번호를 바꾸셨다면 여기에도 다시 등록해야 예약이 계속 됩니다.
+      </p>
+      <input
+        type="password"
+        className="chat-pw-input"
+        placeholder="새 CJ WORLD PW"
+        autoComplete="current-password"
+        value={newPassword}
+        onChange={(event) => setNewPassword(event.target.value)}
+        disabled={mutation.isPending}
+      />
+      {errorText && <p className="chat-pw-error">{errorText}</p>}
+      {doneText && <p className="chat-pw-done">{doneText}</p>}
+      <Button type="submit" size="sm" loading={mutation.isPending} disabled={newPassword === ""}>
+        {mutation.isPending ? "CJ에서 확인 중…" : "등록"}
+      </Button>
+      {mutation.isPending && <p className="chat-pw-hint">실제 CJ 로그인으로 확인하느라 몇 초 걸려요.</p>}
+    </form>
+  );
+}
+
+function AppPasswordForm({ onDone }: { onDone: () => void }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const [doneText, setDoneText] = useState<string | null>(null);
+  const mutation = useChangeAppPasswordMutation();
+
+  const canSubmit = currentPassword !== "" && newPassword !== "" && !mutation.isPending;
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setErrorText(null);
+    setDoneText(null);
+    mutation.mutate(
+      { current_app_password: currentPassword, new_app_password: newPassword },
+      {
+        onSuccess: () => {
+          setCurrentPassword("");
+          setNewPassword("");
+          setDoneText("변경했어요. 다음 로그인부터 새 비밀번호를 쓰세요.");
+          window.setTimeout(onDone, 1800);
+        },
+        onError: (error) => {
+          setErrorText(
+            error instanceof HttpError ? error.message : "변경 중 오류가 발생했어요. 잠시 후 다시 시도해주세요."
+          );
+        },
+      }
+    );
+  }
+
+  return (
+    <form className="chat-pw-form" onSubmit={handleSubmit}>
+      <input
+        type="password"
+        className="chat-pw-input"
+        placeholder="현재 비밀번호"
+        autoComplete="current-password"
+        value={currentPassword}
+        onChange={(event) => setCurrentPassword(event.target.value)}
+        disabled={mutation.isPending}
+      />
+      <input
+        type="password"
+        className="chat-pw-input"
+        placeholder="새 비밀번호 (8자 이상)"
+        autoComplete="new-password"
+        value={newPassword}
+        onChange={(event) => setNewPassword(event.target.value)}
+        disabled={mutation.isPending}
+      />
+      {errorText && <p className="chat-pw-error">{errorText}</p>}
+      {doneText && <p className="chat-pw-done">{doneText}</p>}
+      <Button type="submit" size="sm" loading={mutation.isPending} disabled={!canSubmit}>
+        변경
+      </Button>
+    </form>
   );
 }
 

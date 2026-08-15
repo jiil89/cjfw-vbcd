@@ -3,7 +3,7 @@
 // DB-5에서 일회성 스크립트(`scripts/seed-rooms.ts`)로 처음 채운 rooms 테이블을,
 // 실제 서비스 흐름에서 재사용 가능한 정식 함수로 승격한 것이다. 로그인은
 // cj-automation/session.ts의 `loginAndGetSession(userId)`를 사용한다 — DB에 저장된
-// 사용자의 암호화된 사내 계정 자격증명을 그 안에서 복호화해서 쓰고, 평문 비밀번호는
+// 사용자의 암호화된 CJ WORLD 자격증명을 그 안에서 복호화해서 쓰고, 평문 비밀번호는
 // 이 서비스로 넘어오지 않는다(5-project-principle.md §2).
 //
 // 상암S시티(area_code=804) 3F/12F~16F 각 층을 getDayPilotConfReserveList로 스캔해

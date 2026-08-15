@@ -65,3 +65,20 @@ export async function findUserById(userId: string): Promise<User | null> {
   );
   return result.rows[0] ? toUser(result.rows[0]) : null;
 }
+
+/** CJ WORLD PW(암호문)를 교체한다. 사용자가 CJ에서 비밀번호를 바꾸면 우리가 들고 있는
+ * 암호문이 낡은 값이 되어 CJ 로그인이 전부 실패하므로, 앱에서도 다시 등록할 수 있어야 한다. */
+export async function updateEncryptedPassword(userId: string, encryptedPassword: string): Promise<void> {
+  await pool.query(
+    `update public.users set encrypted_password = $2, updated_at = now() where id = $1`,
+    [userId, encryptedPassword]
+  );
+}
+
+/** 앱 로그인 비밀번호 해시를 교체한다(단방향 — 평문은 어디에도 남기지 않는다). */
+export async function updateAppPasswordHash(userId: string, appPasswordHash: string): Promise<void> {
+  await pool.query(
+    `update public.users set app_password_hash = $2, updated_at = now() where id = $1`,
+    [userId, appPasswordHash]
+  );
+}

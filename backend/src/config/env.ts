@@ -34,7 +34,7 @@ export interface AppConfig {
   jwtAccessTokenSecret: string;
   jwtRefreshTokenSecret: string;
 
-  // CJ 사내 계정 비밀번호 암호화 키. JWT 시크릿과 완전히 다른 별도 키.
+  // CJ WORLD PW 암호화 키. JWT 시크릿과 완전히 다른 별도 키.
   credentialEncryptionKey: string;
 
   // LLM 설정 — 모델명을 코드에 하드코딩하지 않고 환경변수로 분리.

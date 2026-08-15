@@ -99,7 +99,7 @@ export function AdminPanelPage() {
             return (
               <Card key={request.id} radius="lg" className="admin-request-card">
                 <div className="admin-request-row">
-                  <span className="admin-request-label">사내 계정 ID:</span>
+                  <span className="admin-request-label">CJ WORLD ID:</span>
                   <span className="admin-request-value">{request.email_alias}</span>
                   <span className="admin-request-meta">신청일시: {formatShortDateTime(request.created_at)}</span>
                 </div>

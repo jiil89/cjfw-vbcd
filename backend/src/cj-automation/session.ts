@@ -208,7 +208,7 @@ export async function loginWithCredentials(
     if (loginErrorVisible) {
       const errorText = await page.locator("#divErrorLogin").innerText().catch(() => "");
       throw new CjLoginError(
-        `[cj-automation/session] CJ 사내 계정 로그인에 실패했습니다: ${errorText || "(오류 메시지 없음)"}`
+        `[cj-automation/session] CJ WORLD 계정 로그인에 실패했습니다: ${errorText || "(오류 메시지 없음)"}`
       );
     }
 

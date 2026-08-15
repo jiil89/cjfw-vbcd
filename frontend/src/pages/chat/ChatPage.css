@@ -1058,6 +1058,102 @@
 }
 
 /* chat-screen.dc.html "알아두기(정보 배너)" — 좌측 세로 레일 + 앰버 톤. */
+/* ---- 비밀번호 변경(사이드바 / 모바일 시트 공용) ---- */
+
+.chat-pw-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+
+.chat-pw-toggle {
+  appearance: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+  transition: border-color 120ms ease;
+}
+
+.chat-pw-toggle:hover {
+  border-color: var(--ink-tertiary);
+}
+
+.chat-pw-toggle:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.chat-pw-chevron {
+  color: var(--ink-tertiary);
+  font-size: 15px;
+  line-height: 1;
+  flex: none;
+}
+
+.chat-pw-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: 12px;
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.chat-pw-input {
+  width: 100%;
+  box-sizing: border-box;
+  /* 44px — 터치 목표 최소 권장치(모바일 시트에서도 그대로 쓰인다). */
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.chat-pw-input:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--hairline-soft);
+}
+
+.chat-pw-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.chat-pw-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--semantic-error);
+}
+
+.chat-pw-done {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--semantic-success);
+}
+
 .chat-info-banner {
   position: relative;
   font-size: 12.5px;

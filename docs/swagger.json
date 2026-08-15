@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "CJ프레시웨이 회의실 예약 웹 챗봇 Agent API",
-    "description": "CJ프레시웨이 임직원이 웹 챗봇을 통해 사내 회의실을 조회·예약·변경·취소할 수 있게 해주는 백엔드 API 명세서.\n\n- 아직 실제 백엔드 코드는 구현되지 않은 상태이며, 이 문서는 설계 문서(`prompts/1-domain-definition-meeting-room-agent.md`, `prompts/prd.txt`, `docs/service-scenarios.md`, `prompts/8-erd.md`, `supabase/8-schema.sql`, `prompts/9-plan.md`)를 근거로 먼저 정의한 API 계약(contract)이다.\n- 백엔드는 Vercel Serverless Functions(Node.js + Express) 위에서 동작하며, 프론트엔드(React 19 웹 챗봇)와 같은 origin에서 서비스된다. 모든 API의 base path는 `/api`.\n- 인증은 JWT Access Token(짧은 만료, 응답 바디로 전달, 클라이언트는 메모리에만 보관) + Refresh Token(httpOnly + Secure + SameSite 쿠키, 응답 바디에는 절대 노출되지 않음) 이중 토큰 방식을 사용한다.\n- **두 종류의 비밀번호를 절대 혼동하지 말 것**: `corporate_password`(CJ 사내 계정 비밀번호, 클라이언트는 평문으로 전송하고 서버가 복호화 가능한 AES 등으로 암호화하여 저장 — CJ 자동화 로그인용)와 `app_password`(이 서비스 자체 로그인 비밀번호, 클라이언트는 평문으로 전송하고 서버가 bcrypt/argon2 같은 단방향 해시로 저장 — 로그인 검증 전용, 복호화 불가)는 완전히 별개의 값이다.\n- 회원가입 신청은 화이트리스트(`admin_whitelist`)에 해당하면 자동 승인, 아니면 Admin이 웹 패널에서 수동 승인/거부한다. 승인 완료 전에는 로그인 및 챗봇 이용이 불가하다.\n- 에러 응답 포맷은 `{ \"error\": { \"code\": \"...\", \"message\": \"...\" } }`로 통일한다.",
+    "description": "CJ프레시웨이 임직원이 웹 챗봇을 통해 사내 회의실을 조회·예약·변경·취소할 수 있게 해주는 백엔드 API 명세서.\n\n- [20260816 갱신] 백엔드는 **구현 완료**되었고 이 문서는 실제 구현과 맞춰 유지되는 API 계약(contract)이다. 설계 근거 문서: `prompts/1-domain-definition-meeting-room-agent.md`, `prompts/4-prd.md`, `docs/service-scenarios.md`, `prompts/8-erd.md`, `supabase/8-schema.sql`, `prompts/9-plan.md`.\n- 백엔드는 Vercel Serverless Functions(Node.js + Express) 위에서 동작하며, 프론트엔드(React 19 웹 챗봇)와 같은 origin에서 서비스된다. 모든 API의 base path는 `/api`.\n- 인증은 JWT Access Token(짧은 만료, 응답 바디로 전달, 클라이언트는 메모리에만 보관) + Refresh Token(httpOnly + Secure + SameSite 쿠키, 응답 바디에는 절대 노출되지 않음) 이중 토큰 방식을 사용한다.\n- **두 종류의 비밀번호를 절대 혼동하지 말 것**: `corporate_password`(**CJ WORLD PW**, 사용자에게는 이 이름으로 보인다. 클라이언트는 평문으로 전송하고 서버가 복호화 가능한 AES 등으로 암호화하여 저장 — CJ 자동화 로그인용)와 `app_password`(이 서비스 자체 로그인 비밀번호, 클라이언트는 평문으로 전송하고 서버가 bcrypt/argon2 같은 단방향 해시로 저장 — 로그인 검증 전용, 복호화 불가)는 완전히 별개의 값이다.\n- 회원가입 신청은 화이트리스트(`admin_whitelist`)에 해당하면 자동 승인, 아니면 Admin이 웹 패널에서 수동 승인/거부한다. 승인 완료 전에는 로그인 및 챗봇 이용이 불가하다.\n- 에러 응답 포맷은 `{ \"error\": { \"code\": \"...\", \"message\": \"...\" } }`로 통일한다.",
     "version": "0.1.0"
   },
   "servers": [
@@ -27,7 +27,7 @@
       "post": {
         "tags": ["Auth"],
         "summary": "회원가입(계정 등록) 신청",
-        "description": "회원가입 웹페이지에서 사내 계정 ID/PW, 이 앱 전용 로그인 비밀번호, 선호 회의실(우선순위)을 함께 제출한다. 인증이 필요 없는 공개 엔드포인트(anon)다.\n\n- 신청한 사내 계정 ID가 Admin 화이트리스트에 있으면 **자동 승인**되어 즉시 로그인이 가능해진다.\n- 화이트리스트에 없으면 **대기(Pending)** 상태로 접수되며, 등록된 모든 Admin에게 알림 메일(비밀번호는 절대 포함하지 않음)이 발송되어 Admin의 수동 승인/거부를 기다린다.\n- 평문 비밀번호는 어떤 단계에서도 로그/화면/메일에 노출되지 않는다.",
+        "description": "회원가입 웹페이지에서 CJ WORLD ID/PW, 이 앱 전용 로그인 비밀번호, 선호 회의실(우선순위)을 함께 제출한다. 인증이 필요 없는 공개 엔드포인트(anon)다.\n\n- 신청한 CJ WORLD ID가 Admin 화이트리스트에 있으면 **자동 승인**되어 즉시 로그인이 가능해진다.\n- 화이트리스트에 없으면 **대기(Pending)** 상태로 접수되며, 등록된 모든 Admin에게 알림 메일(비밀번호는 절대 포함하지 않음)이 발송되어 Admin의 수동 승인/거부를 기다린다.\n- 평문 비밀번호는 어떤 단계에서도 로그/화면/메일에 노출되지 않는다.",
         "security": [],
         "requestBody": {
           "required": true,
@@ -48,7 +48,7 @@
           },
           "400": { "$ref": "#/components/responses/BadRequest" },
           "409": {
-            "description": "이미 등록되었거나 처리 대기 중인 사내 계정 ID",
+            "description": "이미 등록되었거나 처리 대기 중인 CJ WORLD ID",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } }
             }
@@ -86,7 +86,7 @@
             }
           },
           "401": {
-            "description": "인증 실패 — 사내 계정 ID/앱 로그인 비밀번호가 일치하지 않거나(INVALID_CREDENTIALS), 실제 CJ 사내 계정 인증에 실패함(CJ_LOGIN_FAILED)",
+            "description": "인증 실패 — CJ WORLD ID/앱 로그인 비밀번호가 일치하지 않거나(INVALID_CREDENTIALS), 실제 CJ 사내 계정 인증에 실패함(CJ_LOGIN_FAILED)",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
           },
           "403": {
@@ -127,6 +127,48 @@
         "responses": {
           "204": { "description": "로그아웃 처리 완료" },
           "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/cj-world-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "CJ WORLD PW 재등록 (로그인 전 복구 경로)",
+        "description": "[20260816 신규] `POST /auth/login`은 CJ 세션 확보에 실패하면 로그인 자체를 거부한다(CJ_LOGIN_FAILED). 그래서 사용자가 CJ WORLD에서 비밀번호를 바꾼 순간부터는 앱에 들어올 수 없고, 로그인 후 화면에 있는 `PATCH /me/cj-world-password`에도 영원히 도달할 수 없다 — 정확히 그 상황을 위한 기능인데도. 이 경로는 JWT 대신 **앱 로그인 비밀번호로 본인을 확인**하고(승인 상태·폐기 여부까지 검사), 새 CJ WORLD PW는 실제 CJ 로그인으로 검증한 뒤에만 저장한다. 브라우저 자동화로 검증하므로 응답이 수 초 걸릴 수 있다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email_alias", "app_password", "new_cj_world_password"],
+                "properties": {
+                  "email_alias": { "type": "string", "description": "CJ WORLD ID" },
+                  "app_password": { "type": "string", "description": "이 앱의 로그인 비밀번호(본인 확인용)" },
+                  "new_cj_world_password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "재등록 성공(본문 없음). 이후 정상 로그인 가능." },
+          "400": {
+            "description": "필수값 누락 또는 새 CJ WORLD PW로 CJ 로그인 실패(CJ_WORLD_PASSWORD_INVALID)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": {
+            "description": "CJ WORLD ID 또는 앱 로그인 비밀번호 불일치(INVALID_CREDENTIALS)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "403": {
+            "description": "승인 대기/거부/폐기된 계정",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "502": {
+            "description": "외부 사내 예약 시스템(CJ) 연동 실패",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
         }
       }
     },
@@ -431,6 +473,77 @@
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "502": {
             "description": "외부 사내 예약 시스템(CJ) 연동 실패",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/me/cj-world-password": {
+      "patch": {
+        "tags": ["Me"],
+        "summary": "CJ WORLD PW 재등록 (로그인 상태)",
+        "description": "[20260816 신규] 사용자가 CJ WORLD에서 비밀번호를 바꾸면 우리가 보관 중인 암호문이 낡은 값이 되어 조회/예약이 전부 실패한다. 그때 앱에도 다시 등록하는 경로. 저장 전에 새 비밀번호로 CJ에 **실제 로그인해서 검증**하고(오타 저장으로 인한 조용한 잠김 방지) 성공한 값만 저장하며, 옛 비밀번호로 맺어둔 CJ 세션 캐시를 즉시 버린다. 브라우저 자동화로 검증하므로 응답이 수 초 걸릴 수 있다. 로그인 자체가 막힌 상태(CJ_LOGIN_FAILED)라면 이 경로에 도달할 수 없으므로 `POST /auth/cj-world-password`를 쓴다.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["new_cj_world_password"],
+                "properties": { "new_cj_world_password": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "재등록 성공(본문 없음)" },
+          "400": {
+            "description": "필수값 누락 또는 새 CJ WORLD PW로 CJ 로그인 실패(CJ_WORLD_PASSWORD_INVALID)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "사용자를 찾을 수 없음",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "502": {
+            "description": "외부 사내 예약 시스템(CJ) 연동 실패",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/me/app-password": {
+      "patch": {
+        "tags": ["Me"],
+        "summary": "앱 로그인 비밀번호 변경",
+        "description": "[20260816 신규] 이 앱 자체 로그인 비밀번호(단방향 해시)를 바꾼다. 현재 비밀번호를 확인한 뒤에만 교체하고, 성공하면 해당 사용자의 refresh 토큰을 전부 폐기해 기존 세션을 끊는다. 새 비밀번호는 8자 이상이어야 한다(가입 시점에는 아직 같은 규칙이 없다 — 후속 정리 대상).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["current_app_password", "new_app_password"],
+                "properties": {
+                  "current_app_password": { "type": "string" },
+                  "new_app_password": { "type": "string", "minLength": 8 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "변경 성공(본문 없음). 기존 refresh 토큰은 모두 폐기된다." },
+          "400": {
+            "description": "필수값 누락, 8자 미만, 또는 현재 비밀번호 불일치(CURRENT_PASSWORD_MISMATCH)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": {
+            "description": "사용자를 찾을 수 없음",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
           }
         }
