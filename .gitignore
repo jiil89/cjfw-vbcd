@@ -22,6 +22,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+# 로컬에서 dev 서버를 백그라운드로 띄울 때 남는 로그
+.dev-server.log
 
 # editor
 .vscode/*

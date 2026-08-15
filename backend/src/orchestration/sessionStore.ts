@@ -43,10 +43,26 @@ export interface PendingConfirmation {
   createdAtTurn: number;
 }
 
+/** check_availability로 사용자에게 실제로 보여준 "예약 가능 슬롯". 사용자가 목록에서
+ * 하나를 고르면 그건 이미 명시적 선택이므로 확인 버튼을 한 번 더 누르게 하지 않는데,
+ * 그 판정을 LLM의 주장이 아니라 이 서버 기록으로만 한다. */
+export interface OfferedSlot {
+  roomId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
 export interface OrchestrationSession {
   userId: string;
   messages: StoredChatMessage[];
   pendingConfirmation: PendingConfirmation | null;
+  /** 직전에 사용자에게 보여준 슬롯 목록과, 그걸 보여준 turnIndex. */
+  offeredSlots: OfferedSlot[];
+  offeredSlotsTurn: number;
+  /** find_reservation_candidates가 "후보 정확히 1건"으로 확정한 예약 id.
+   * 변경/취소 대상이 서버 기준으로 유일하다는 증거로만 쓴다. */
+  resolvedTargetReservationId: string | null;
   turnIndex: number;
   createdAt: number;
   lastActivityAt: number;
@@ -67,6 +83,9 @@ function createEmptySession(userId: string): OrchestrationSession {
     userId,
     messages: [],
     pendingConfirmation: null,
+    offeredSlots: [],
+    offeredSlotsTurn: -1,
+    resolvedTargetReservationId: null,
     turnIndex: 0,
     createdAt: now,
     lastActivityAt: now,
@@ -126,6 +145,36 @@ export function setPendingConfirmation(
   pending: PendingConfirmation | null
 ): void {
   session.pendingConfirmation = pending;
+}
+
+export function setOfferedSlots(session: OrchestrationSession, slots: OfferedSlot[]): void {
+  session.offeredSlots = slots;
+  session.offeredSlotsTurn = session.turnIndex;
+}
+
+/**
+ * 이 슬롯이 "사용자가 이전 턴에 실제로 보고 나서 고른 것"인지 판정한다.
+ * 이전 턴(offeredSlotsTurn < turnIndex)이어야 한다는 조건이 핵심이다 — 같은 턴에
+ * 조회하고 곧바로 예약하면 사용자는 목록을 본 적조차 없으므로 선택으로 볼 수 없다.
+ */
+export function wasSlotOfferedBefore(session: OrchestrationSession, slot: OfferedSlot): boolean {
+  if (session.offeredSlotsTurn >= session.turnIndex) return false;
+  return session.offeredSlots.some(
+    (offered) =>
+      offered.roomId === slot.roomId &&
+      offered.date === slot.date &&
+      offered.startTime === slot.startTime &&
+      offered.endTime === slot.endTime
+  );
+}
+
+export function setResolvedTarget(session: OrchestrationSession, reservationId: string | null): void {
+  session.resolvedTargetReservationId = reservationId;
+}
+
+/** 변경/취소 대상이 서버가 직접 "후보 1건"으로 좁힌 그 예약과 동일한지. */
+export function isResolvedTarget(session: OrchestrationSession, reservationId: string): boolean {
+  return session.resolvedTargetReservationId === reservationId;
 }
 
 /**

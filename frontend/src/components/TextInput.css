@@ -1,24 +1,27 @@
+/* grid를 쓰는 이유: labelAction(비밀번호 표시 토글)은 화면상 라벨 행 우측에 있어야
+   하지만, DOM에서는 input 뒤에 와야 Tab 순서가 "입력칸 → 토글"이 된다(TextInput.tsx
+   주석 참고). grid 명시 배치가 이 둘을 동시에 만족시킨다. */
 .text-input-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xxs);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-xxs) var(--space-xs);
   width: 100%;
 }
 
-.text-input-label-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-xs);
-}
-
 .text-input-label {
+  grid-column: 1;
+  align-self: baseline;
   font-size: var(--fs-body-sm);
   font-weight: 500;
   color: var(--ink);
 }
 
+/* DOM상 마지막이지만 라벨과 같은 첫 행 우측에 그린다. */
 .text-input-label-action {
+  grid-row: 1;
+  grid-column: 2;
+  justify-self: end;
+  align-self: baseline;
   background: transparent;
   border: none;
   padding: 0;
@@ -33,6 +36,7 @@
 }
 
 .text-input-field {
+  grid-column: 1 / -1;
   position: relative;
   display: flex;
   align-items: center;
@@ -96,6 +100,7 @@
 }
 
 .text-input-error-text {
+  grid-column: 1 / -1;
   margin: 0;
   font-size: var(--fs-caption);
   color: var(--semantic-error);
@@ -115,6 +120,7 @@
 }
 
 .text-input-help-text {
+  grid-column: 1 / -1;
   margin: 0;
   font-size: var(--fs-caption);
   color: var(--ink-muted);

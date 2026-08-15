@@ -163,23 +163,6 @@ export async function findReservationsByRequestId(requestId: string): Promise<Re
 }
 
 /** 취소되지 않은, 특정 사용자의 특정 기간(겹치는) 예약 목록. 내 예약 조회/변경·취소 대상 특정에 사용. */
-export async function findActiveReservationsByUserAndRange(
-  userId: string,
-  rangeStartAt: string,
-  rangeEndAt: string
-): Promise<Reservation[]> {
-  const result = await pool.query<ReservationRow>(
-    `select ${RESERVATION_COLUMNS} from public.reservations
-     where user_id = $1
-       and status <> 'cancelled'
-       and start_at < $3
-       and end_at > $2
-     order by start_at asc`,
-    [userId, rangeStartAt, rangeEndAt]
-  );
-  return result.rows.map(toReservation);
-}
-
 export async function cancelReservationById(id: string): Promise<void> {
   await pool.query(`update public.reservations set status = 'cancelled' where id = $1`, [id]);
 }

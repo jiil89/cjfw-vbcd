@@ -38,6 +38,24 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("2026-08-13");
   });
 
+  it("친절한 말투 규칙과 짧게 답하라는 규칙이 함께 들어간다 (짧다고 무뚝뚝해지면 안 됨)", () => {
+    const prompt = buildSystemPrompt({ today: "2026-08-13", rooms: SAMPLE_ROOMS });
+    expect(prompt).toContain("짧게, 그리고 친절하게");
+    expect(prompt).toContain("정중한 존댓말");
+    expect(prompt).toContain("대안을 함께 제시");
+    // 친절함을 이유로 답변이 길어지면 카드와 내용이 중복되므로 분량 제한은 그대로 유지돼야 한다.
+    expect(prompt).toContain("전체 답변은 1~3문장으로 끝냅니다");
+  });
+
+  it("상대 날짜 표를 서버가 미리 계산해서 넣어준다 -- 모델이 '차주 월요일'을 암산하다 틀린 회귀 방지", () => {
+    // 2026-08-13은 목요일. 이번주 월요일은 8/10이므로 "다음주 월요일"은 8/17이다.
+    const prompt = buildSystemPrompt({ today: "2026-08-13", rooms: SAMPLE_ROOMS });
+    expect(prompt).toContain("2026-08-13(목요일) = 오늘, 이번주 목요일");
+    expect(prompt).toContain("2026-08-14(금요일) = 내일, 이번주 금요일");
+    expect(prompt).toContain("2026-08-17(월요일) = 4일 후, 다음주 월요일");
+    expect(prompt).toContain("2026-08-21(금요일) = 8일 후, 다음주 금요일");
+  });
+
   it("회의실 목록이 층별로 정리되어 포함된다", () => {
     const prompt = buildSystemPrompt({ today: "2026-08-13", rooms: SAMPLE_ROOMS });
     expect(prompt).toContain("3F-1(정원 8인)");

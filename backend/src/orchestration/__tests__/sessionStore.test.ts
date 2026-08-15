@@ -8,9 +8,13 @@ import {
   __resetAllSessionsForTest,
   appendMessage,
   getOrCreateSession,
+  isResolvedTarget,
   resetSession,
+  setOfferedSlots,
   setPendingConfirmation,
+  setResolvedTarget,
   validatePendingConfirmation,
+  wasSlotOfferedBefore,
   type PendingConfirmation,
 } from "../sessionStore";
 
@@ -128,6 +132,48 @@ describe("sessionStore", () => {
     if (result.ok) {
       expect(result.pending).toEqual(pending);
     }
+  });
+
+  // 확인 클릭 생략(3-5b) 판정 -- LLM의 주장이 아니라 서버 기록으로만 판정해야 한다.
+  const slot = { roomId: "room-1", date: "2026-08-17", startTime: "10:00", endTime: "11:00" };
+
+  it("이전 턴에 보여준 슬롯을 사용자가 고르면 확인 생략 대상으로 판정한다", () => {
+    const session = getOrCreateSession("user-1");
+    session.turnIndex = 1;
+    setOfferedSlots(session, [slot]);
+
+    session.turnIndex = 2; // 사용자가 목록을 보고 다음 메시지를 보낸 상황
+    expect(wasSlotOfferedBefore(session, slot)).toBe(true);
+  });
+
+  it("같은 턴에 조회하고 곧바로 예약하는 건 확인 생략 대상이 아니다 -- 사용자가 목록을 본 적이 없다", () => {
+    const session = getOrCreateSession("user-1");
+    session.turnIndex = 1;
+    setOfferedSlots(session, [slot]);
+
+    expect(wasSlotOfferedBefore(session, slot)).toBe(false);
+  });
+
+  it("보여준 적 없는 슬롯(시간/회의실이 다름)은 확인 생략 대상이 아니다", () => {
+    const session = getOrCreateSession("user-1");
+    session.turnIndex = 1;
+    setOfferedSlots(session, [slot]);
+    session.turnIndex = 2;
+
+    expect(wasSlotOfferedBefore(session, { ...slot, roomId: "room-2" })).toBe(false);
+    expect(wasSlotOfferedBefore(session, { ...slot, startTime: "14:00" })).toBe(false);
+    expect(wasSlotOfferedBefore(session, { ...slot, date: "2026-08-18" })).toBe(false);
+  });
+
+  it("서버가 1건으로 좁힌 예약만 변경/취소 확인 생략 대상이 된다", () => {
+    const session = getOrCreateSession("user-1");
+    setResolvedTarget(session, "res-1");
+
+    expect(isResolvedTarget(session, "res-1")).toBe(true);
+    expect(isResolvedTarget(session, "res-2")).toBe(false);
+
+    setResolvedTarget(session, null);
+    expect(isResolvedTarget(session, "res-1")).toBe(false);
   });
 
   it("타임아웃(30분 초과) 후 getOrCreateSession을 호출하면 세션이 리셋된다", () => {

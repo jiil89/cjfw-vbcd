@@ -142,6 +142,8 @@ export function ChatPage() {
   ]);
   const [draft, setDraft] = useState("");
   const [isPanelSheetOpen, setIsPanelSheetOpen] = useState(false);
+  // 모바일 전용 — 빠른명령 칩 줄을 접어두고 "+"로 펼친다(데스크톱은 항상 펼쳐진 상태라 이 값과 무관).
+  const [isQuickOpen, setIsQuickOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -263,19 +265,35 @@ export function ChatPage() {
           </div>
 
           <form className="chat-composer" onSubmit={handleSubmit}>
-            <div className="chat-quick-chips">
+            <div className={`chat-quick-chips${isQuickOpen ? " is-open" : ""}`}>
               {QUICK_COMMANDS.map((command) => (
                 <Chip
                   key={command.label}
                   type="button"
                   disabled={sendMutation.isPending}
-                  onClick={() => sendMessage(command.message)}
+                  onClick={() => {
+                    setIsQuickOpen(false);
+                    sendMessage(command.message);
+                  }}
                 >
                   {command.label}
                 </Chip>
               ))}
             </div>
             <div className="chat-input-row">
+              {/* 모바일에서만 보이는 빠른명령 토글. 칩 줄이 늘 자리를 차지하면 컴포저가
+                  138px까지 커져서 키보드가 올라왔을 때 대화가 거의 안 보였다. */}
+              <button
+                type="button"
+                className="chat-quick-toggle"
+                aria-label="빠른 명령"
+                aria-expanded={isQuickOpen}
+                onClick={() => setIsQuickOpen((open) => !open)}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
               <input
                 type="text"
                 className="chat-input"

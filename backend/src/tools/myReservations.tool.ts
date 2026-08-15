@@ -11,7 +11,7 @@
 
 import { bindMyReservation } from "../cj-automation/client";
 import { getValidSession } from "../cj-automation/session";
-import { findActiveReservationsByUserAndRange } from "../db/repositories/reservationRepository";
+import { findActiveReservationsWithRoomByUserAndRange } from "../db/repositories/reservationRepository";
 import { resolveEmailAlias } from "./availability.tool";
 import { kstDayRange } from "../lib/kst";
 
@@ -61,7 +61,7 @@ export async function getMyReservations(
 
   const rangeStartAt = kstDayRange(query.fromDate).rangeStartAt;
   const rangeEndAt = kstDayRange(query.toDate).rangeEndAt;
-  const reservations = await findActiveReservationsByUserAndRange(userId, rangeStartAt, rangeEndAt);
+  const reservations = await findActiveReservationsWithRoomByUserAndRange(userId, rangeStartAt, rangeEndAt);
 
   const groupsByRequestId = new Map<string, MyReservationGroup>();
   const ungrouped: MyReservationGroup[] = [];
@@ -69,7 +69,7 @@ export async function getMyReservations(
   for (const reservation of reservations) {
     const segment = {
       reservationId: reservation.id,
-      roomName: null as string | null,
+      roomName: reservation.roomName,
       startAt: reservation.startAt,
       endAt: reservation.endAt,
       cjSeq: reservation.cjSeq,
