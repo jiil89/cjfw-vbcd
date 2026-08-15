@@ -1147,10 +1147,14 @@
   color: var(--semantic-error);
 }
 
+/* 성공 안내는 사용자가 닫을 때까지 남아있으므로(자동으로 사라지지 않음) 눈에 띄게 둔다. */
 .chat-pw-done {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--semantic-success-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
   color: var(--semantic-success);
 }
 

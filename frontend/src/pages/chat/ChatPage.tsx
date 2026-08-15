@@ -899,7 +899,7 @@ function PasswordSettingsRail() {
             {openForm === "cj" ? "−" : "+"}
           </span>
         </button>
-        {openForm === "cj" && <CjWorldPasswordForm onDone={() => setOpenForm(null)} />}
+        {openForm === "cj" && <CjWorldPasswordForm onClose={() => setOpenForm(null)} />}
 
         <button
           type="button"
@@ -912,30 +912,28 @@ function PasswordSettingsRail() {
             {openForm === "app" ? "−" : "+"}
           </span>
         </button>
-        {openForm === "app" && <AppPasswordForm onDone={() => setOpenForm(null)} />}
+        {openForm === "app" && <AppPasswordForm onClose={() => setOpenForm(null)} />}
       </div>
     </div>
   );
 }
 
-function CjWorldPasswordForm({ onDone }: { onDone: () => void }) {
+function CjWorldPasswordForm({ onClose }: { onClose: () => void }) {
   const [newPassword, setNewPassword] = useState("");
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [doneText, setDoneText] = useState<string | null>(null);
+  const [isDone, setIsDone] = useState(false);
   const mutation = useChangeCjWorldPasswordMutation();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (newPassword === "" || mutation.isPending) return;
     setErrorText(null);
-    setDoneText(null);
     mutation.mutate(
       { new_cj_world_password: newPassword },
       {
         onSuccess: () => {
           setNewPassword("");
-          setDoneText("등록했어요. 이제 예약이 정상 동작합니다.");
-          window.setTimeout(onDone, 1800);
+          setIsDone(true);
         },
         onError: (error) => {
           setErrorText(
@@ -943,6 +941,23 @@ function CjWorldPasswordForm({ onDone }: { onDone: () => void }) {
           );
         },
       }
+    );
+  }
+
+  // 성공 화면은 타이머로 자동으로 닫지 않는다 — CJ 검증에 수 초 걸려서 그 사이 사용자가
+  // 화면에서 눈을 떼는 일이 흔한데, 잠깐 떴다 사라지면 성공했는지 알 수 없다(실사용 신고).
+  if (isDone) {
+    return (
+      <div className="chat-pw-form">
+        <p className="chat-pw-done">
+          <b>새 CJ WORLD PW를 등록했어요.</b>
+          <br />
+          CJ 로그인까지 확인했으니 이제 예약·조회가 정상 동작합니다.
+        </p>
+        <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+          닫기
+        </Button>
+      </div>
     );
   }
 
@@ -961,7 +976,6 @@ function CjWorldPasswordForm({ onDone }: { onDone: () => void }) {
         disabled={mutation.isPending}
       />
       {errorText && <p className="chat-pw-error">{errorText}</p>}
-      {doneText && <p className="chat-pw-done">{doneText}</p>}
       <Button type="submit" size="sm" loading={mutation.isPending} disabled={newPassword === ""}>
         {mutation.isPending ? "CJ에서 확인 중…" : "등록"}
       </Button>
@@ -970,11 +984,11 @@ function CjWorldPasswordForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function AppPasswordForm({ onDone }: { onDone: () => void }) {
+function AppPasswordForm({ onClose }: { onClose: () => void }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [doneText, setDoneText] = useState<string | null>(null);
+  const [isDone, setIsDone] = useState(false);
   const mutation = useChangeAppPasswordMutation();
 
   const canSubmit = currentPassword !== "" && newPassword !== "" && !mutation.isPending;
@@ -983,15 +997,13 @@ function AppPasswordForm({ onDone }: { onDone: () => void }) {
     event.preventDefault();
     if (!canSubmit) return;
     setErrorText(null);
-    setDoneText(null);
     mutation.mutate(
       { current_app_password: currentPassword, new_app_password: newPassword },
       {
         onSuccess: () => {
           setCurrentPassword("");
           setNewPassword("");
-          setDoneText("변경했어요. 다음 로그인부터 새 비밀번호를 쓰세요.");
-          window.setTimeout(onDone, 1800);
+          setIsDone(true);
         },
         onError: (error) => {
           setErrorText(
@@ -999,6 +1011,21 @@ function AppPasswordForm({ onDone }: { onDone: () => void }) {
           );
         },
       }
+    );
+  }
+
+  if (isDone) {
+    return (
+      <div className="chat-pw-form">
+        <p className="chat-pw-done">
+          <b>앱 로그인 비밀번호를 변경했어요.</b>
+          <br />
+          다음 로그인부터 새 비밀번호를 쓰세요. 다른 기기에 남아있던 로그인은 모두 끊겼습니다.
+        </p>
+        <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+          닫기
+        </Button>
+      </div>
     );
   }
 
@@ -1023,7 +1050,6 @@ function AppPasswordForm({ onDone }: { onDone: () => void }) {
         disabled={mutation.isPending}
       />
       {errorText && <p className="chat-pw-error">{errorText}</p>}
-      {doneText && <p className="chat-pw-done">{doneText}</p>}
       <Button type="submit" size="sm" loading={mutation.isPending} disabled={!canSubmit}>
         변경
       </Button>
