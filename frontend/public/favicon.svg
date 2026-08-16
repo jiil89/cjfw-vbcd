@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
-  <!-- 회의실 예약 AI 에이전트 브랜드 마크.
-       기존 파일은 Vite 스캐폴딩 기본 로고(보라색 번개)가 그대로 남아있었다.
-       앱 안의 브랜드 마크(BrandMarkIcon)와 동일한 4점 스파클 + Fin Orange를 쓴다. -->
-  <rect width="32" height="32" rx="7" fill="#111111"/>
-  <path
-    d="M16 6 L18.1 13.9 L26 16 L18.1 18.1 L16 26 L13.9 18.1 L6 16 L13.9 13.9 Z"
-    fill="#ff5600"/>
-</svg>
