@@ -38,6 +38,49 @@ interface ChatUiMessage {
   proposal?: ChatProposal | null;
   pending?: boolean;
   isError?: boolean;
+  /** 실패한 경우 백엔드가 준 에러 코드 — 아바타 아이콘(인증 문제 vs 일반 실패) 선택에 쓴다. */
+  errorCode?: string;
+}
+
+/** 에이전트 아바타 아이콘 — 답변 상황에 맞는 캐릭터를 고른다.
+ *
+ * 어떤 도구가 실행됐는지는 이미 응답의 `proposal.tool`로 내려오므로, LLM에게 따로
+ * "지금 표정이 뭐냐"고 물을 필요 없이 서버가 실제로 한 일을 근거로 결정론적으로 고른다. */
+const AGENT_AVATAR_DEFAULT = "/webpage_icon.png";
+
+function agentAvatarSrc(message: ChatUiMessage): string {
+  if (message.pending) return "/webpage_icon_response_pending.png";
+
+  if (message.isError) {
+    // 세션 만료·CJ 로그인 실패처럼 "인증" 문제는 자물쇠 캐릭터로 구분한다.
+    const isAuthProblem =
+      message.errorCode === "SESSION_EXPIRED" ||
+      message.errorCode === "CJ_LOGIN_FAILED" ||
+      message.errorCode === "UNAUTHORIZED";
+    return isAuthProblem ? "/webpage_icon_security.png" : "/webpage_icon_reservation_fail.png";
+  }
+
+  const tool = message.proposal?.tool;
+  if (!tool) return AGENT_AVATAR_DEFAULT;
+
+  // 도구가 실패를 돌려준 경우(errorResult)도 실패 표정으로 맞춘다.
+  const data = message.proposal?.data;
+  if (data && typeof data === "object" && "error" in data) {
+    return "/webpage_icon_reservation_fail.png";
+  }
+
+  if (tool.startsWith("confirm_")) return "/webpage_icon_reservation_success.png";
+  if (tool.startsWith("propose_")) return "/webpage_icon_newroom_recomendation.png";
+  if (
+    tool === "check_availability" ||
+    tool === "plan_long_meeting" ||
+    tool === "recommend_rooms" ||
+    tool === "get_my_reservations" ||
+    tool === "find_reservation_candidates"
+  ) {
+    return "/webpage_icon_search.png";
+  }
+  return AGENT_AVATAR_DEFAULT;
 }
 
 const QUICK_COMMANDS = [
@@ -185,9 +228,12 @@ export function ChatPage() {
       onError: (error) => {
         const message =
           error instanceof HttpError ? error.message : "메시지 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+        const errorCode = error instanceof HttpError ? error.code : undefined;
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === pendingId ? { id: pendingId, role: "agent", text: message, timestamp: new Date(), isError: true } : m
+            m.id === pendingId
+              ? { id: pendingId, role: "agent", text: message, timestamp: new Date(), isError: true, errorCode }
+              : m
           )
         );
       },
@@ -368,7 +414,7 @@ function ChatMessageGroup({
     <div className={`chat-row-group ${isAgent ? "chat-row-group-agent" : "chat-row-group-user"}`}>
       {isAgent && (
         <span className="chat-avatar chat-group-avatar" aria-hidden="true">
-          A
+          <img className="chat-avatar-img" src={agentAvatarSrc(lastMessage)} alt="" />
         </span>
       )}
       <div className="chat-bubble-stack">

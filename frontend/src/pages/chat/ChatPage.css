@@ -131,11 +131,21 @@
   flex: none;
 }
 
-/* Agent 아바타만 Fin Orange — 이 앱에서 AI 요소를 나타내는 유일한 배지(DESIGN.md 원칙) */
+/* Agent 아바타는 로봇 캐릭터 이미지를 그대로 쓴다 — 이미지 자체가 완결된 아이콘이라
+   배경/글자색을 씌우지 않는다. 답변 상황(대기/성공/실패/조회/추천/인증)에 따라 표정이
+   다른 이미지로 바뀐다(ChatPage.tsx agentAvatarSrc). */
 .chat-row-group-agent .chat-avatar {
-  background: var(--fin-orange);
-  color: #ffffff;
+  background: transparent;
   margin-top: 2px;
+  /* 캐릭터가 원형 배지보다 조금 커야 표정이 읽힌다. */
+  width: 30px;
+  height: 30px;
+}
+
+.chat-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .chat-row-group-user .chat-avatar {
