@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./LoginPage.css";
-import { Button, CatLoader, Card, TextInput } from "../../components";
+import { BrandMarkIcon, Button, CatLoader, Card, TextInput } from "../../components";
 import { HttpError } from "../../api/httpClient";
 import { useLoginMutation, useRecoverCjWorldPasswordMutation } from "../../queries/authQueries";
 import { useAuthStore } from "../../stores/authStore";
@@ -41,7 +41,7 @@ export function LoginPage() {
       <div className="login-column">
         <div className="login-brand">
           <div className="login-logo" aria-hidden="true">
-            회
+            <BrandMarkIcon size={20} />
           </div>
           <div className="login-brand-text">
             <h1 className="login-title">회의실 예약</h1>

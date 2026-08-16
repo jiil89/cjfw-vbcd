@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./ChatPage.css";
-import { Badge, Button, Card, Chip } from "../../components";
+import { Badge, BrandMarkIcon, Button, Card, Chip } from "../../components";
 import { HttpError } from "../../api/httpClient";
 import { useAuthStore } from "../../stores/authStore";
 import { useLogoutMutation } from "../../queries/authQueries";
@@ -220,7 +220,9 @@ export function ChatPage() {
     <div className="chat-page">
       <header className="chat-topbar">
         <div className="chat-brand">
-          <span className="chat-brand-mark">회</span>
+          <span className="chat-brand-mark">
+            <BrandMarkIcon size={13} />
+          </span>
           <span className="chat-brand-name">회의실 예약</span>
           <span className="chat-brand-site mono">상암S시티</span>
         </div>

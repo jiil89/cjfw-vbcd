@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./RegisterPage.css";
-import { Button, Card, TextInput } from "../../components";
+import { BrandMarkIcon, Button, Card, TextInput } from "../../components";
 import { HttpError } from "../../api/httpClient";
 import { useRegisterMutation, useRoomsQuery } from "../../queries/registrationQueries";
 import type { RegisterResponse } from "../../types/registration";
@@ -62,7 +62,7 @@ export function RegisterPage() {
       <div className="register-column">
         <div className="register-brand">
           <div className="register-logo" aria-hidden="true">
-            회
+            <BrandMarkIcon size={20} />
           </div>
           <div className="register-brand-text">
             <h1 className="register-title">계정 등록 신청</h1>
