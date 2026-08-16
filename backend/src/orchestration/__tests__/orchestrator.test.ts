@@ -102,7 +102,6 @@ describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", ()
           toolCallMessage("propose_create_reservation", {
             title: "주간회의",
             contents: "주간회의",
-            phoneNum: "",
             date: TOMORROW,
             startTime: "15:00",
             endTime: "16:00",
@@ -145,7 +144,6 @@ describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", ()
           toolCallMessage("propose_create_reservation", {
             title: "주간회의",
             contents: "주간회의",
-            phoneNum: "",
             date: TOMORROW,
             startTime: "15:00",
             endTime: "16:00",

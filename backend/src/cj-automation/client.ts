@@ -346,7 +346,6 @@ export interface SaveReserveParams {
   endTime: string;
   title: string;
   contents: string;
-  phoneNum: string;
   /** [2026-08-14 실사용 검증 완료] CJ 실제 웹 UI가 브라우저에서 보내는 요청을 Playwright로
    * 직접 재현/캡처해서(`/NCONF/ConferenceRoom/script/reserve_insmod.js`의 `$('#btnConfirm')`
    * click 핸들러 원본을 확보함) 아래 필드들과 정확한 타입/기본값을 확정했다. 이전 버전의
@@ -393,7 +392,10 @@ export async function saveReserve(
     title: params.title,
     contents: params.contents,
     attendee_count: params.attendeeCount,
-    phone_num: params.phoneNum,
+    // [20260816] 비상 연락처는 항상 비워서 저장한다 — 사용자가 챗봇에 뭐라고 답했든
+    // 무관하게 이 API 호출 지점 한 곳에서 고정한다(상위 계층 어디서도 값을 흘려보내지
+    // 않고 아예 필드를 받지 않게 만들었다. 이 파일 상단 SaveReserveParams 참고).
+    phone_num: "",
     gubun: params.gubun,
     req_list: params.reqList,
     opt_list: params.optList,

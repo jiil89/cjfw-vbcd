@@ -512,7 +512,6 @@ async function executeTool(
       case "propose_create_reservation": {
         const title = requireString(args, "title");
         const contents = requireString(args, "contents") ?? "";
-        const phoneNum = typeof args.phoneNum === "string" ? args.phoneNum : "";
         const date = requireString(args, "date");
         const startTime = requireString(args, "startTime");
         const endTime = requireString(args, "endTime");
@@ -530,7 +529,7 @@ async function executeTool(
           throw err;
         }
 
-        const params = { title, contents, phoneNum, date, startTime, endTime, room: toRoomLike(room) };
+        const params = { title, contents, date, startTime, endTime, room: toRoomLike(room) };
         const summary = `${room.roomName} ${date} ${startTime}~${endTime} "${title}"`;
         const pending: PendingConfirmation = {
           token: randomUUID(),
@@ -574,7 +573,6 @@ async function executeTool(
       case "propose_split_reservation": {
         const title = requireString(args, "title");
         const contents = requireString(args, "contents") ?? "";
-        const phoneNum = typeof args.phoneNum === "string" ? args.phoneNum : "";
         const date = requireString(args, "date");
         const planRaw = args.plan;
         if (!title || !date || !Array.isArray(planRaw) || planRaw.length < 2) {
@@ -598,7 +596,7 @@ async function executeTool(
           token: randomUUID(),
           kind: "split_reservation",
           summary,
-          params: { title, contents, phoneNum, date, plan },
+          params: { title, contents, date, plan },
           createdAtTurn: session.turnIndex,
         };
         setPendingConfirmation(session, pending);

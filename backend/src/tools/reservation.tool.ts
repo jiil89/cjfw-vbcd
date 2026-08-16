@@ -201,7 +201,6 @@ interface SaveOneSegmentParams {
   endTime: string;
   title: string;
   contents: string;
-  phoneNum: string;
 }
 
 async function saveOneSegmentToCj(params: SaveOneSegmentParams): Promise<string> {
@@ -260,7 +259,6 @@ async function saveOneSegmentToCj(params: SaveOneSegmentParams): Promise<string>
       endTime: params.endTime,
       title: params.title,
       contents: params.contents,
-      phoneNum: params.phoneNum,
       isSendMail: "0",
       attendeeCount: "",
       gubun: roomOption.gubun,
@@ -315,7 +313,6 @@ export class SegmentReservationFailedError extends Error {
 export interface CreateReservationInput {
   title: string;
   contents: string;
-  phoneNum: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -373,7 +370,6 @@ export async function createReservation(
       endTime: input.endTime,
       title: input.title,
       contents: input.contents,
-      phoneNum: input.phoneNum,
     });
   } catch (err) {
     throw err instanceof ReservationConflictError
@@ -497,7 +493,7 @@ export async function planLongMeetingSegments(
 }
 export async function createSplitReservation(
   userId: string,
-  input: { title: string; contents: string; phoneNum: string; date: string; plan: RoomedSegmentPlan[] },
+  input: { title: string; contents: string; date: string; plan: RoomedSegmentPlan[] },
   today?: string
 ): Promise<CreatedReservationSummary[]> {
   if (input.plan.length < 2) {
@@ -541,7 +537,6 @@ export async function createSplitReservation(
         endTime: segment.endTime,
         title: input.title,
         contents: input.contents,
-        phoneNum: input.phoneNum,
       });
       createdCjSeqs.push(cjSeq);
 

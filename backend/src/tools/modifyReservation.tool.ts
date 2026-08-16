@@ -109,7 +109,7 @@ function splitTimestamp(ts: string): { date: string; time: string } {
 async function saveReserveChecked(
   session: CjSession,
   room: Room,
-  params: { date: string; startTime: string; endTime: string; title: string; contents: string; phoneNum: string }
+  params: { date: string; startTime: string; endTime: string; title: string; contents: string }
 ): Promise<string> {
   const roomOption = await fetchRoomOptionInfo(session, {
     roomCode: room.roomCode,
@@ -128,7 +128,6 @@ async function saveReserveChecked(
     endTime: params.endTime,
     title: params.title,
     contents: params.contents,
-    phoneNum: params.phoneNum,
     isSendMail: "0",
     attendeeCount: "",
     gubun: roomOption.gubun,
@@ -246,7 +245,6 @@ export async function modifyReservation(
       endTime: newEndTime,
       title: reservation.title,
       contents: reservation.contents ?? "",
-      phoneNum: "",
     });
   } catch (err) {
     const originalRoom = await findRoomById(reservation.roomId);
@@ -259,7 +257,6 @@ export async function modifyReservation(
           endTime: originalEnd.time,
           title: reservation.title,
           contents: reservation.contents ?? "",
-          phoneNum: "",
         });
         await markReservationModified(reservation.id, { cjSeq: restoredSeq });
         restored = true;
