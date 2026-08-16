@@ -63,6 +63,7 @@ import {
   durationMinutes,
   FIXED_SITE,
   MAX_SINGLE_ROOM_MINUTES,
+  normalizeReservationTitle,
 } from "../tools/businessRules";
 
 // ---------------------------------------------------------------------------
@@ -171,6 +172,9 @@ interface OpenAiUsage {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  // 프롬프트 캐싱이 실제로 적중했는지는 이 필드로만 확인할 수 있다 — prompt_tokens 자체는
+  // 캐시 적중 여부와 무관하게 항상 "이번 요청에 넣은 프롬프트 토큰 수"를 그대로 보여준다.
+  prompt_tokens_details?: { cached_tokens?: number };
 }
 
 interface OpenAiChatCompletionResponse {
@@ -401,11 +405,27 @@ async function executeTool(
         const floorLabel = typeof args.floorLabel === "string" ? args.floorLabel : undefined;
         try {
           const result = await findAvailableRooms(userId, { date, startTime, endTime, minCapacity, floorLabel });
+
+          // [20260816 실사용] 특정 층으로 걸러 0곳이면 "다른 층으로 찾아드릴까요?"라고
+          // 되묻기만 하고 끝나는 경우가 있었다 — 정작 같은 시간 다른 층에는 8곳이나
+          // 비어 있었는데도. 층 필터 결과가 비면 같은 조건으로 층 없이 한 번 더 조회해
+          // 대안을 함께 실어준다(사용자를 한 턴 더 기다리게 하지 않는다).
+          let sameTimeOtherFloors: typeof result.others = [];
+          if (floorLabel && result.preferred.length === 0 && result.others.length === 0) {
+            const fallback = await findAvailableRooms(userId, { date, startTime, endTime, minCapacity });
+            sameTimeOtherFloors = [...fallback.preferred, ...fallback.others];
+          }
+
           // 사용자에게 실제로 보여준 슬롯을 서버가 기록해둔다 — 다음 턴에 사용자가 이
           // 중 하나를 고르면 확인 버튼을 한 번 더 누르지 않고 바로 예약한다(3-5b).
           setOfferedSlots(
             session,
-            [...result.preferred, ...result.others].map((room) => ({ roomId: room.id, date, startTime, endTime }))
+            [...result.preferred, ...result.others, ...sameTimeOtherFloors].map((room) => ({
+              roomId: room.id,
+              date,
+              startTime,
+              endTime,
+            }))
           );
           // date/startTime/endTime을 결과에도 그대로 실어준다 — FE-5 카드가 "8월 17일(월)
           // 10:00-11:00"처럼 조건을 다시 보여줄 때, reply 텍스트를 파싱하지 않고 이 값을
@@ -414,6 +434,10 @@ async function executeTool(
             content: {
               preferred: result.preferred.map(toRoomSummary),
               others: result.others.map(toRoomSummary),
+              // 요청한 층에 아무것도 없을 때만 채워진다. 비어있지 않으면 모델이 이걸
+              // 그대로 대안으로 제시해야 한다(3-2b).
+              sameTimeOtherFloors: sameTimeOtherFloors.map(toRoomSummary),
+              requestedFloorLabel: floorLabel ?? null,
               date,
               startTime,
               endTime,
@@ -522,14 +546,16 @@ async function executeTool(
       //  반드시 사용자의 다음 메시지 이후에만 가능하다.)
       // -----------------------------------------------------------------
       case "propose_create_reservation": {
-        const title = requireString(args, "title");
+        // 회의명은 비어있거나 "회의" 같은 placeholder면 서버가 기본 제목으로 교정한다
+        // (businessRules.normalizeReservationTitle 주석 — 프롬프트 지시만으로는 안 막혔다).
+        const title = normalizeReservationTitle(requireString(args, "title"));
         const contents = requireString(args, "contents") ?? "";
         const date = requireString(args, "date");
         const startTime = requireString(args, "startTime");
         const endTime = requireString(args, "endTime");
         const room = requireRoomInput(args, "room");
-        if (!title || !date || !startTime || !endTime || !room) {
-          return errorResult("title/date/startTime/endTime/room은 필수입니다.");
+        if (!date || !startTime || !endTime || !room) {
+          return errorResult("date/startTime/endTime/room은 필수입니다.");
         }
         try {
           assertValidReservationWindow({ date, today: new Date().toISOString().slice(0, 10), startTime, endTime });
@@ -583,12 +609,12 @@ async function executeTool(
       }
 
       case "propose_split_reservation": {
-        const title = requireString(args, "title");
+        const title = normalizeReservationTitle(requireString(args, "title"));
         const contents = requireString(args, "contents") ?? "";
         const date = requireString(args, "date");
         const planRaw = args.plan;
-        if (!title || !date || !Array.isArray(planRaw) || planRaw.length < 2) {
-          return errorResult("title/date/plan(2개 이상)은 필수입니다. plan_long_meeting 결과의 segments를 그대로 전달하세요.");
+        if (!date || !Array.isArray(planRaw) || planRaw.length < 2) {
+          return errorResult("date/plan(2개 이상)은 필수입니다. plan_long_meeting 결과의 segments를 그대로 전달하세요.");
         }
 
         const plan: RoomedSegmentPlan[] = [];
@@ -788,7 +814,7 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
   let lastToolResult: ChatProposal | null = null;
   // 이번 턴 안에서 OpenAI를 여러 번 부를 수 있어(도구 호출 루프) 합산해서 한 번만 로그로
   // 남긴다 — "턴당 토큰이 대략 얼마나 드는지"를 실측할 방법이 이거 말고 없었다.
-  const turnTokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, calls: 0 };
+  const turnTokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cached_tokens: 0, calls: 0 };
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
     const systemPrompt = buildSystemPrompt({
@@ -815,6 +841,7 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
       turnTokenUsage.prompt_tokens += usage.prompt_tokens;
       turnTokenUsage.completion_tokens += usage.completion_tokens;
       turnTokenUsage.total_tokens += usage.total_tokens;
+      turnTokenUsage.cached_tokens += usage.prompt_tokens_details?.cached_tokens ?? 0;
       turnTokenUsage.calls += 1;
     }
 
@@ -876,7 +903,8 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
 
   console.log(
     `[orchestration/orchestrator] 토큰 사용량 (userId=${userId}, OpenAI 호출 ${turnTokenUsage.calls}회): ` +
-      `prompt=${turnTokenUsage.prompt_tokens} completion=${turnTokenUsage.completion_tokens} total=${turnTokenUsage.total_tokens}`
+      `prompt=${turnTokenUsage.prompt_tokens}(캐시적중=${turnTokenUsage.cached_tokens}) ` +
+      `completion=${turnTokenUsage.completion_tokens} total=${turnTokenUsage.total_tokens}`
   );
 
   // 턴 안에서의 mutate(appendMessage, setPendingConfirmation 등)는 전부 메모리 위에서

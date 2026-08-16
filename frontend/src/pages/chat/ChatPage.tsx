@@ -430,7 +430,9 @@ function renderProposalContent(proposal: ChatProposal, onAction: (text: string) 
   switch (proposal.tool) {
     case "check_availability": {
       const data = proposal.data as CheckAvailabilityData;
-      const rooms = [...data.preferred, ...data.others];
+      // 요청한 층에 자리가 없으면 서버가 같은 시간대 다른 층 후보를 함께 실어준다 —
+      // 그 경우에도 카드를 그려야 사용자가 클릭할 수 있다(안 그리면 텍스트만 남는다).
+      const rooms = [...data.preferred, ...data.others, ...(data.sameTimeOtherFloors ?? [])];
       if (rooms.length === 0) return null;
 
       if (data.preferred.length > 0) {

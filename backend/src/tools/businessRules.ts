@@ -23,6 +23,29 @@ export const FIXED_SITE = "상암S시티";
 /** 1차 범위 지원 층 (도메인 정의서 9번 "[결정됨]" — B1F/2F는 후보 풀에서 제외). */
 export const SUPPORTED_FLOOR_LABELS = ["3F", "12F", "13F", "14F", "15F", "16F"] as const;
 
+/** 사용자가 회의명을 끝내 알려주지 않았을 때 쓰는 기본 제목 (사용자 결정, 20260816).
+ * CJ 예약 현황은 다른 직원에게도 보이므로 아무 값이나 넣으면 안 되고, 의미가 있는 하나의
+ * 값으로 고정한다. */
+export const DEFAULT_RESERVATION_TITLE = "데이터 수집/분석 회의";
+
+/** LLM이 회의명을 못 받았을 때 임의로 채워 넣던 무의미한 placeholder들 (실사용에서 관찰됨).
+ * 이런 값이 오면 사용자가 실제로 준 제목이 아니므로 기본 제목으로 교체한다. */
+const PLACEHOLDER_TITLES = ["회의", "미팅", "meeting", "회의실", "예약"];
+
+/**
+ * 저장 직전 회의명을 정규화한다. 비어있거나 LLM이 지어낸 placeholder면 기본 제목으로 바꾼다.
+ *
+ * [배경 — 20260816 실사용] 프롬프트로 "title은 사용자에게 물어서 받은 값만 쓰고 '회의' 같은
+ * placeholder를 채워 넣지 말 것"이라고 지시했지만, 목록에서 회의실을 고르면 서버가 즉시
+ * 실행하는 경로(3-5b)에서 모델이 회의명을 묻지 않고 그냥 "회의"로 저장해버린 사례가 나왔다.
+ * 프롬프트 지시만으로는 막히지 않으므로 서버에서 결정론적으로 교정한다.
+ */
+export function normalizeReservationTitle(title: string | null | undefined): string {
+  const trimmed = (title ?? "").trim();
+  if (trimmed === "") return DEFAULT_RESERVATION_TITLE;
+  return PLACEHOLDER_TITLES.includes(trimmed.toLowerCase()) ? DEFAULT_RESERVATION_TITLE : trimmed;
+}
+
 function timeToMinutes(hhmm: string): number {
   const [hourStr, minuteStr] = hhmm.split(":");
   return Number(hourStr) * 60 + Number(minuteStr);
