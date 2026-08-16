@@ -167,6 +167,12 @@ interface OpenAiRequestMessage {
   tool_calls?: OpenAiToolCall[];
 }
 
+interface OpenAiUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 interface OpenAiChatCompletionResponse {
   choices: Array<{
     message: {
@@ -176,12 +182,18 @@ interface OpenAiChatCompletionResponse {
     };
     finish_reason: string;
   }>;
+  usage?: OpenAiUsage;
   error?: { message: string };
 }
 
 const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
 
-async function callOpenAi(messages: OpenAiRequestMessage[]): Promise<OpenAiChatCompletionResponse["choices"][0]["message"]> {
+/** [2026-08-16 추가] 턴당 실제 토큰 사용량을 알 방법이 없어("대략 얼마나 쓰냐"는 질문에
+ * 프롬프트 글자 수로 추측만 할 수 있었다) OpenAI 응답의 usage를 그대로 실어 돌려준다.
+ * 매 턴 여러 번(도구 호출 루프) 호출되므로, 합산은 호출부(handleUserMessage)가 한다. */
+async function callOpenAi(
+  messages: OpenAiRequestMessage[]
+): Promise<{ message: OpenAiChatCompletionResponse["choices"][0]["message"]; usage: OpenAiUsage | null }> {
   const response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
     method: "POST",
     headers: {
@@ -210,7 +222,7 @@ async function callOpenAi(messages: OpenAiRequestMessage[]): Promise<OpenAiChatC
   if (!message) {
     throw new Error("[orchestration/orchestrator] OpenAI 응답에 message가 없습니다.");
   }
-  return message;
+  return { message, usage: body.usage ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -774,6 +786,9 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
 
   let finalReply: string | null = null;
   let lastToolResult: ChatProposal | null = null;
+  // 이번 턴 안에서 OpenAI를 여러 번 부를 수 있어(도구 호출 루프) 합산해서 한 번만 로그로
+  // 남긴다 — "턴당 토큰이 대략 얼마나 드는지"를 실측할 방법이 이거 말고 없었다.
+  const turnTokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, calls: 0 };
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
     const systemPrompt = buildSystemPrompt({
@@ -795,7 +810,13 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
       })),
     ];
 
-    const assistantMessage = await callOpenAi(messages);
+    const { message: assistantMessage, usage } = await callOpenAi(messages);
+    if (usage) {
+      turnTokenUsage.prompt_tokens += usage.prompt_tokens;
+      turnTokenUsage.completion_tokens += usage.completion_tokens;
+      turnTokenUsage.total_tokens += usage.total_tokens;
+      turnTokenUsage.calls += 1;
+    }
 
     const storedAssistantMessage: StoredChatMessage = {
       role: "assistant",
@@ -852,6 +873,11 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
   } else {
     finalReply = collapseDuplicateLines(finalReply);
   }
+
+  console.log(
+    `[orchestration/orchestrator] 토큰 사용량 (userId=${userId}, OpenAI 호출 ${turnTokenUsage.calls}회): ` +
+      `prompt=${turnTokenUsage.prompt_tokens} completion=${turnTokenUsage.completion_tokens} total=${turnTokenUsage.total_tokens}`
+  );
 
   // 턴 안에서의 mutate(appendMessage, setPendingConfirmation 등)는 전부 메모리 위에서
   // 일어나고, 실제 DB 저장은 턴이 끝나는 이 시점 한 번뿐이다 — 매 mutate마다 DB를

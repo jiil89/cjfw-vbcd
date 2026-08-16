@@ -76,4 +76,28 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt({ today: "2026-08-13", rooms: SAMPLE_ROOMS });
     expect(prompt).not.toContain("지금 사용자의 확인을 기다리고 있는 제안이 있습니다");
   });
+
+  // [2026-08-16 추가] OpenAI 프롬프트 캐싱은 "앞부분이 정확히 일치하는 구간까지만" 캐시를
+  // 재사용한다 — 한 글자라도 다르면 그 뒤 전체가 통째로 캐시 미스가 된다. pendingConfirmation은
+  // propose 직후/confirm 이후로 매 턴 바뀌는 값이라, 예전에는 이걸 프롬프트 중간(§3-5b
+  // 다음)에 끼워 넣어서 회의실 목록·응답 스타일 규칙을 포함한 뒷부분 전체가 매번 다시
+  // 계산됐다. pendingConfirmation을 프롬프트 맨 끝에만 붙이도록 옮겨서, 그 앞부분(회의실
+  // 목록 포함)은 확인 대기 상태와 무관하게 항상 동일한 문자열이 되게 했다 — 이게 깨지면
+  // 캐시 적중률이 실사용 트래픽에서 조용히 나빠지므로 회귀 테스트로 고정한다.
+  it("pendingConfirmation 유무와 무관하게 프롬프트 앞부분(회의실 목록 포함)이 완전히 동일하다 (프롬프트 캐싱 적중률 보존)", () => {
+    const base = { today: "2026-08-13", rooms: SAMPLE_ROOMS };
+    const withoutPending = buildSystemPrompt(base);
+    const withPending = buildSystemPrompt({
+      ...base,
+      pendingConfirmation: { kind: "create_reservation", token: "abc-123", summary: "3F-1 15:00~16:00" },
+    });
+
+    // withPending은 withoutPending 뒤에 내용을 "추가"한 것이어야 한다 — 중간에 끼워넣으면
+    // 이 접두사 검사가 실패한다.
+    expect(withPending.startsWith(withoutPending)).toBe(true);
+    // 회의실 목록처럼 상대적으로 큰 정적 블록이 여전히 공통 접두사 안에 있는지도 확인한다.
+    expect(withoutPending).toContain("3F-1(정원 8인)");
+    const roomListIndex = withoutPending.indexOf("3F-1(정원 8인)");
+    expect(withPending.slice(0, roomListIndex + 20)).toBe(withoutPending.slice(0, roomListIndex + 20));
+  });
 });
