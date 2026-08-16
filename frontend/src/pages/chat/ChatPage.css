@@ -26,14 +26,11 @@
   min-width: 0;
 }
 
-/* 아이콘 색은 Fin Orange — DESIGN.md에서 이 앱의 AI 요소를 나타내는 색이고,
-   챗봇 답변 아바타와 같은 의미로 브랜드 마크에도 쓴다(BrandMarkIcon 주석 참고). */
+/* 로봇 캐릭터 이미지가 이미 완결된 아이콘이라 배경/색을 따로 씌우지 않는다
+   (BrandMarkIcon 주석 참고) — 크기만 담당. */
 .chat-brand-mark {
   width: 22px;
   height: 22px;
-  border-radius: var(--radius-sm);
-  background: var(--ink);
-  color: var(--fin-orange);
   display: inline-flex;
   align-items: center;
   justify-content: center;

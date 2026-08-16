@@ -62,7 +62,7 @@ export function RegisterPage() {
       <div className="register-column">
         <div className="register-brand">
           <div className="register-logo" aria-hidden="true">
-            <BrandMarkIcon size={20} />
+            <BrandMarkIcon size={36} />
           </div>
           <div className="register-brand-text">
             <h1 className="register-title">계정 등록 신청</h1>

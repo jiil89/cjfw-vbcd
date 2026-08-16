@@ -41,7 +41,7 @@ export function LoginPage() {
       <div className="login-column">
         <div className="login-brand">
           <div className="login-logo" aria-hidden="true">
-            <BrandMarkIcon size={20} />
+            <BrandMarkIcon size={36} />
           </div>
           <div className="login-brand-text">
             <h1 className="login-title">회의실 예약</h1>

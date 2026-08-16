@@ -221,7 +221,7 @@ export function ChatPage() {
       <header className="chat-topbar">
         <div className="chat-brand">
           <span className="chat-brand-mark">
-            <BrandMarkIcon size={13} />
+            <BrandMarkIcon size={22} />
           </span>
           <span className="chat-brand-name">회의실 예약</span>
           <span className="chat-brand-site mono">상암S시티</span>
