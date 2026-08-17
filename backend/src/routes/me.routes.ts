@@ -302,6 +302,21 @@ meRouter.patch("/recurring-rules/:id", requireAuth, async (req: AuthenticatedReq
     return;
   }
 
+  // [버그 수정, 20260818] 끄는 건 항상 허용하지만, 다시 켜려면 POST와 동일하게 동의를
+  // 재확인한다 — 없으면 동의 철회 후에도 토글로 규칙을 재활성화할 수 있는 구멍이 생긴다.
+  if (is_active) {
+    const user = await findUserById(req.user!.userId);
+    if (!user || !hasValidUnattendedBookingConsent(user)) {
+      res.status(400).json({
+        error: {
+          code: "CONSENT_REQUIRED",
+          message: "반복 예약을 다시 켜려면 에이전트 자동 실행 동의가 먼저 필요합니다.",
+        },
+      });
+      return;
+    }
+  }
+
   try {
     const updated = await setRuleActive(req.user!.userId, req.params.id, is_active);
     if (!updated) {

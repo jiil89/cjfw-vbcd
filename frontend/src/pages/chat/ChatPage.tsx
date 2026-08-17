@@ -1242,9 +1242,20 @@ function recurWeekdayLine(rule: RecurringRule): string {
 function RecurringRuleCard({ rule }: { rule: RecurringRule }) {
   const toggleMutation = useToggleRecurringRuleMutation();
   const deleteMutation = useDeleteRecurringRuleMutation();
+  const [toggleErrorText, setToggleErrorText] = useState<string | null>(null);
 
   function handleToggle() {
-    toggleMutation.mutate({ id: rule.id, is_active: !rule.is_active });
+    setToggleErrorText(null);
+    toggleMutation.mutate(
+      { id: rule.id, is_active: !rule.is_active },
+      {
+        onError: (error) => {
+          setToggleErrorText(
+            error instanceof HttpError ? error.message : "변경 중 오류가 발생했어요. 잠시 후 다시 시도해주세요."
+          );
+        },
+      }
+    );
   }
 
   function handleDelete() {
@@ -1280,6 +1291,7 @@ function RecurringRuleCard({ rule }: { rule: RecurringRule }) {
           ))}
       </div>
 
+      {toggleErrorText && <p className="chat-pw-error">{toggleErrorText}</p>}
       {rule.latest_run && <RecurringRunResult run={rule.latest_run} />}
 
       <button
