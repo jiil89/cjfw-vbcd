@@ -41,6 +41,12 @@
   --color-semantic-warn: #9a6b12;
   --color-semantic-warn-soft: rgba(154, 107, 18, 0.1);
 
+  /* PROPOSED — DESIGN.md에는 "강조 안내(notice)"용 파랑 semantic이 없다. 다만 팔레트에
+     brand-blue(#0007cb)가 이미 정의돼 있어 신규 hex를 창작하지 않고 그대로 쓴다.
+     반복 예약 동의문처럼 "사용자가 반드시 읽어야 하는 문장"을 굵게+파랑으로 강조하는 데 쓴다
+     (warn=주의, error=실패와 구분되는 중립적 강조). */
+  --color-semantic-notice: #0007cb;
+
   /* 현재 테마에서 실제로 쓰는 alias — 컴포넌트는 이 alias만 참조한다.
      라이트 기본값이며, 다크 블록에서 재정의된다. */
   --canvas: var(--color-canvas);
@@ -61,6 +67,7 @@
   --semantic-error-soft: var(--color-semantic-error-soft);
   --semantic-warn: var(--color-semantic-warn);
   --semantic-warn-soft: var(--color-semantic-warn-soft);
+  --semantic-notice: var(--color-semantic-notice);
 
   /* ---- Typography — DESIGN.md `typography` ----
      Saans/SaansMono는 사내 배포 불가한 proprietary 폰트이므로
@@ -146,6 +153,9 @@
     /* warn만 예외적으로 다크 변형이 필요 — chatbot-shell.html이 이미 정의해둔 값 그대로. */
     --color-semantic-warn: #d6a15c;
     --color-semantic-warn-soft: rgba(214, 161, 92, 0.14);
+    /* notice도 다크 변형이 필수 — 라이트값 brand-blue(#0007cb)는 검은 캔버스에서 거의 안 보인다.
+       DESIGN.md 리포트 팔레트의 report-blue를 그대로 쓴다(신규 hex 아님). */
+    --color-semantic-notice: #65b5ff;
 
     --canvas: var(--color-inverse-canvas);
     --surface-1: var(--color-inverse-surface-1);
@@ -160,6 +170,7 @@
     --primary-fg: var(--color-inverse-canvas);
     --semantic-warn: var(--color-semantic-warn);
     --semantic-warn-soft: var(--color-semantic-warn-soft);
+    --semantic-notice: var(--color-semantic-notice);
 
     /* fin-orange/success/error semantic 색은 DESIGN.md가 다크 변형을 정의하지 않았고,
        배지/버튼의 배경색(칠 영역)으로만 쓰여 검정 캔버스 위에서도 충분한
@@ -176,6 +187,7 @@
   --color-inverse-hairline-soft: rgba(255, 255, 255, 0.08);
   --color-semantic-warn: #d6a15c;
   --color-semantic-warn-soft: rgba(214, 161, 92, 0.14);
+  --color-semantic-notice: #65b5ff;
 
   --canvas: var(--color-inverse-canvas);
   --surface-1: var(--color-inverse-surface-1);
@@ -190,6 +202,7 @@
   --primary-fg: var(--color-inverse-canvas);
   --semantic-warn: var(--color-semantic-warn);
   --semantic-warn-soft: var(--color-semantic-warn-soft);
+  --semantic-notice: var(--color-semantic-notice);
 }
 
 * {

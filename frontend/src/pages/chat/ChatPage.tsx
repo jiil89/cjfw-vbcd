@@ -1330,9 +1330,13 @@ function UnattendedConsentGate() {
     <form className="chat-pw-form" onSubmit={handleSubmit}>
       <p className="chat-pw-hint">
         매주 반복 예약을 쓰려면 무인 자동 실행에 동의해야 해요. 대상일 7일 전 자정 직후,{" "}
-        <b>제가 앱에 없을 때도 서버가 제 CJ WORLD 계정으로 로그인해</b> 예약을 대신 잡습니다.
+        <b className="chat-recur-notice">제가 앱에 없을 때도 서버가 제 CJ WORLD 계정으로 로그인해</b> 예약을 대신
+        잡습니다.
         <br />
-        단, <b>이 사무실 PC가 꺼져 있거나 사내망에 연결되어 있지 않으면 그날 예약은 실행되지 않아요</b> —
+        <b className="chat-recur-notice">
+          회의실 예약 챗봇 서버가 가동중이 아닌 경우 반복 예약은 실행되지 않을 수 있으니 최종 사용자가 직접 확인을
+          권장드립니다.
+        </b>{" "}
         실행 여부는 각 규칙의 "최근 실행 결과"에서 확인할 수 있어요.
       </p>
       <label className="chat-recur-consent-checkbox">

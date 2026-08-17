@@ -1165,6 +1165,13 @@
    제목(.chat-rail-title) 대신 토글 버튼이 섹션 헤더 역할을 한다. 생김새는 다른 토글
    (.chat-pw-toggle)과 완전히 동일하게 두고 굵기를 따로 주지 않는다(사용자 요청, 20260817). */
 
+/* 동의문에서 사용자가 반드시 읽어야 하는 문장 — 굵게 + 파랑(--semantic-notice).
+   라이트는 brand-blue, 다크는 report-blue로 tokens.css가 알아서 바꿔준다. */
+.chat-recur-notice {
+  color: var(--semantic-notice);
+  font-weight: 700;
+}
+
 .chat-recur-panel {
   margin-top: var(--space-xs);
 }
