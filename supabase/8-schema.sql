@@ -120,6 +120,14 @@ create table if not exists public.users (
   approved_at timestamptz not null default now(),  -- 등록 승인 일시
   revoked_at timestamptz,                          -- 동의 철회 일시 (해당 시에만 값 존재)
 
+  -- [20260817 추가] 매주 반복 예약 기능용 무인(unattended) 로그인 동의 기록. 반복 예약은
+  -- 대상일이 CJ 예약 가능 범위(7일 전)에 들어오는 순간 사용자가 앱에 없어도 서버가 그
+  -- 사용자의 CJ 계정으로 대신 로그인해 예약을 생성해야 하므로, 평소 요청 기반 로그인과
+  -- 달리 별도의 명시적 동의가 필요하다. 유효한 동의 = consent_at is not null and
+  -- consent_revoked_at is null. 상세 근거는 supabase/migrations/20260817000000_recurring_reservations.sql 참고.
+  unattended_booking_consent_at timestamptz,
+  unattended_booking_consent_revoked_at timestamptz,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -130,6 +138,10 @@ comment on column public.users.encrypted_password is
   '애플리케이션 레벨 AES로 암호화된 사내 계정 비밀번호(복호화 가능, CJ 자동화 로그인용). DB 자체 암호화 기능에 의존하지 않음. 평문 저장/로깅 금지.';
 comment on column public.users.app_password_hash is
   '이 서비스 자체 로그인용 비밀번호 해시(bcrypt/argon2 등 단방향, 복호화 불가/불필요). 사내 계정 비밀번호(encrypted_password)와 절대 혼동 금지.';
+comment on column public.users.unattended_booking_consent_at is
+  '매주 반복 예약을 위해 서버가 사용자 CJ 계정으로 무인 로그인하는 것에 동의한 시각. 반복 예약 규칙을 만들려면 이 동의가 유효해야 한다(철회 안 됨).';
+comment on column public.users.unattended_booking_consent_revoked_at is
+  '무인 로그인 동의를 철회한 시각. NULL이면 아직 철회 안 함. 철회되면 그 시점부터 이 사용자의 반복 예약 실행을 중단해야 한다(서버 로직에서 강제).';
 
 -- admin_whitelist.added_by_user_id -> users.id FK
 alter table public.admin_whitelist
@@ -442,6 +454,112 @@ comment on column public.chat_sessions.state is
 
 
 -- -----------------------------------------------------------------------------
+-- 6-2. RecurringReservationRule / RecurringReservationRuleRoom / RecurringReservationRun
+--       (매주 반복 예약)
+-- -----------------------------------------------------------------------------
+-- [배경] CJ 시스템은 오늘~7일 뒤까지만 예약을 받는다(backend/src/tools/businessRules.ts의
+-- MAX_ADVANCE_DAYS = 7). 그래서 "매주 화요일 3개월치"처럼 먼 미래 예약을 CJ에 한 번에
+-- 미리 넣어둘 방법이 없다. 대신 사용자가 "요일/시간/회의실 우선순위" 같은 반복 규칙만
+-- 등록해두면, 서버는 대상일이 예약 가능 범위(7일 전)에 들어오는 순간(대상일 00:01)
+-- Windows 작업 스케줄러로 잡을 돌려 그때 실제 CJ 예약을 생성하는 구조다. 사용자가 앱을
+-- 열어보지 않은 상태에서도 실행돼야 하므로, 서버가 그 사용자의 CJ 계정으로 무인 로그인을
+-- 수행하며 이에 대한 별도 동의 기록은 users.unattended_booking_consent_at(위 2번 참고)이 담당한다.
+--
+-- 상세 설계 근거: supabase/migrations/20260817000000_recurring_reservations.sql
+
+create table if not exists public.recurring_reservation_rules (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  -- 0=일요일 ~ 6=토요일. JS Date.getDay() 규약을 그대로 따른다(별도 enum/매핑 테이블 없이
+  -- 백엔드 Node.js 코드와 값 변환 없이 바로 맞물리게 하기 위함).
+  weekday smallint not null check (weekday between 0 and 6),
+
+  start_time time not null,
+  end_time time not null,
+
+  title text not null,
+  contents text,
+
+  is_active boolean not null default true,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  constraint recurring_reservation_rules_time_order check (end_time > start_time)
+);
+
+create index if not exists recurring_reservation_rules_user_id_idx
+  on public.recurring_reservation_rules (user_id);
+
+create index if not exists recurring_reservation_rules_weekday_active_idx
+  on public.recurring_reservation_rules (weekday, is_active);
+
+comment on table public.recurring_reservation_rules is
+  '사용자가 등록한 매주 반복 예약 규칙. CJ는 7일 뒤까지만 예약을 받으므로 여기 저장된 규칙 자체는
+   CJ에 아직 반영되지 않은 "의도"이고, 실제 예약 생성은 대상일이 예약 가능 범위에 들어올 때마다
+   Windows 작업 스케줄러가 recurring_reservation_runs를 통해 수행한다.';
+
+create trigger recurring_reservation_rules_set_updated_at
+  before update on public.recurring_reservation_rules
+  for each row
+  execute function public.set_updated_at();
+
+-- [user_preferred_rooms와의 차이 - 반드시 구분할 것] 기존 user_preferred_rooms는 사용자
+-- 전역 선호도(평소 예약 추천/정렬용)이고, 이 테이블은 "이 반복 규칙 하나를 실행할 때 몇
+-- 순위 회의실부터 시도할지"를 나타내는 규칙 단위 시도 순서다. 같은 사용자라도 반복 규칙마다
+-- 시도 순서가 다를 수 있어 별도 테이블로 두되, "우선순위 있는 회의실 목록"이라는 성격이
+-- 같으므로 제약 구조(unique 2개)는 user_preferred_rooms와 의도적으로 동일하게 맞췄다.
+
+create table if not exists public.recurring_reservation_rule_rooms (
+  id uuid primary key default gen_random_uuid(),
+  rule_id uuid not null references public.recurring_reservation_rules(id) on delete cascade,
+  room_id uuid not null references public.rooms(id) on delete cascade,
+  priority int not null,  -- 1이 최우선
+
+  created_at timestamptz not null default now(),
+
+  unique (rule_id, room_id),
+  unique (rule_id, priority)
+);
+
+comment on table public.recurring_reservation_rule_rooms is
+  '반복 예약 규칙별 회의실 시도 순서(1~3순위). user_preferred_rooms(사용자 전역 선호도)와는
+   목적이 다른 규칙 단위 속성이다.';
+
+-- [unique (rule_id, target_date)가 멱등성 키인 이유] Windows 작업 스케줄러는 PC 재부팅,
+-- 잡 재실행 등으로 같은 (규칙, 대상일) 조합을 두 번 실행할 수 있다. 이 제약이 없으면 같은
+-- 시간대에 같은 회의실을 중복 예약 시도할 위험이 있다. 잡 코드는 실행 전 기존 row 존재
+-- 여부로 "이미 처리됨"을 판단한다.
+
+create table if not exists public.recurring_reservation_runs (
+  id uuid primary key default gen_random_uuid(),
+  rule_id uuid not null references public.recurring_reservation_rules(id) on delete cascade,
+
+  target_date date not null,
+
+  status text not null check (status in ('succeeded', 'failed', 'skipped')),
+
+  reservation_id uuid references public.reservations(id) on delete set null,
+  booked_room_id uuid references public.rooms(id),
+
+  attempted_priority int,   -- recurring_reservation_rule_rooms.priority 중 몇 순위로 성공/시도했는지
+  failure_reason text,
+
+  executed_at timestamptz not null default now(),
+
+  unique (rule_id, target_date)
+);
+
+create index if not exists recurring_reservation_runs_rule_id_executed_at_idx
+  on public.recurring_reservation_runs (rule_id, executed_at desc);
+
+comment on table public.recurring_reservation_runs is
+  '반복 예약 규칙이 대상일마다 실제로 실행된 기록. unique (rule_id, target_date)가 멱등성 키로,
+   Windows 작업 스케줄러 중복 실행으로 인한 CJ 중복 예약을 막는다.';
+
+
+-- -----------------------------------------------------------------------------
 -- 7. 계정 등록 요청 승인/거부 함수
 -- -----------------------------------------------------------------------------
 -- [설계 결정] 화이트리스트 대조 로직 자체는 DB 트리거가 아니라 "서버 코드"에서 수행한다. 이유:
@@ -658,6 +776,9 @@ alter table public.reservations enable row level security;
 alter table public.alternative_suggestions enable row level security;
 alter table public.refresh_tokens enable row level security;
 alter table public.chat_sessions enable row level security;
+alter table public.recurring_reservation_rules enable row level security;
+alter table public.recurring_reservation_rule_rooms enable row level security;
+alter table public.recurring_reservation_runs enable row level security;
 
 -- rooms: 회원가입 웹페이지가 "선호 회의실" 선택 UI를 보여주기 위해 예약 가능한 회의실 목록을
 -- anon key로 읽을 수 있어야 한다. 민감정보가 아니므로 공개 조회를 허용한다.
@@ -691,8 +812,9 @@ create policy account_registration_requests_public_insert
 -- 키 분리 + 백엔드 자체의 Admin 인증(JWT + is_admin 검증)으로 보장한다.
 
 -- users, admin_whitelist, user_preferred_rooms, reservation_requests, reservations,
--- alternative_suggestions, refresh_tokens, chat_sessions: anon/authenticated용 정책을 전혀 만들지 않는다.
--- RLS가 켜져 있고 정책이 없으면 기본값은 "모두 거부"이므로, 이 테이블들은 anon/authenticated
--- 키로는 어떤 행도 읽거나 쓸 수 없다. service role key를 쓰는 백엔드만 접근 가능하며,
--- "사용자는 자기 자신의 데이터만" 원칙은 백엔드가 JWT의 user_id로 매번 WHERE 필터링하는
--- 애플리케이션 레벨 로직으로 강제한다 (위 아키텍처 전제 참고).
+-- alternative_suggestions, refresh_tokens, chat_sessions, recurring_reservation_rules,
+-- recurring_reservation_rule_rooms, recurring_reservation_runs: anon/authenticated용 정책을
+-- 전혀 만들지 않는다. RLS가 켜져 있고 정책이 없으면 기본값은 "모두 거부"이므로, 이
+-- 테이블들은 anon/authenticated 키로는 어떤 행도 읽거나 쓸 수 없다. service role key를
+-- 쓰는 백엔드만 접근 가능하며, "사용자는 자기 자신의 데이터만" 원칙은 백엔드가 JWT의
+-- user_id로 매번 WHERE 필터링하는 애플리케이션 레벨 로직으로 강제한다 (위 아키텍처 전제 참고).

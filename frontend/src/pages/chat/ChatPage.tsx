@@ -12,6 +12,16 @@ import {
   useSendChatMessageMutation,
   useTodayReservationsQuery,
 } from "../../queries/chatQueries";
+import { useRoomsQuery } from "../../queries/registrationQueries";
+import {
+  useCreateRecurringRuleMutation,
+  useDeleteRecurringRuleMutation,
+  useGiveUnattendedConsentMutation,
+  useRecurringRulesQuery,
+  useRevokeUnattendedConsentMutation,
+  useToggleRecurringRuleMutation,
+  useUnattendedConsentQuery,
+} from "../../queries/recurringQueries";
 import type {
   CheckAvailabilityData,
   ChatProposal,
@@ -24,6 +34,7 @@ import type {
   ProposeSplitReservationData,
   ReservationCandidate,
 } from "../../types/chat";
+import type { RecurringRule, RecurringRuleLatestRun } from "../../types/recurring";
 import type { Room } from "../../types/room";
 
 /** 이 앱에서 지원하는 6개 층의 정렬 순서 — 시스템 프롬프트(systemPrompt.ts)의
@@ -921,6 +932,7 @@ function ChatRailContent({ todayGroups, todayLoading, preferredRooms, preferredL
       <TodayReservationsRail groups={todayGroups} isLoading={todayLoading} onAction={onAction} />
       <PreferredRoomsRail rooms={preferredRooms} isLoading={preferredLoading} />
       <PasswordSettingsRail />
+      <RecurringBookingRail />
       <div className="chat-info-banner">
         같은 회의실은 하루 <b>최대 2시간</b>까지만 예약할 수 있어요. 더 필요하면 다른 회의실로 이어서 잡아드려요.
       </div>
@@ -1104,6 +1116,505 @@ function AppPasswordForm({ onClose }: { onClose: () => void }) {
         변경
       </Button>
     </form>
+  );
+}
+
+// ---- 매주 반복 예약 ----
+// CJ는 오늘~7일 뒤까지만 예약을 받으므로, 반복 예약은 미리 여러 건을 만들어두는 게 아니라
+// "대상일 7일 전 자정 직후"에 서버가 자동으로 잡는 방식이다(백엔드 스케줄러). 자동 실행은
+// 이 사무실 PC가 켜져 있고 사내망에 붙어 있을 때만 동작하므로, 그 한계를 동의 화면에서
+// 솔직히 안내한다.
+
+const RECUR_MAX_DURATION_MINUTES = 120; // 도메인 정의서 6번: 회의실 1건당 하루 최대 2시간
+const RECUR_OPEN_MINUTES = 7 * 60; // 07:00
+const RECUR_CLOSE_MINUTES = 19 * 60; // 19:00
+const RECUR_STEP_MINUTES = 30;
+
+function recurMinutesToHHMM(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function recurHHMMToMinutes(value: string): number {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+// 07:00 ~ 18:30(30분 단위) — 마지막 시작 시각은 18:30이어야 30분짜리 회의라도 19:00 안에 끝난다.
+const RECUR_START_OPTIONS: string[] = [];
+for (let mins = RECUR_OPEN_MINUTES; mins < RECUR_CLOSE_MINUTES; mins += RECUR_STEP_MINUTES) {
+  RECUR_START_OPTIONS.push(recurMinutesToHHMM(mins));
+}
+
+/** 선택한 시작 시각 기준, 30분 단위 · 최대 2시간 · 19:00을 넘지 않는 종료 시각 후보. */
+function recurEndOptions(startTime: string): string[] {
+  const startMinutes = recurHHMMToMinutes(startTime);
+  const maxEnd = Math.min(startMinutes + RECUR_MAX_DURATION_MINUTES, RECUR_CLOSE_MINUTES);
+  const options: string[] = [];
+  for (let mins = startMinutes + RECUR_STEP_MINUTES; mins <= maxEnd; mins += RECUR_STEP_MINUTES) {
+    options.push(recurMinutesToHHMM(mins));
+  }
+  return options;
+}
+
+/** 사이드바 "매주 반복 예약" — PasswordSettingsRail과 같은 패턴(자체 쿼리/뮤테이션 보유,
+ * 데스크톱 사이드바·모바일 시트가 이 컴포넌트 하나를 그대로 공유). */
+function RecurringBookingRail() {
+  // [2026-08-17 사용자 요청] 사이드바가 길어지지 않도록 섹션 전체를 기본으로 접어둔다.
+  // 사용자가 "열기"를 눌렀을 때만 목록/동의 화면을 불러온다 — 접힌 동안에는 쿼리도
+  // 보내지 않아(enabled) 사이드바를 여는 것만으로 불필요한 API 호출이 생기지 않는다.
+  const [isSectionOpen, setIsSectionOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        type="button"
+        className="chat-pw-toggle chat-recur-section-toggle"
+        aria-expanded={isSectionOpen}
+        onClick={() => setIsSectionOpen((prev) => !prev)}
+      >
+        매주 반복 예약
+        <span className="chat-pw-chevron" aria-hidden="true">
+          {isSectionOpen ? "−" : "+"}
+        </span>
+      </button>
+      {isSectionOpen && <RecurringBookingPanel />}
+    </div>
+  );
+}
+
+/** 섹션을 펼쳤을 때만 마운트되는 본문 — 목록 + 동의 게이트 + 새 규칙 폼. */
+function RecurringBookingPanel() {
+  const rulesQuery = useRecurringRulesQuery();
+  const consentQuery = useUnattendedConsentQuery();
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
+  return (
+    <div className="chat-recur-panel">
+      {rulesQuery.isLoading && <p className="chat-rail-empty">불러오는 중…</p>}
+      {rulesQuery.isError && <p className="chat-pw-error">목록을 불러오지 못했어요.</p>}
+      {rulesQuery.data && rulesQuery.data.length === 0 && (
+        <p className="chat-rail-empty">등록된 반복 예약이 없어요.</p>
+      )}
+      {rulesQuery.data && rulesQuery.data.length > 0 && (
+        <ul className="chat-recur-list">
+          {rulesQuery.data.map((rule) => (
+            <RecurringRuleCard key={rule.id} rule={rule} />
+          ))}
+        </ul>
+      )}
+
+      {consentQuery.isError && <p className="chat-pw-error">동의 상태를 불러오지 못했어요.</p>}
+
+      {!consentQuery.isLoading && consentQuery.data && !consentQuery.data.consented && (
+        <UnattendedConsentGate />
+      )}
+
+      {!consentQuery.isLoading && consentQuery.data?.consented && (
+        <>
+          <button
+            type="button"
+            className="chat-pw-toggle"
+            aria-expanded={isFormOpen}
+            onClick={() => setIsFormOpen((prev) => !prev)}
+          >
+            새 반복 예약 추가
+            <span className="chat-pw-chevron" aria-hidden="true">
+              {isFormOpen ? "−" : "+"}
+            </span>
+          </button>
+          {isFormOpen && <RecurringRuleForm onDone={() => setIsFormOpen(false)} />}
+          <RevokeUnattendedConsentControl />
+        </>
+      )}
+    </div>
+  );
+}
+
+function recurWeekdayLine(rule: RecurringRule): string {
+  return `매주 ${WEEKDAY_LABELS[rule.weekday]}요일 · ${rule.start_time}~${rule.end_time}`;
+}
+
+/** 등록된 규칙 한 건 — 회의실 우선순위, 활성 토글, 삭제, 최근 실행 결과. */
+function RecurringRuleCard({ rule }: { rule: RecurringRule }) {
+  const toggleMutation = useToggleRecurringRuleMutation();
+  const deleteMutation = useDeleteRecurringRuleMutation();
+
+  function handleToggle() {
+    toggleMutation.mutate({ id: rule.id, is_active: !rule.is_active });
+  }
+
+  function handleDelete() {
+    if (!window.confirm(`"${rule.title}" 반복 예약을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    deleteMutation.mutate(rule.id);
+  }
+
+  return (
+    <li className={`chat-recur-card ${!rule.is_active ? "chat-recur-card-inactive" : ""}`}>
+      <div className="chat-recur-head">
+        <span className="chat-recur-when mono">{recurWeekdayLine(rule)}</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={rule.is_active}
+          aria-label={rule.is_active ? `${rule.title} 비활성화` : `${rule.title} 활성화`}
+          className="chat-recur-switch"
+          disabled={toggleMutation.isPending}
+          onClick={handleToggle}
+        >
+          <span className="chat-recur-switch-knob" aria-hidden="true" />
+        </button>
+      </div>
+      <div className="chat-recur-title">{rule.title}</div>
+      <div className="chat-recur-rooms">
+        {rule.rooms
+          .slice()
+          .sort((a, b) => a.priority - b.priority)
+          .map((room) => (
+            <span key={room.room_id} className="chat-recur-room-chip">
+              {room.priority}. {room.room_name}
+            </span>
+          ))}
+      </div>
+
+      {rule.latest_run && <RecurringRunResult run={rule.latest_run} />}
+
+      <button
+        type="button"
+        className="chat-recur-delete"
+        disabled={deleteMutation.isPending}
+        onClick={handleDelete}
+      >
+        {deleteMutation.isPending ? "삭제하는 중…" : "삭제"}
+      </button>
+    </li>
+  );
+}
+
+/** 최근 실행 결과 — 성공/실패/건너뜀을 시각적으로 구분한다. 실패는 기존 semantic-error 톤을 쓴다. */
+function RecurringRunResult({ run }: { run: RecurringRuleLatestRun }) {
+  const dateLabel = formatDateWithWeekday(run.target_date);
+
+  if (run.status === "succeeded") {
+    return (
+      <span className="chat-status-line chat-recur-run">
+        <span className="chat-status-dot-inline" aria-hidden="true" />
+        {dateLabel} · {run.booked_room_name ?? "회의실 미상"}으로 예약 완료
+      </span>
+    );
+  }
+
+  if (run.status === "failed") {
+    return (
+      <p className="chat-recur-run chat-recur-run-failed">
+        {dateLabel} 예약 실패 — {run.failure_reason ?? "사유를 확인할 수 없어요."}
+      </p>
+    );
+  }
+
+  return <p className="chat-recur-run chat-recur-run-skipped">{dateLabel} 실행 건너뜀</p>;
+}
+
+/** 동의 게이트 — 무인 자동 실행에 동의해야 새 규칙 폼이 열린다. */
+function UnattendedConsentGate() {
+  const [checked, setChecked] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const mutation = useGiveUnattendedConsentMutation();
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!checked || mutation.isPending) return;
+    setErrorText(null);
+    mutation.mutate(undefined, {
+      onError: (error) => {
+        setErrorText(
+          error instanceof HttpError ? error.message : "동의 처리 중 오류가 발생했어요. 잠시 후 다시 시도해주세요."
+        );
+      },
+    });
+  }
+
+  return (
+    <form className="chat-pw-form" onSubmit={handleSubmit}>
+      <p className="chat-pw-hint">
+        매주 반복 예약을 쓰려면 무인 자동 실행에 동의해야 해요. 대상일 7일 전 자정 직후,{" "}
+        <b>제가 앱에 없을 때도 서버가 제 CJ WORLD 계정으로 로그인해</b> 예약을 대신 잡습니다.
+        <br />
+        단, <b>이 사무실 PC가 꺼져 있거나 사내망에 연결되어 있지 않으면 그날 예약은 실행되지 않아요</b> —
+        실행 여부는 각 규칙의 "최근 실행 결과"에서 확인할 수 있어요.
+      </p>
+      <label className="chat-recur-consent-checkbox">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => setChecked(event.target.checked)}
+          disabled={mutation.isPending}
+        />
+        위 내용을 이해했고 동의합니다
+      </label>
+      {errorText && <p className="chat-pw-error">{errorText}</p>}
+      <Button type="submit" size="sm" loading={mutation.isPending} disabled={!checked}>
+        동의하고 시작하기
+      </Button>
+    </form>
+  );
+}
+
+/** 동의 철회 — 철회하면 서버가 모든 규칙을 비활성화한다는 점을 미리 안내한다. */
+function RevokeUnattendedConsentControl() {
+  const mutation = useRevokeUnattendedConsentMutation();
+
+  function handleRevoke() {
+    if (!window.confirm("무인 자동 실행 동의를 철회할까요? 등록된 모든 반복 예약이 비활성화됩니다.")) return;
+    mutation.mutate();
+  }
+
+  return (
+    <button type="button" className="chat-recur-revoke" disabled={mutation.isPending} onClick={handleRevoke}>
+      {mutation.isPending ? "철회하는 중…" : "무인 자동 실행 동의 철회"}
+    </button>
+  );
+}
+
+/** 새 규칙 폼 — 요일/시간/회의명/반복 대상 회의실(최대 3곳, 층별로 접히는 RecurringRoomPicker). */
+function RecurringRuleForm({ onDone }: { onDone: () => void }) {
+  const roomsQuery = useRoomsQuery();
+  const createMutation = useCreateRecurringRuleMutation();
+
+  const [weekday, setWeekday] = useState(1); // 기본값: 월요일
+  const [startTime, setStartTime] = useState(RECUR_START_OPTIONS[0]);
+  const endOptions = useMemo(() => recurEndOptions(startTime), [startTime]);
+  const [endTime, setEndTime] = useState(endOptions[0]);
+  const [title, setTitle] = useState("");
+  const [roomIds, setRoomIds] = useState<string[]>([]);
+  const [errorText, setErrorText] = useState<string | null>(null);
+
+  // 시작 시간이 바뀌면 종료 시간 후보 목록도 바뀐다 — 현재 선택값이 새 목록 밖으로
+  // 밀려났으면(예: 종료를 뒤로 미뤄뒀다가 시작을 늦춘 경우) 첫 후보로 맞춰준다.
+  useEffect(() => {
+    setEndTime((prev) => (endOptions.includes(prev) ? prev : endOptions[0]));
+  }, [endOptions]);
+
+  const canSubmit = title.trim() !== "" && roomIds.length > 0 && !createMutation.isPending;
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setErrorText(null);
+    createMutation.mutate(
+      { weekday, start_time: startTime, end_time: endTime, title: title.trim(), room_ids: roomIds },
+      {
+        onSuccess: () => onDone(),
+        onError: (error) => {
+          setErrorText(
+            error instanceof HttpError ? error.message : "등록 중 오류가 발생했어요. 잠시 후 다시 시도해주세요."
+          );
+        },
+      }
+    );
+  }
+
+  return (
+    <form className="chat-pw-form chat-recur-form" onSubmit={handleSubmit}>
+      <p className="chat-pw-hint">30분 단위 · 07:00~19:00 · 회의실 1건당 최대 2시간까지 설정할 수 있어요.</p>
+
+      <label className="chat-recur-field">
+        <span className="chat-recur-field-label">요일</span>
+        <select
+          className="chat-recur-select"
+          value={weekday}
+          onChange={(event) => setWeekday(Number(event.target.value))}
+          disabled={createMutation.isPending}
+        >
+          {WEEKDAY_LABELS.map((label, index) => (
+            <option key={label} value={index}>
+              매주 {label}요일
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="chat-recur-time-row">
+        <label className="chat-recur-field">
+          <span className="chat-recur-field-label">시작</span>
+          <select
+            className="chat-recur-select mono"
+            value={startTime}
+            onChange={(event) => setStartTime(event.target.value)}
+            disabled={createMutation.isPending}
+          >
+            {RECUR_START_OPTIONS.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="chat-recur-field">
+          <span className="chat-recur-field-label">종료</span>
+          <select
+            className="chat-recur-select mono"
+            value={endTime}
+            onChange={(event) => setEndTime(event.target.value)}
+            disabled={createMutation.isPending}
+          >
+            {endOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label className="chat-recur-field">
+        <span className="chat-recur-field-label">회의명</span>
+        <input
+          type="text"
+          className="chat-pw-input"
+          placeholder="예: 주간 스크럼"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          disabled={createMutation.isPending}
+        />
+      </label>
+
+      <RecurringRoomPicker
+        rooms={roomsQuery.data ?? []}
+        isLoading={roomsQuery.isLoading}
+        loadError={roomsQuery.isError}
+        value={roomIds}
+        onChange={setRoomIds}
+      />
+
+      {errorText && <p className="chat-pw-error">{errorText}</p>}
+
+      <div className="chat-card-actions">
+        <Button type="submit" size="sm" loading={createMutation.isPending} disabled={!canSubmit}>
+          등록
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+          취소
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** 반복 예약이 시도할 회의실을 1~3순위로 고르는 UI.
+ *
+ * [2026-08-17 사용자 요청 — 회원가입의 PreferredRoomPicker를 쓰지 않는 이유]
+ *  1. 여기서 고르는 건 "선호 회의실"(사용자 전역 취향)이 아니라 **이 규칙이 실제로 예약을
+ *     시도할 대상 회의실**이다. 이름이 같으면 두 개념을 혼동하게 된다.
+ *  2. 회의실이 26개라 평면 칩 목록으로 깔면 좁은 사이드바가 통째로 밀린다. 그래서 층별로
+ *     묶어 기본은 접어두고, 누른 층만 펼친다(기존 groupRoomsByFloor 재사용).
+ * 회원가입 화면은 기존 PreferredRoomPicker를 그대로 쓴다 — 그쪽은 넓은 단일 컬럼 폼이라
+ * 평면 목록이 오히려 낫고, 개념도 실제로 "선호 회의실"이 맞다.
+ */
+const RECUR_MAX_ROOM_COUNT = 3;
+
+function RecurringRoomPicker({
+  rooms,
+  isLoading,
+  loadError,
+  value,
+  onChange,
+}: {
+  rooms: Room[];
+  isLoading: boolean;
+  loadError: boolean;
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const floorGroups = useMemo(() => groupRoomsByFloor(rooms), [rooms]);
+  const [openFloor, setOpenFloor] = useState<string | null>(null);
+  const selectedRooms = value
+    .map((id) => rooms.find((room) => room.id === id))
+    .filter((room): room is Room => room != null);
+
+  function toggleRoom(roomId: string) {
+    if (value.includes(roomId)) {
+      onChange(value.filter((id) => id !== roomId));
+      return;
+    }
+    if (value.length >= RECUR_MAX_ROOM_COUNT) return;
+    onChange([...value, roomId]);
+  }
+
+  return (
+    <div className="chat-recur-rooms">
+      <span className="chat-recur-field-label">반복 대상 회의실</span>
+      <p className="chat-recur-rooms-hint">
+        누른 순서가 시도 순서예요. 1순위가 차 있으면 2·3순위를 차례로 잡습니다. (최대{" "}
+        {RECUR_MAX_ROOM_COUNT}곳)
+      </p>
+
+      {isLoading && <p className="chat-rail-empty">회의실 목록을 불러오는 중…</p>}
+      {loadError && <p className="chat-pw-error">회의실 목록을 불러오지 못했어요.</p>}
+
+      {selectedRooms.length > 0 && (
+        <ol className="chat-recur-picked">
+          {selectedRooms.map((room, index) => (
+            <li key={room.id} className="chat-recur-picked-item">
+              <span className="chat-recur-picked-rank">{index + 1}순위</span>
+              <span className="chat-recur-picked-name">{room.roomName}</span>
+              <button
+                type="button"
+                className="chat-recur-picked-remove"
+                onClick={() => toggleRoom(room.id)}
+                aria-label={`${room.roomName} 선택 해제`}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {floorGroups.map((group) => {
+        const isOpen = openFloor === group.floorLabel;
+        const pickedInFloor = group.rooms.filter((room) => value.includes(room.id)).length;
+        return (
+          <div key={group.floorLabel} className="chat-recur-floor">
+            <button
+              type="button"
+              className="chat-recur-floor-toggle"
+              aria-expanded={isOpen}
+              onClick={() => setOpenFloor((prev) => (prev === group.floorLabel ? null : group.floorLabel))}
+            >
+              <span>
+                {group.floorLabel}
+                <span className="chat-recur-floor-count">
+                  {pickedInFloor > 0 ? ` · ${pickedInFloor}곳 선택` : ` · ${group.rooms.length}개`}
+                </span>
+              </span>
+              <span className="chat-pw-chevron" aria-hidden="true">
+                {isOpen ? "−" : "+"}
+              </span>
+            </button>
+            {isOpen && (
+              <div className="chat-chip-group chat-recur-floor-rooms">
+                {group.rooms.map((room) => {
+                  const selected = value.includes(room.id);
+                  const atLimit = !selected && value.length >= RECUR_MAX_ROOM_COUNT;
+                  return (
+                    <Chip
+                      key={room.id}
+                      selected={selected}
+                      disabled={atLimit}
+                      onClick={() => toggleRoom(room.id)}
+                    >
+                      {room.roomName} · {capacityLabel(room.capacity)}
+                    </Chip>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

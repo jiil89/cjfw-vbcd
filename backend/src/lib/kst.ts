@@ -45,3 +45,16 @@ export function toKstDate(value: string | Date): string {
   const date = typeof value === "string" ? new Date(value) : value;
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(date);
 }
+
+/**
+ * "YYYY-MM-DD" 달력일에 일수를 더한다(반복 예약 잡이 "오늘(KST) + 7일" 대상일을 계산할 때
+ * 사용 — jobs/runRecurringBookings.ts). 순수 달력 산술이라 시각/타임존 변환이 필요 없다
+ * (businessRules.ts의 isWithinBookableDateRange가 diffDays를 계산할 때와 동일하게, 날짜
+ * 문자열을 UTC 자정으로 고정해서 더하고 다시 "YYYY-MM-DD"로 잘라낸다 — KST 오프셋을 여기서
+ * 섞으면 오히려 날짜가 하루 밀리는 실수를 만들기 쉽다).
+ */
+export function addDaysToKstDate(date: string, days: number): string {
+  const base = new Date(`${date}T00:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().slice(0, 10);
+}

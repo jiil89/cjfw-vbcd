@@ -17,6 +17,12 @@ erDiagram
     RESERVATION_REQUESTS ||--o{ ALTERNATIVE_SUGGESTIONS : "reservation_request_id"
     ROOMS ||--o{ ALTERNATIVE_SUGGESTIONS : "room_id"
     USERS ||--o{ REFRESH_TOKENS : "user_id"
+    USERS ||--o{ RECURRING_RESERVATION_RULES : "user_id"
+    RECURRING_RESERVATION_RULES ||--o{ RECURRING_RESERVATION_RULE_ROOMS : "rule_id"
+    ROOMS ||--o{ RECURRING_RESERVATION_RULE_ROOMS : "room_id"
+    RECURRING_RESERVATION_RULES ||--o{ RECURRING_RESERVATION_RUNS : "rule_id"
+    RECURRING_RESERVATION_RUNS |o--o| RESERVATIONS : "reservation_id"
+    RECURRING_RESERVATION_RUNS |o--o| ROOMS : "booked_room_id"
 
     ADMIN_WHITELIST {
         uuid id PK
@@ -126,6 +132,39 @@ erDiagram
         timestamptz revoked_at
         timestamptz created_at
     }
+
+    RECURRING_RESERVATION_RULES {
+        uuid id PK
+        uuid user_id FK
+        smallint weekday "0=일요일, JS Date.getDay() 규약"
+        time start_time
+        time end_time
+        text title
+        text contents
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    RECURRING_RESERVATION_RULE_ROOMS {
+        uuid id PK
+        uuid rule_id FK
+        uuid room_id FK
+        int priority "1이 최우선, (rule_id, priority) UK"
+        timestamptz created_at
+    }
+
+    RECURRING_RESERVATION_RUNS {
+        uuid id PK
+        uuid rule_id FK
+        date target_date
+        text status "succeeded|failed|skipped"
+        uuid reservation_id FK "성공 시에만 null 아님"
+        uuid booked_room_id FK "성공 시에만 null 아님"
+        int attempted_priority
+        text failure_reason
+        timestamptz executed_at
+    }
 ```
 
 ## 테이블별 설명
@@ -140,3 +179,6 @@ erDiagram
 - **alternative_suggestions**: 요청 시간대가 충돌할 때 제시하는 대체 회의실/시간대 추천 목록.
 - **refresh_tokens**: JWT 로그인의 Refresh Token 발급 이력. 토큰 원문이 아니라 해시값만 저장하며, 개별 로그아웃(해당 행 하나 폐기) 또는 비밀번호 변경/보안사고 대응 시 전체 폐기(해당 user_id의 미폐기 행 전체 UPDATE) 두 시나리오 모두 지원한다.
 - **chat_sessions** `[20260816 추가]`: 사용자별 챗봇 오케스트레이션 세션(대화 이력 + 확인대기 상태)을 `state jsonb` 하나로 통째로 저장한다. 원래는 `sessionStore.ts`의 in-memory `Map`으로만 관리했는데, Vercel 서버리스에서는 함수 인스턴스가 바뀌면 그 메모리가 통째로 사라져 대화 기억이 유실되는 문제가 있어 DB로 옮겼다. `user_id`가 PK라 사용자당 세션 1개(도메인 정의서 1번: 챗봇 대화 채널이 하나라는 전제)라는 기존 설계를 그대로 반영한다.
+- **recurring_reservation_rules** `[신규]`: 사용자가 등록한 반복 예약 규칙. 매주 어느 요일 어느 시간대에 어떤 회의명으로 예약할지 정의한다. `is_active`는 동의 철회 시 자동으로 false로 설정되어 규칙을 비활성화한다.
+- **recurring_reservation_rule_rooms** `[신규]`: 각 반복 예약 규칙이 시도할 회의실 목록(1~3순위). **이는 `user_preferred_rooms`(가입 시 등록하는 선호 회의실)과 다른 목적**이다 — 같은 사용자도 규칙마다 다른 회의실 우선순위를 가질 수 있다. `(rule_id, priority)` unique 제약으로 같은 규칙에서 중복된 우선순위를 방지하고, `(rule_id, room_id)` unique 제약으로 같은 회의실이 중복되지 않게 한다.
+- **recurring_reservation_runs** `[신규]`: 반복 예약 규칙의 자동 실행 로그 + 멱등성 보장. 매 실행 시마다 대상일, 상태(성공/실패/스킵), 최종 성공한 회의실(있으면), 시도 우선순위 단계, 실패 사유를 기록한다. `(rule_id, target_date)` unique 제약으로 **같은 규칙의 같은 날짜 중복 실행을 방지** — PC 재부팅이나 수동 재실행으로 잡이 같은 날 두 번 돌아도, 잡이 실행 전에 이 행의 존재를 먼저 확인하고 건너뛰므로 **첫 실행 결과가 그대로 남고 CJ에 중복 예약이 생기지 않는다**(나중 실행이 앞의 결과를 덮어쓰지 않는다).

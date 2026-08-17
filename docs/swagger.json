@@ -548,6 +548,169 @@
           }
         }
       }
+    },
+    "/me/recurring-rules": {
+      "get": {
+        "tags": ["Me"],
+        "summary": "내 반복 예약 규칙 목록 조회",
+        "description": "[신규] 로그인한 사용자가 등록한 반복 예약 규칙을 모두 반환한다. 각 규칙마다 시도 회의실(우선순위 순), 최근 자동 실행 결과가 함께 포함된다.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/RecurringReservationRule" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Me"],
+        "summary": "반복 예약 규칙 등록",
+        "description": "새로운 반복 예약 규칙을 등록한다. 무인 예약 동의가 없으면 400/CONSENT_REQUIRED로 거부(게이트 ①).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["weekday", "start_time", "end_time", "title", "room_ids"],
+                "properties": {
+                  "weekday": { "type": "integer", "enum": [0, 1, 2, 3, 4, 5, 6], "description": "요일 (0=일요일, 6=토요일, JS Date.getDay() 규약)" },
+                  "start_time": { "type": "string", "format": "time", "description": "시작 시각 (07:00~19:00, 30분 단위)" },
+                  "end_time": { "type": "string", "format": "time", "description": "종료 시각 (07:00~19:00, 30분 단위)" },
+                  "title": { "type": "string", "description": "회의명" },
+                  "contents": { "type": "string", "nullable": true, "description": "회의 내용 (선택사항)" },
+                  "room_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "description": "시도할 회의실 ID 목록 (배열 순서 = 우선순위)",
+                    "items": { "type": "string", "format": "uuid" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "규칙 생성 완료",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecurringReservationRule" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/me/recurring-rules/{id}": {
+      "patch": {
+        "tags": ["Me"],
+        "summary": "반복 예약 규칙 활성화/비활성화",
+        "description": "규칙의 `is_active` 상태를 토글한다. 수정(시간, 회의실 변경)은 삭제 후 재생성으로 유도한다.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["is_active"],
+                "properties": { "is_active": { "type": "boolean" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": { "description": "토글 완료(본문 없음)" },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["Me"],
+        "summary": "반복 예약 규칙 삭제",
+        "description": "규칙을 삭제한다.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "삭제 완료(본문 없음)" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/me/unattended-consent": {
+      "get": {
+        "tags": ["Me"],
+        "summary": "무인 예약 동의 상태 조회",
+        "description": "[신규] 현재 무인 예약 동의 여부를 반환한다.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "consented": { "type": "boolean", "description": "현재 동의 상태 (유효한 동의 = consent_at not null and revoked_at is null)" },
+                    "consented_at": { "type": "string", "format": "date-time", "nullable": true, "description": "최초 동의 시각" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Me"],
+        "summary": "무인 예약 동의 (게이트 ①)",
+        "description": "[신규] 무인 예약 동의를 기록한다(또는 철회 이력이 있다면 갱신). 이후 반복 예약 규칙 생성이 가능해진다.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "204": { "description": "동의 기록 완료(본문 없음)" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "delete": {
+        "tags": ["Me"],
+        "summary": "무인 예약 동의 철회 (게이트 ③)",
+        "description": "[신규] 무인 예약 동의를 철회한다. 현존하는 모든 규칙이 자동으로 비활성화되고, 철회 이력이 기록되어 다시 규칙을 생성하려면 새로운 동의가 필요하다.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "204": { "description": "철회 완료(본문 없음)" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
     }
   },
   "components": {
@@ -852,6 +1015,47 @@
             "type": "integer",
             "description": "서버가 이 메시지를 처리하는 데 걸린 시간(ms). CJ 자동화 콜드스타트로 응답이 지연될 수 있어, 프론트가 로딩 UX를 조정하는 데 참고용으로 쓸 수 있다."
           }
+        }
+      },
+      "RecurringReservationRule": {
+        "type": "object",
+        "description": "[신규] 사용자가 등록한 반복 예약 규칙. 매주 정해진 요일·시간대에 자동으로 예약을 시도한다.",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "weekday": { "type": "integer", "enum": [0, 1, 2, 3, 4, 5, 6], "description": "요일 (0=일요일, 6=토요일)" },
+          "start_time": { "type": "string", "format": "time", "example": "10:00" },
+          "end_time": { "type": "string", "format": "time", "example": "11:00" },
+          "title": { "type": "string", "description": "회의명" },
+          "contents": { "type": "string", "nullable": true, "description": "회의 내용" },
+          "is_active": { "type": "boolean", "description": "규칙 활성화 여부 (동의 철회 시 자동으로 false)" },
+          "rooms": {
+            "type": "array",
+            "description": "시도 회의실 목록 (우선순위 순, 1~3개)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "room_id": { "type": "string", "format": "uuid" },
+                "room_name": { "type": "string", "example": "14F-2" },
+                "floor_label": { "type": "string", "example": "14F" },
+                "priority": { "type": "integer", "description": "1이 최우선" }
+              }
+            }
+          },
+          "latest_run": {
+            "type": "object",
+            "nullable": true,
+            "description": "가장 최근 자동 실행 결과",
+            "properties": {
+              "target_date": { "type": "string", "format": "date" },
+              "status": { "type": "string", "enum": ["succeeded", "failed", "skipped"], "description": "실행 결과" },
+              "booked_room_name": { "type": "string", "nullable": true, "description": "성공 시 확정된 회의실명" },
+              "attempted_priority": { "type": "integer", "nullable": true, "description": "마지막 시도한 우선순위" },
+              "failure_reason": { "type": "string", "nullable": true, "description": "실패 사유 (예: 1순위:만석, 2순위:만석, 3순위:만석)" },
+              "executed_at": { "type": "string", "format": "date-time" }
+            }
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
         }
       }
     }

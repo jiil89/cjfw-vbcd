@@ -133,6 +133,17 @@ flowchart LR
   - [x] 각 회의실의 `room_code`/`area_code`/`sub_area_code`가 실제 CJ 시스템 값과 일치함 (스캔 결과 그대로 upsert, SELECT로 NULL/이상값 없음 확인)
   - [x] `capacity`가 26개 회의실 전부 실제 값(응답 HTML의 `num_person` 파싱, 추정치 아님)으로 채워짐
 
+### DB-6. 반복 예약 테이블 추가
+
+- **작업 내용**: `recurring_reservation_rules`, `recurring_reservation_rule_rooms`, `recurring_reservation_runs` 3개 테이블을 새 마이그레이션으로 추가. `users`에도 `unattended_booking_consent_at`/`unattended_booking_consent_revoked_at` 컬럼 추가. 신규 3테이블 모두 RLS 활성화, 정책은 없음(백엔드 service role 전용).
+- **선행 Task**: DB-2
+- **완료 조건**:
+  - [ ] `recurring_reservation_rules` 생성: `user_id`(FK), `weekday`(0-6), `start_time`, `end_time`, `title`, `contents`, `is_active`, 타임스탬프. (user_id, weekday, start_time, end_time) 조합 unique 제약으로 같은 시간대 중복 규칙 방지
+  - [ ] `recurring_reservation_rule_rooms` 생성: `rule_id`(FK), `room_id`(FK), `priority`(1부터). (rule_id, priority) / (rule_id, room_id) 둘 다 unique로 우선순위와 회의실 중복 각각 방지
+  - [ ] `recurring_reservation_runs` 생성: `rule_id`(FK), `target_date`, `status`, `reservation_id`(nullable FK), `booked_room_id`(nullable FK), `attempted_priority`, `failure_reason`, `executed_at`. (rule_id, target_date) unique로 멱등성 보장
+  - [ ] `users`에 `unattended_booking_consent_at` / `unattended_booking_consent_revoked_at` 타임스탬프 추가 (유효한 동의 = consent_at not null and revoked_at is null)
+  - [ ] `supabase/8-schema.sql`에 3개 테이블 + users 수정 반영
+
 ---
 
 ## 백엔드 (Backend)
@@ -295,6 +306,32 @@ flowchart LR
   - [x] `Secure` 쿠키 플래그가 `NODE_ENV` 기준으로 정확히 토글됨 (BE-2에서 이미 구현됨, `auth.routes.ts`의 `refreshTokenCookieOptions()`가 `secure: config.isProd`로 분기하는 것을 코드 레벨로 재확인)
 
   **후속 확인 필요 사항**: FE-1 스캐폴딩 시 (1) Vite 프록시 경로 vs 백엔드 라우트 프리픽스 정합성 결정, (2) 프론트/백엔드를 같은 Vercel 프로젝트로 묶을지 분리 배포할지 확정 후 루트 `vercel.json` 작성 필요
+
+### BE-10. 반복 예약 규칙 관리 API
+
+- **작업 내용**: `routes/recurring-reservations.routes.ts` — `GET /me/recurring-rules` (규칙 목록 조회), `POST /me/recurring-rules` (규칙 생성), `PATCH /me/recurring-rules/:id` (활성화/비활성화), `DELETE /me/recurring-rules/:id` (규칙 삭제), 그리고 무인 동의 관리: `GET /me/unattended-consent`, `POST /me/unattended-consent`, `DELETE /me/unattended-consent`. 도메인 정의서 6번 "무인 예약 동의" 3중 게이트 구현.
+- **선행 Task**: BE-1, DB-6
+- **완료 조건**:
+  - [ ] `GET /me/recurring-rules` — 로그인 사용자의 규칙을 모두 반환, 각 규칙마다 `rooms` 배열(우선순위 순) + 가장 최근 실행 결과(`latest_run`)를 함께 포함
+  - [ ] `POST /me/recurring-rules` — 무인 동의 없으면 400/CONSENT_REQUIRED로 거부(게이트 ①). weekday/start_time/end_time 검증(도메인 정의서 6번 제약: 07:00~19:00, 30분 단위). room_ids 배열이 1~3개 필수. 성공 시 201 + {id}
+  - [ ] `PATCH /me/recurring-rules/:id` — `is_active` 토글만 지원(수정은 삭제·재생성으로 유도). DELETE와 달리 no-op(이미 같은 상태)은 204
+  - [ ] `DELETE /me/recurring-rules/:id` — 규칙 삭제 (hard delete, soft delete 아님). 스케줄러가 실행 중일 수 있으므로 SELECT된 규칙이 정확히 1개여야만 삭제(`DELETE WHERE id=$1 AND user_id=$2` WHERE 절에 user_id 이중 확인)
+  - [ ] `GET /me/unattended-consent` — 현재 동의 상태 반환 (`{consented: boolean, consented_at: string | null}`)
+  - [ ] `POST /me/unattended-consent` — 동의 기록 (처음이면 INSERT, 이미 동의 상태면 no-op). `unattended_booking_consent_revoked_at` 초기화(revoke 이력 있다가 다시 동의하는 경우 처리용)
+  - [ ] `DELETE /me/unattended-consent` — 철회 (게이트 ③): 모든 규칙을 is_active=false로 일괄 업데이트 후 `unattended_booking_consent_revoked_at` 기록. 현존하는 규칙이 없어도 동의 철회 자체는 기록됨(나중에 다시 규칙을 만들 때 동의가 필요하도록 강제)
+  - [ ] `docs/swagger.json`에 7개 엔드포인트 추가 (OpenAPI 3.0 명세, 기존 스타일 준수)
+
+### BE-11. 반복 예약 자동 실행 스케줄러 (Windows Task Scheduler)
+
+- **작업 내용**: Windows 작업 스케줄러에서 매일 00:01에 실행할 Node.js CLI 스크립트 (`backend/scripts/run-recurring-reservations.ts`). 모든 사용자의 규칙 중 오늘의 타겟일에 해당하는 것을 찾아 순차 실행, 결과를 `recurring_reservation_runs`에 기록. 실행 결과를 app 사이드바에서만 표시(메일/푸시 미지원, 범위 외).
+- **선행 Task**: BE-4, BE-10
+- **완료 조건**:
+  - [ ] 스크립트 구현: `recurringReservationService.executeScheduledRuns()` — 대상일이 CJ 예약 윈도우 범위(오늘~7일) 내인 규칙을 식별하고 순차 실행(병렬 금지)
+  - [ ] 실행 로직: rule의 room 우선순위 순서로 `checkRoom → checkStraightRoom → checkDayCountLimit → SaveReserve` 시도. 1순위 성공하면 중단, 실패하면 2순위 시도, 2순위도 실패하면 3순위 시도. 모두 실패하면 failure_reason 기록
+  - [ ] 멱등성: `(rule_id, target_date)` unique 제약이 이미 있으므로 PC 재부팅 후 같은 규칙이 다시 실행되어도 마지막 결과만 남음
+  - [ ] 스케줄러 콘솔 로그(Windows 작업 스케줄러가 캡처할 수 있는 stdout) — 실행한 규칙 수, 성공/실패 요약 (앱 내 로그는 BE-10의 `latest_run` 조회로 표시)
+  - [ ] `.env.example`에 실행 스크립트 경로/시간대 문서화
+  - [ ] [미검증] +7일 예약 창이 정확히 00:01에 열리는지 재확인(도메인 정의서 6번 참고) — 첫 실행 후 확인 필요
 
 ---
 
@@ -523,3 +560,16 @@ flowchart LR
   - [ ] 모바일에서 숨겨진 챗봇 사이드바 정보(오늘예약/선호회의실/규칙)에 접근할 수 있는 대체 UI가 구현됨
   - [ ] 키보드 포커스 상태(`:focus-visible`)가 모든 인터랙션 요소에서 시각적으로 확인됨
   - [ ] 로그인~예약 1건 확정까지의 골든 패스를 모바일 뷰포트에서 수동으로 완주 확인
+
+### FE-7. 반복 예약 규칙 등록 폼 (사이드바)
+
+- **작업 내용**: 챗봇 사이드바(모바일: "내 정보" 시트)의 "반복 예약" 섹션. 요일/시작·종료시간/회의명/회의실 우선순위 입력 폼 + 무인 동의 게이트 구현. `docs/design/` 또는 와이어프레임 재검토로 UI 스펙 확정 후 구현.
+- **선행 Task**: FE-1, BE-10(반복 예약 API)
+- **완료 조건**:
+  - [ ] 규칙 등록 폼이 사이드바에 표시되고, 모든 입력 필드(weekday 선택, start_time/end_time 시간 선택, title/contents, room_ids 배열)가 동작함
+  - [ ] 동의 체크박스 없이는 저장 버튼이 비활성화됨 (게이트 ①)
+  - [ ] 저장 성공 후 등록된 규칙이 목록에 즉시 추가됨 (`GET /me/recurring-rules` 재조회)
+  - [ ] 규칙의 활성화/비활성화 토글(`PATCH /me/recurring-rules/:id`)과 삭제(`DELETE /me/recurring-rules/:id`)가 동작함
+  - [ ] 각 규칙의 최근 실행 결과(`latest_run`)를 "마지막 실행: 2026-08-17 성공 (3F-2)" 형식으로 표시
+  - [ ] 860px 이하에서도 모바일 시트 형태로 정상 표시됨
+  - [ ] 선택한 회의실이 정말 user_preferred_rooms이 아닌 recurring_reservation_rule_rooms로 저장되는지 DB 검증

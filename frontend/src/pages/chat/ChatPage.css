@@ -1165,6 +1165,381 @@
   color: var(--semantic-success);
 }
 
+/* ---- 매주 반복 예약(사이드바 / 모바일 시트 공용) ---- */
+
+/* [2026-08-17] 섹션 전체를 기본으로 접어둔다 — 사이드바가 길어지지 않게 하려는 것이므로
+   제목(.chat-rail-title) 대신 토글 버튼이 섹션 헤더 역할을 한다. .chat-pw-toggle의
+   생김새를 그대로 쓰되, 섹션 헤더라 글자만 조금 더 눈에 띄게 한다. */
+.chat-recur-section-toggle {
+  font-weight: 600;
+}
+
+.chat-recur-panel {
+  margin-top: var(--space-xs);
+}
+
+/* 반복 대상 회의실 선택 — 회의실이 26개라 평면 목록이면 사이드바를 통째로 밀어낸다.
+   층별로 묶어 기본은 접고, 누른 층 하나만 펼친다. */
+.chat-recur-rooms {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+
+.chat-recur-rooms-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-tertiary);
+}
+
+.chat-recur-picked {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-recur-picked-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  padding: 4px var(--space-xxs);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 12px;
+}
+
+.chat-recur-picked-rank {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.chat-recur-picked-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.chat-recur-picked-remove {
+  flex: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.chat-recur-picked-remove:hover {
+  color: var(--ink);
+}
+
+.chat-recur-picked-remove:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.chat-recur-floor-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xxs);
+  padding: 6px var(--space-xxs);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.chat-recur-floor-toggle:hover {
+  background: var(--surface-2);
+}
+
+.chat-recur-floor-toggle:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.chat-recur-floor-count {
+  font-size: 11px;
+  color: var(--ink-tertiary);
+}
+
+.chat-recur-floor-rooms {
+  padding: var(--space-xxs) var(--space-xxs) var(--space-xs);
+}
+
+.chat-recur-list {
+  list-style: none;
+  margin: 0 0 var(--space-sm);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.chat-recur-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+/* 비활성 규칙은 흐리게 — 삭제와 구분되는 "잠시 꺼둠" 상태임을 알린다. */
+.chat-recur-card-inactive {
+  opacity: 0.6;
+}
+
+.chat-recur-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+}
+
+.chat-recur-when {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.chat-recur-title {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.chat-recur-rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.chat-recur-room-chip {
+  font-size: 11px;
+  color: var(--ink-muted);
+  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+  padding: 2px 7px;
+}
+
+.chat-recur-run {
+  margin: 0;
+  padding: 5px 9px;
+  border-radius: var(--radius-xs);
+  font-size: 11.5px;
+  line-height: 1.5;
+  width: fit-content;
+}
+
+.chat-recur-run-failed {
+  color: var(--semantic-error);
+  background: var(--semantic-error-soft);
+}
+
+.chat-recur-run-skipped {
+  color: var(--ink-muted);
+  background: var(--surface-2);
+}
+
+.chat-recur-delete {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 11.5px;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+}
+
+.chat-recur-delete:hover:not(:disabled) {
+  color: var(--semantic-error);
+  text-decoration: underline;
+}
+
+.chat-recur-delete:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.chat-recur-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* 활성/비활성 토글 스위치 — 이 프로젝트에 기존 스위치 컴포넌트가 없어 새로 만들되,
+   색은 기존 ink/hairline 토큰만 쓴다(칠 색은 유지, 넉의 이동만 transform으로 애니메이션). */
+.chat-recur-switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-full);
+  background: var(--hairline-soft);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.chat-recur-switch[aria-checked="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.chat-recur-switch:hover:not(:disabled) {
+  border-color: var(--ink-tertiary);
+}
+
+.chat-recur-switch:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.chat-recur-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.chat-recur-switch-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--surface-1);
+  transform: translateX(0);
+  transition: transform 140ms ease;
+}
+
+.chat-recur-switch[aria-checked="true"] .chat-recur-switch-knob {
+  transform: translateX(14px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-recur-switch,
+  .chat-recur-switch-knob {
+    transition: none;
+  }
+}
+
+.chat-recur-consent-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chat-recur-consent-checkbox input {
+  /* 44px 터치 목표를 위해 히트 영역만 키우고, 보이는 체크박스 자체는 작게 유지한다. */
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--ink);
+}
+
+.chat-recur-form {
+  gap: var(--space-sm);
+}
+
+.chat-recur-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-recur-field-label {
+  font-size: 11.5px;
+  color: var(--ink-tertiary);
+}
+
+.chat-recur-time-row {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.chat-recur-time-row .chat-recur-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-recur-select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.chat-recur-select:hover:not(:disabled) {
+  border-color: var(--ink-tertiary);
+}
+
+.chat-recur-select:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--hairline-soft);
+}
+
+.chat-recur-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.chat-recur-revoke {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin-top: var(--space-xxs);
+  font-size: 11.5px;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+}
+
+.chat-recur-revoke:hover:not(:disabled) {
+  color: var(--semantic-error);
+  text-decoration: underline;
+}
+
+.chat-recur-revoke:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.chat-recur-revoke:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .chat-info-banner {
   position: relative;
   font-size: 12.5px;
