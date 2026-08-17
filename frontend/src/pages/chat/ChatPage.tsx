@@ -1307,7 +1307,7 @@ function RecurringRunResult({ run }: { run: RecurringRuleLatestRun }) {
   return <p className="chat-recur-run chat-recur-run-skipped">{dateLabel} 실행 건너뜀</p>;
 }
 
-/** 동의 게이트 — 무인 자동 실행에 동의해야 새 규칙 폼이 열린다. */
+/** 동의 게이트 — 에이전트 자동 실행에 동의해야 새 규칙 폼이 열린다. */
 function UnattendedConsentGate() {
   const [checked, setChecked] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -1329,15 +1329,14 @@ function UnattendedConsentGate() {
   return (
     <form className="chat-pw-form" onSubmit={handleSubmit}>
       <p className="chat-pw-hint">
-        매주 반복 예약을 쓰려면 무인 자동 실행에 동의해야 해요. 대상일 7일 전 자정 직후,{" "}
-        <b className="chat-recur-notice">제가 앱에 없을 때도 서버가 제 CJ WORLD 계정으로 로그인해</b> 예약을 대신
-        잡습니다.
-        <br />
+        반복 예약을 사용하려면 '에이전트 자동 실행'에 동의해야 해요.{" "}
+        <b className="chat-recur-notice">
+          대상 일자 7일 전에 에이전트가 사용자님의 CJ WORLD 계정으로 로그인해 대신 예약을 합니다.
+        </b>{" "}
         <b className="chat-recur-notice">
           회의실 예약 챗봇 서버가 가동중이 아닌 경우 반복 예약은 실행되지 않을 수 있으니 최종 사용자가 직접 확인을
           권장드립니다.
-        </b>{" "}
-        실행 여부는 각 규칙의 "최근 실행 결과"에서 확인할 수 있어요.
+        </b>
       </p>
       <label className="chat-recur-consent-checkbox">
         <input
@@ -1361,13 +1360,13 @@ function RevokeUnattendedConsentControl() {
   const mutation = useRevokeUnattendedConsentMutation();
 
   function handleRevoke() {
-    if (!window.confirm("무인 자동 실행 동의를 철회할까요? 등록된 모든 반복 예약이 비활성화됩니다.")) return;
+    if (!window.confirm("에이전트 자동 실행 동의를 철회할까요? 등록된 모든 반복 예약이 비활성화됩니다.")) return;
     mutation.mutate();
   }
 
   return (
     <button type="button" className="chat-recur-revoke" disabled={mutation.isPending} onClick={handleRevoke}>
-      {mutation.isPending ? "철회하는 중…" : "무인 자동 실행 동의 철회"}
+      {mutation.isPending ? "철회하는 중…" : "에이전트 자동 실행 동의 철회"}
     </button>
   );
 }
