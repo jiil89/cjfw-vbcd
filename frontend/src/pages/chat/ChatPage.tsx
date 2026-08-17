@@ -201,10 +201,20 @@ export function ChatPage() {
   // 모바일 전용 — 빠른명령 칩 줄을 접어두고 "+"로 펼친다(데스크톱은 항상 펼쳐진 상태라 이 값과 무관).
   const [isQuickOpen, setIsQuickOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const composerInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [messages]);
+
+  // 응답 대기 중엔 입력창이 disabled가 되는데, 브라우저가 disabled 요소의 포커스를
+  // 강제로 뺏는다. 응답이 오면 disabled는 풀리지만 포커스는 저절로 안 돌아와서
+  // 사용자가 매번 다시 클릭해야 했다 — 여기서 명시적으로 되돌려준다.
+  useEffect(() => {
+    if (!sendMutation.isPending) {
+      composerInputRef.current?.focus();
+    }
+  }, [sendMutation.isPending]);
 
   function sendMessage(text: string) {
     const trimmed = text.trim();
@@ -356,6 +366,7 @@ export function ChatPage() {
                 </svg>
               </button>
               <input
+                ref={composerInputRef}
                 type="text"
                 className="chat-input"
                 placeholder="내일 오전 10시 회의실 잡아줘"
