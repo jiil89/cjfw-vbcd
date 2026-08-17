@@ -44,7 +44,12 @@ import {
   type RoomedSegmentPlan,
 } from "../tools/reservation.tool";
 import { getMyReservations } from "../tools/myReservations.tool";
-import { addPreferredRoom, removePreferredRoom, RoomNotFoundError } from "../tools/preferredRooms.tool";
+import {
+  addPreferredRoom,
+  removePreferredRoom,
+  RoomNotFoundError,
+  PreferredRoomLimitExceededError,
+} from "../tools/preferredRooms.tool";
 import {
   modifyReservation,
   resolveSingleReservationTarget,
@@ -742,6 +747,7 @@ async function executeTool(
           return { content: { rooms: rooms.map(toRoomSummary) } };
         } catch (err) {
           if (err instanceof RoomNotFoundError) return errorResult(err.message);
+          if (err instanceof PreferredRoomLimitExceededError) return errorResult(err.message);
           throw err;
         }
       }

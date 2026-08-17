@@ -23,6 +23,13 @@ export const FIXED_SITE = "상암S시티";
 /** 1차 범위 지원 층 (도메인 정의서 9번 "[결정됨]" — B1F/2F는 후보 풀에서 제외). */
 export const SUPPORTED_FLOOR_LABELS = ["3F", "12F", "13F", "14F", "15F", "16F"] as const;
 
+/** 선호 회의실 최대 등록 개수. 회원가입 폼(frontend/src/pages/register/PreferredRoomPicker.tsx의
+ * MAX_PRIORITY_COUNT)과 반드시 같은 값을 유지해야 한다 — 값을 바꾸면 두 곳을 함께 고칠 것.
+ * [2026-08-17 발견] 이 상한이 회원가입 폼에서만 클라이언트단으로 걸려 있고 챗봇의
+ * add_preferred_room 도구에는 전혀 강제되지 않아, 채팅으로는 무제한 추가가 가능했다
+ * (preferredRooms.tool.ts에서 이 상수로 검증). */
+export const MAX_PREFERRED_ROOMS = 5;
+
 /** 사용자가 회의명을 끝내 알려주지 않았을 때 쓰는 기본 제목 (사용자 결정, 20260816).
  * CJ 예약 현황은 다른 직원에게도 보이므로 아무 값이나 넣으면 안 되고, 의미가 있는 하나의
  * 값으로 고정한다. */
