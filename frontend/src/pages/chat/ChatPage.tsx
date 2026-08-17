@@ -385,7 +385,6 @@ export function ChatPage() {
             todayLoading={todayQuery.isLoading}
             preferredRooms={prefQuery.data}
             preferredLoading={prefQuery.isLoading}
-            onAction={sendMessage}
           />
         </aside>
 
@@ -396,10 +395,6 @@ export function ChatPage() {
             todayLoading={todayQuery.isLoading}
             preferredRooms={prefQuery.data}
             preferredLoading={prefQuery.isLoading}
-            onAction={(text) => {
-              setIsPanelSheetOpen(false);
-              sendMessage(text);
-            }}
             isAdmin={Boolean(user?.is_admin)}
             onLogout={handleLogout}
             logoutPending={logoutMutation.isPending}
@@ -860,24 +855,15 @@ function ReservationPickerCard({
 function TodayReservationsRail({
   groups,
   isLoading,
-  onAction,
 }: {
   groups: MyReservationGroup[] | undefined;
   isLoading: boolean;
-  onAction: (text: string) => void;
 }) {
   return (
     <div>
       <div className="chat-rail-title">오늘 예약</div>
       {isLoading && <p className="chat-rail-empty">불러오는 중…</p>}
-      {groups && groups.length === 0 && (
-        <div className="chat-rail-empty-row">
-          <span>예약이 없어요</span>
-          <button type="button" className="chat-rail-empty-action" onClick={() => onAction("회의실 예약하고 싶어")}>
-            예약 잡기
-          </button>
-        </div>
-      )}
+      {groups && groups.length === 0 && <p className="chat-rail-empty">예약이 없어요</p>}
       {groups?.map((group) => (
         <Card key={group.reservationRequestId ?? group.segments[0].reservationId} radius="lg" className="chat-today-card">
           <div className="chat-today-card-title">{group.title}</div>
@@ -898,7 +884,11 @@ function TodayReservationsRail({
 function PreferredRoomsRail({ rooms, isLoading }: { rooms: Room[] | undefined; isLoading: boolean }) {
   return (
     <div>
-      <div className="chat-rail-title">선호 회의실</div>
+      {/* title 속성으로 hover 툴팁 — 사이드바가 좁아 설명을 상시 노출하면 목록이 밀린다.
+          도움말이 있다는 걸 알 수 있게 점선 밑줄(.chat-rail-title-help)을 준다. */}
+      <div className="chat-rail-title chat-rail-title-help" title="에이전트가 선호 회의실을 우선적으로 예약 검토합니다.">
+        선호 회의실
+      </div>
       {isLoading && <p className="chat-rail-empty">불러오는 중…</p>}
       {rooms && rooms.length === 0 && <p className="chat-rail-empty">등록된 선호 회의실이 없어요.</p>}
       {rooms && rooms.length > 0 && (
@@ -921,21 +911,22 @@ interface ChatRailContentProps {
   todayLoading: boolean;
   preferredRooms: Room[] | undefined;
   preferredLoading: boolean;
-  onAction: (text: string) => void;
 }
 
 /** 오른쪽 사이드바(데스크톱)와 모바일 "내 정보" 시트가 공유하는 내용 —
  * chat-screen.dc.html: 오늘 예약 → 선호 회의실 → 알아두기 배너 순서. */
-function ChatRailContent({ todayGroups, todayLoading, preferredRooms, preferredLoading, onAction }: ChatRailContentProps) {
+function ChatRailContent({ todayGroups, todayLoading, preferredRooms, preferredLoading }: ChatRailContentProps) {
   return (
     <>
-      <TodayReservationsRail groups={todayGroups} isLoading={todayLoading} onAction={onAction} />
+      <TodayReservationsRail groups={todayGroups} isLoading={todayLoading} />
       <PreferredRoomsRail rooms={preferredRooms} isLoading={preferredLoading} />
-      <PasswordSettingsRail />
       <RecurringBookingRail />
+      {/* 비밀번호는 자주 쓰는 기능이 아니라 맨 아래에 둔다(사용자 요청, 20260817). */}
+      <PasswordSettingsRail />
       <div className="chat-info-banner">
         같은 회의실은 하루 <b>최대 2시간</b>까지만 예약할 수 있어요. 더 필요하면 다른 회의실로 이어서 잡아드려요.
       </div>
+      <div className="chat-rail-credit">CJFW-AI팀</div>
     </>
   );
 }

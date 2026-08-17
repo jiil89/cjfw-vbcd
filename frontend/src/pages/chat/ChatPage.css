@@ -962,40 +962,34 @@
   margin-bottom: var(--space-sm);
 }
 
+/* hover하면 title 속성 툴팁이 뜨는 제목 — 도움말이 있다는 걸 알 수 있게 점선 밑줄과
+   물음표 커서를 준다(설명을 상시 노출하면 좁은 사이드바가 밀린다). */
+.chat-rail-title-help {
+  display: inline-block;
+  cursor: help;
+  border-bottom: 1px dotted var(--ink-tertiary);
+  padding-bottom: 1px;
+}
+
+/* 개발 주체 표기 — 사이드바 맨 아래, 눈에 띄지 않게. */
+.chat-rail-credit {
+  margin-top: auto;
+  padding-top: var(--space-sm);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-tertiary);
+  opacity: 0.65;
+  text-align: right;
+}
+
 .chat-rail-empty {
   margin: 0;
   font-size: 12.5px;
   color: var(--ink-muted);
 }
 
-/* chat-screen.dc.html "오늘 예약 빈 상태": 세로 공간을 잡지 않는 한 줄 카드 + 다음 행동 제안. */
-.chat-rail-empty-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  background: var(--surface-1);
-  border: 1px solid var(--hairline-soft);
-  border-radius: var(--radius-md);
-  padding: 11px 12px;
-  font-size: 12.5px;
-  color: var(--ink-muted);
-}
-
-.chat-rail-empty-action {
-  background: transparent;
-  border: none;
-  padding: 0;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.chat-rail-empty-action:hover {
-  text-decoration: underline;
-}
+/* [20260817] "오늘 예약" 빈 상태의 한 줄 카드 + "예약 잡기" 버튼(.chat-rail-empty-row /
+   .chat-rail-empty-action)은 사용자 요청으로 제거했다 — 지금은 .chat-rail-empty 한 줄만 쓴다. */
 
 .chat-today-card {
   padding: var(--space-sm) !important;
@@ -1168,11 +1162,8 @@
 /* ---- 매주 반복 예약(사이드바 / 모바일 시트 공용) ---- */
 
 /* [2026-08-17] 섹션 전체를 기본으로 접어둔다 — 사이드바가 길어지지 않게 하려는 것이므로
-   제목(.chat-rail-title) 대신 토글 버튼이 섹션 헤더 역할을 한다. .chat-pw-toggle의
-   생김새를 그대로 쓰되, 섹션 헤더라 글자만 조금 더 눈에 띄게 한다. */
-.chat-recur-section-toggle {
-  font-weight: 600;
-}
+   제목(.chat-rail-title) 대신 토글 버튼이 섹션 헤더 역할을 한다. 생김새는 다른 토글
+   (.chat-pw-toggle)과 완전히 동일하게 두고 굵기를 따로 주지 않는다(사용자 요청, 20260817). */
 
 .chat-recur-panel {
   margin-top: var(--space-xs);
@@ -1639,7 +1630,6 @@
 }
 
 .chat-sheet-body .chat-today-card,
-.chat-sheet-body .chat-rail-empty-row,
 .chat-sheet-body .chat-pref-list li {
   background: var(--surface-2);
 }
