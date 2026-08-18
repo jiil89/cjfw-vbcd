@@ -38,6 +38,7 @@ import {
   setUnattendedBookingConsent,
 } from "../db/repositories/userRepository";
 import { getMyReservations } from "../tools/myReservations.tool";
+import { toKstDate } from "../lib/kst";
 import {
   durationMinutes,
   isAlignedToReservationUnit,
@@ -107,7 +108,9 @@ meRouter.get("/preferred-rooms", requireAuth, async (req: AuthenticatedRequest, 
 
 // 사이드바 "오늘 예약" 전용 — 범위를 오늘 하루로 고정한다(다른 기간 조회는 챗봇으로).
 meRouter.get("/reservations/today", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const today = new Date().toISOString().slice(0, 10);
+  // [버그 수정, 20260818] toISOString()은 UTC 날짜라, 한국시간 00:00~08:59 사이에는
+  // "오늘"이 어제로 계산돼 사이드바에 어제 예약이 떴다. 반드시 KST 기준으로 계산한다.
+  const today = toKstDate(new Date());
   try {
     const groups = await getMyReservations(req.user!.userId, { fromDate: today, toDate: today });
     res.status(200).json(groups);

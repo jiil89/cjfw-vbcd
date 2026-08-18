@@ -187,4 +187,61 @@ describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", ()
 
     vi.unstubAllGlobals();
   });
+
+  // [버그 수정, 20260818] 예전엔 세션을 턴이 끝난 뒤 한 번만 저장해서, confirm_create_reservation이
+  // 이미 실제로 CJ에 반영된 뒤 그 다음 OpenAI 호출이 실패하면 그 사실(pendingConfirmation
+  // 해제 등)이 저장되지 않고 날아갔다. 재시도 시 서버가 "아직 아무 일도 없었던 걸로" 착각해
+  // 중복 예약을 시도할 위험이 있었다 — 도구 호출 직후 즉시 저장하는지 확인한다.
+  it("도구 호출이 성공한 뒤 다음 OpenAI 호출이 실패해도, 그 도구 호출의 결과는 이미 저장돼 있다", async () => {
+    (createReservation as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      reservationId: "res-2",
+      roomName: "3F-1",
+      startTime: "15:00",
+      endTime: "16:00",
+      cjSeq: "1002",
+    });
+
+    const fetchMockTurn1 = vi
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          toolCallMessage("propose_create_reservation", {
+            title: "주간회의",
+            contents: "주간회의",
+            date: TOMORROW,
+            startTime: "15:00",
+            endTime: "16:00",
+            room: SAMPLE_ROOM,
+          })
+        )
+      )
+      .mockResolvedValueOnce(chatResponse(textMessage("3F-1 15:00~16:00으로 예약할까요?")));
+    vi.stubGlobal("fetch", fetchMockTurn1);
+    await handleUserMessage("user-3", "내일 오후 3시 3F-1 예약해줘");
+
+    const { getOrCreateSession } = await import("../sessionStore");
+    const session = await getOrCreateSession("user-3");
+    const capturedToken = session.pendingConfirmation?.token ?? "";
+    expect(capturedToken).not.toBe("");
+
+    // 도구 호출(confirm_create_reservation, 실제로 예약을 만듦)은 성공하지만, 그 직후
+    // 이어지는 OpenAI 호출이 실패하는 상황을 재현한다.
+    const fetchMockTurn2 = vi
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(toolCallMessage("confirm_create_reservation", { confirmationToken: capturedToken }))
+      )
+      .mockRejectedValueOnce(new Error("네트워크 오류(시뮬레이션)"));
+    vi.stubGlobal("fetch", fetchMockTurn2);
+
+    await expect(handleUserMessage("user-3", "네, 확정해주세요")).rejects.toThrow();
+
+    // 턴 전체는 실패했지만, 이미 성공한 도구 호출(실제 CJ 예약)의 결과는 저장돼 있어야 한다.
+    expect(createReservation).toHaveBeenCalledTimes(1);
+    const persisted = await getOrCreateSession("user-3");
+    expect(persisted.pendingConfirmation).toBeNull();
+    expect(persisted.messages.some((m) => m.role === "tool" && m.content?.includes("res-2"))).toBe(true);
+
+    vi.unstubAllGlobals();
+  });
 });

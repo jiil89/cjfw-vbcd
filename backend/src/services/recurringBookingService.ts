@@ -10,8 +10,12 @@
 //
 // [assertValidReservationWindow와의 관계] 잡이 대상일=오늘(KST)+7일에 정확히 실행되므로,
 // createReservation 내부의 assertValidReservationWindow가 계산하는 diffDays는 항상 정확히
-// 7이 되어 통과한다. 이 서비스가 별도로 날짜 범위를 검증하지 않는 이유가 이것이다 — 대상일
+// 7이 되어 통과해야 한다. 이 서비스가 별도로 날짜 범위를 검증하지 않는 이유가 이것이다 — 대상일
 // 계산 자체가 이미 그 검증을 통과하도록 설계되어 있다(jobs/runRecurringBookings.ts에서 계산).
+// **단, 이 "오늘"은 반드시 KST 기준이어야 한다** — createReservation의 기본값(UTC)에
+// 맡기면 한국시간 자정 실행 시점에 diffDays가 8로 계산돼 매번 거부된다(20260818 실사용에서
+// 실제로 발생). 그래서 runOneRule은 targetDate에서 거꾸로 KST "오늘"을 복원해 명시적으로
+// 넘긴다.
 //
 // [순차 실행, 병렬 금지] createReservation은 내부적으로 그 사용자의 CJ 계정으로 로그인한
 // Playwright 브라우저 세션을 사용한다. 규칙을 Promise.all 등으로 동시에 처리하면 여러
@@ -20,7 +24,8 @@
 // 않았다"는 리스크에 정확히 해당한다. 그래서 규칙을 for...of로 하나씩 순차 처리하고, 사용자
 // 사이에 짧은 지연을 둔다.
 
-import { normalizeReservationTitle } from "../tools/businessRules";
+import { MAX_ADVANCE_DAYS, normalizeReservationTitle } from "../tools/businessRules";
+import { addDaysToKstDate } from "../lib/kst";
 import { CjLoginError } from "../cj-automation/session";
 import { createReservation, ReservationConflictError } from "../tools/reservation.tool";
 import {
@@ -135,17 +140,29 @@ async function runOneRule(rule: RecurringRuleWithRooms, targetDate: string): Pro
   let lastFailureReason = "시도할 회의실이 없습니다.";
   let lastAttemptedPriority: number | null = null;
 
+  // [버그 수정, 20260818] createReservation의 assertValidReservationWindow는 today 인자를
+  // 안 넘기면 자체적으로 new Date().toISOString()(UTC)로 "오늘"을 계산한다. 이 잡은 한국시간
+  // 00:01에 도는데, 그 순간 UTC는 아직 전날이라 diffDays가 7이 아니라 8로 계산돼 매번
+  // "범위를 벗어났다"며 거부됐다(실사용에서 실제로 발생 — .job.log에 남은 실패 기록).
+  // targetDate는 "오늘(KST)+MAX_ADVANCE_DAYS"로 계산된 값이므로(runRecurringBookings.ts),
+  // 거꾸로 빼면 정확히 그 "오늘(KST)"을 복원할 수 있다 — 실행 시점의 시계에 기대지 않는다.
+  const todayForWindowCheck = addDaysToKstDate(targetDate, -MAX_ADVANCE_DAYS);
+
   for (const roomEntry of rule.rooms) {
     lastAttemptedPriority = roomEntry.priority;
     try {
-      const result = await createReservation(rule.userId, {
-        title,
-        contents: rule.contents ?? "",
-        date: targetDate,
-        startTime: rule.startTime,
-        endTime: rule.endTime,
-        room: roomEntry.room,
-      });
+      const result = await createReservation(
+        rule.userId,
+        {
+          title,
+          contents: rule.contents ?? "",
+          date: targetDate,
+          startTime: rule.startTime,
+          endTime: rule.endTime,
+          room: roomEntry.room,
+        },
+        todayForWindowCheck
+      );
 
       await recordRun({
         ruleId: rule.id,

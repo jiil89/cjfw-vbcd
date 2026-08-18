@@ -135,9 +135,11 @@ export async function getOrCreateSession(userId: string): Promise<OrchestrationS
   return loaded;
 }
 
-/** 이번 턴에 바뀐 세션을 저장한다. 턴 안에서의 각 mutate(appendMessage 등)는 메모리
- * 객체를 그대로 조작할 뿐이고, 실제 영속화는 턴이 끝날 때 이 함수 호출 한 번으로
- * 끝낸다 — 매 mutate마다 DB를 치지 않는다. */
+/** 지금 시점의 세션 상태를 저장한다. [버그 수정, 20260818] 예전엔 턴이 끝날 때 한
+ * 번만 호출했는데, 도구가 이미 CJ에 실제로 반영되는 부작용(예약 확정 등)을 낸 직후
+ * 다음 OpenAI 호출이 실패하면 그 사실이 저장 안 된 채 사라지는 문제가 있었다. 그래서
+ * orchestrator.ts는 이제 도구 호출이 끝날 때마다(부작용 여부와 무관하게) 이 함수를
+ * 호출한다 — 매번 호출해도 이 앱 규모에서는 비용 문제가 없다. */
 export async function saveSession(session: OrchestrationSession): Promise<void> {
   await saveChatSessionState(session.userId, session, new Date(session.lastActivityAt));
 }

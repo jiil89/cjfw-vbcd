@@ -212,6 +212,30 @@ describe("runRecurringBookingsForTargetDate", () => {
     );
   });
 
+  // [버그 수정, 20260818] createReservation이 today 인자 없이 자체 기본값(UTC)을 쓰면
+  // 한국시간 자정 실행 시 diffDays가 7이 아니라 8로 계산돼 매번 거부됐다(실사용에서 실제로
+  // 발생 — .job.log에 남은 실패 기록). targetDate에서 거꾸로 KST "오늘"을 복원해 넘기는지 확인한다.
+  it("createReservation에 KST 기준 오늘(targetDate - MAX_ADVANCE_DAYS)을 명시적으로 넘긴다", async () => {
+    const rule = makeRule();
+    (findActiveRulesForWeekday as ReturnType<typeof vi.fn>).mockResolvedValue([rule]);
+    (createReservation as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      reservationId: "res-1",
+      roomName: "3F-1",
+      date: "2026-08-24",
+      startTime: "10:00",
+      endTime: "11:00",
+      cjSeq: "9001",
+    });
+
+    await runWithFakeTimers(runRecurringBookingsForTargetDate("2026-08-24"));
+
+    expect(createReservation).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ date: "2026-08-24" }),
+      "2026-08-17"
+    );
+  });
+
   it("무인 예약 동의가 철회된 사용자는 skipped로 기록하고 CJ를 호출하지 않는다", async () => {
     const rule = makeRule();
     (findActiveRulesForWeekday as ReturnType<typeof vi.fn>).mockResolvedValue([rule]);

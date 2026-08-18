@@ -17,6 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 import { config } from "../config/env";
+import { toKstDate } from "../lib/kst";
 import {
   appendMessage,
   getOrCreateSession,
@@ -563,7 +564,9 @@ async function executeTool(
           return errorResult("date/startTime/endTime/room은 필수입니다.");
         }
         try {
-          assertValidReservationWindow({ date, today: new Date().toISOString().slice(0, 10), startTime, endTime });
+          // [버그 수정, 20260818] toISOString()은 UTC라 한국시간 00:00~08:59 사이에는 "오늘"이
+          // 어제로 계산돼, 정확히 7일 뒤를 요청한 예약이 부당하게 거부됐다. KST로 계산한다.
+          assertValidReservationWindow({ date, today: toKstDate(new Date()), startTime, endTime });
           if (durationMinutes(startTime, endTime) > MAX_SINGLE_ROOM_MINUTES) {
             return errorResult(`${MAX_SINGLE_ROOM_MINUTES}분을 초과하는 요청은 plan_long_meeting으로 분할 계획을 먼저 세워야 합니다.`);
           }
@@ -814,7 +817,9 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
   appendMessage(session, { role: "user", content: userMessage });
 
   const rooms = await getRoomContext();
-  const today = new Date().toISOString().slice(0, 10);
+  // [버그 수정, 20260818] toISOString()은 UTC라 한국시간 00:00~08:59 사이에는 모델에게
+  // "오늘"을 어제로 알려줬다 — "내일"/"모레" 같은 상대 날짜 해석이 전부 하루씩 밀렸다.
+  const today = toKstDate(new Date());
 
   let finalReply: string | null = null;
   let lastToolResult: ChatProposal | null = null;
@@ -897,6 +902,13 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
         name,
         content: JSON.stringify(result.content),
       });
+      // [버그 수정, 20260818] 예전엔 턴이 끝난 뒤(919번째 줄) 딱 한 번만 저장했다. 그런데
+      // executeTool은 confirm_create_reservation처럼 이미 CJ에 실제로 반영되는 부작용을
+      // 낼 수 있는데, 그 직후 다음 OpenAI 호출이 타임아웃/오류로 실패하면 실제로는 예약이
+      // 됐는데도 그 사실(pendingConfirmation 해제, tool 응답 메시지)이 저장 안 된 채
+      // 사라진다. 사용자가 재시도하면 서버는 "아직 아무 일도 없었던 걸로" 착각해 중복
+      // 예약을 시도할 수 있다. 그래서 도구 호출 하나가 끝날 때마다 바로 저장한다.
+      await saveSession(session);
     }
   }
 
@@ -913,9 +925,9 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
       `completion=${turnTokenUsage.completion_tokens} total=${turnTokenUsage.total_tokens}`
   );
 
-  // 턴 안에서의 mutate(appendMessage, setPendingConfirmation 등)는 전부 메모리 위에서
-  // 일어나고, 실제 DB 저장은 턴이 끝나는 이 시점 한 번뿐이다 — 매 mutate마다 DB를
-  // 치지 않는다(sessionStore.ts saveSession 주석 참고).
+  // 도구 호출이 있었던 턴은 이미 도구 호출 루프 안에서 매번 저장했다(위 주석 참고).
+  // 여기서는 마지막 assistant 메시지(finalReply)까지 포함해 한 번 더 저장해 마무리한다 —
+  // 도구 호출이 아예 없었던 턴(순수 대화)은 이게 유일한 저장 시점이다.
   await saveSession(session);
 
   return { reply: finalReply, proposal: lastToolResult };
