@@ -32,6 +32,9 @@ function proxyTo(): ProxyOptions {
 export default defineConfig({
   plugins: [react()],
   server: {
+    // 사내망의 다른 PC에서 내 PC의 LAN IP로 접속해 같이 쓸 수 있게 0.0.0.0으로 바인딩한다
+    // (임시 공유용, 20260818) — 기본값(localhost only)이면 같은 PC에서만 접속 가능하다.
+    host: true,
     proxy: {
       '/auth': proxyTo(),
       '/admin': proxyTo(),

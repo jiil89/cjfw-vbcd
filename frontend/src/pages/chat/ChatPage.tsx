@@ -53,6 +53,14 @@ interface ChatUiMessage {
   errorCode?: string;
 }
 
+/** 채팅 메시지의 React key로만 쓰는 로컬 임시 id — 서버로 전송되지 않고 보안과도 무관하므로
+ * crypto.randomUUID()를 쓰지 않는다. 그 함수는 브라우저가 "보안 컨텍스트"(HTTPS 또는
+ * localhost)에서만 제공해서, 사내망 LAN IP로 http 접속한 사용자는 여기서 예외가 나 전송
+ * 버튼/엔터가 죽어 있는 것처럼 보였다(20260818). */
+function makeLocalId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 /** 에이전트 아바타 아이콘 — 답변 상황에 맞는 캐릭터를 고른다.
  *
  * 어떤 도구가 실행됐는지는 이미 응답의 `proposal.tool`로 내려오므로, LLM에게 따로
@@ -220,10 +228,10 @@ export function ChatPage() {
     const trimmed = text.trim();
     if (!trimmed || sendMutation.isPending) return;
 
-    const pendingId = crypto.randomUUID();
+    const pendingId = makeLocalId();
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), role: "user", text: trimmed, timestamp: new Date() },
+      { id: makeLocalId(), role: "user", text: trimmed, timestamp: new Date() },
       { id: pendingId, role: "agent", text: "확인 중입니다…", timestamp: new Date(), pending: true },
     ]);
     setDraft("");
