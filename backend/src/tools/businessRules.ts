@@ -37,7 +37,7 @@ export const DEFAULT_RESERVATION_TITLE = "데이터 수집/분석 회의";
 
 /** LLM이 회의명을 못 받았을 때 임의로 채워 넣던 무의미한 placeholder들 (실사용에서 관찰됨).
  * 이런 값이 오면 사용자가 실제로 준 제목이 아니므로 기본 제목으로 교체한다. */
-const PLACEHOLDER_TITLES = ["회의", "미팅", "meeting", "회의실", "예약"];
+const PLACEHOLDER_TITLES = ["회의", "미팅", "meeting", "회의실", "예약", "테스트", "test"];
 
 /**
  * 저장 직전 회의명을 정규화한다. 비어있거나 LLM이 지어낸 placeholder면 기본 제목으로 바꾼다.

@@ -94,10 +94,21 @@ describe("normalizeReservationTitle -- 회의명 placeholder를 기본 제목으
     expect(normalizeReservationTitle("미팅")).toBe(DEFAULT_RESERVATION_TITLE);
     expect(normalizeReservationTitle("  회의  ")).toBe(DEFAULT_RESERVATION_TITLE);
     expect(normalizeReservationTitle("Meeting")).toBe(DEFAULT_RESERVATION_TITLE);
+    expect(normalizeReservationTitle("테스트")).toBe(DEFAULT_RESERVATION_TITLE);
+    expect(normalizeReservationTitle("test")).toBe(DEFAULT_RESERVATION_TITLE);
   });
 
   it("placeholder를 포함하지만 더 구체적인 제목은 그대로 둔다", () => {
     expect(normalizeReservationTitle("주간 회의")).toBe("주간 회의");
     expect(normalizeReservationTitle("팀 미팅")).toBe("팀 미팅");
+  });
+
+  // [실사용 발견, 20260818] 사용자가 회의명을 전혀 말하지 않았는데도 모델이 대화 맥락에서
+  // "AI챗봇 테스트" 같은 그럴듯한 문구를 지어내 그대로 저장된 사례가 있었다. 이 함수는
+  // 정확히 일치하는 단어만 걸러내므로 이런 복합 문구는 걸러내지 못한다 — 그래서 이 문제는
+  // systemPrompt.ts(모델이 확인/완료 메시지에 회의명을 항상 보여주게 해서 사용자가 즉시
+  // 알아채게 함)에서 막는다. 여기서는 이 한계를 회귀 테스트로 명시해둔다.
+  it("[알려진 한계] 지어낸 단어라도 다른 단어와 결합되면 걸러내지 못한다", () => {
+    expect(normalizeReservationTitle("AI챗봇 테스트")).toBe("AI챗봇 테스트");
   });
 });
