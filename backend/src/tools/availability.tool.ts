@@ -15,12 +15,15 @@ import type { Room } from "../db/repositories/roomRepository";
 import { findUserById } from "../db/repositories/userRepository";
 import { findPreferredRoomsByUserId } from "../db/repositories/userPreferredRoomRepository";
 import { assertValidReservationWindow, RESERVATION_UNIT_MINUTES } from "./businessRules";
+import { toKstDate } from "../lib/kst";
 
 // 가용성 그리드는 07:00부터 30분 단위로 시작한다 (도메인 정의서 6번 운영시간/예약단위).
 const GRID_START_TIME = "07:00";
 
+// [버그 수정, 20260818] UTC 기본값이면 한국시간 00:00~08:59 사이 정확히 7일 뒤 조회가
+// 부당하게 "범위 밖"으로 거부된다. check_availability의 기본 오늘이라 실사용 영향이 크다.
 function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toKstDate(new Date());
 }
 
 /**

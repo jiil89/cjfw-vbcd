@@ -38,10 +38,13 @@ import {
   RESERVATION_UNIT_MINUTES,
 } from "./businessRules";
 import { findAvailableRooms, resolveEmailAlias } from "./availability.tool";
-import { toKstTimestamp } from "../lib/kst";
+import { toKstDate, toKstTimestamp } from "../lib/kst";
 
+// [버그 수정, 20260818] UTC 기본값이면 한국시간 00:00~08:59 사이 정확히 7일 뒤 요청이
+// 부당하게 "범위 밖"으로 거부된다. createReservation/planLongMeetingSegments/
+// createSplitReservation 전부 이 함수를 기본값으로 쓰므로 여기 한 곳만 고치면 된다.
 function isoToday(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toKstDate(new Date());
 }
 
 /**

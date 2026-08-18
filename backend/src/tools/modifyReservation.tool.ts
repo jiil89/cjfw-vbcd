@@ -250,7 +250,9 @@ export async function modifyReservation(
 
   assertValidReservationWindow({
     date: newDate,
-    today: today ?? new Date().toISOString().slice(0, 10),
+    // [버그 수정, 20260818] UTC 기본값이면 한국시간 00:00~08:59 사이 정확히 7일 뒤로
+    // 변경하려는 요청이 부당하게 거부된다(reservation.tool.ts와 동일한 버그).
+    today: today ?? toKstDate(new Date()),
     startTime: newStartTime,
     endTime: newEndTime,
   });

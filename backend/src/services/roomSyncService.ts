@@ -15,6 +15,7 @@ import { loginAndGetSession } from "../cj-automation/session";
 import { getDayPilotConfReserveList } from "../cj-automation/client";
 import { upsertRoomIfChanged } from "../db/repositories/roomRepository";
 import { findUserById } from "../db/repositories/userRepository";
+import { toKstDate } from "../lib/kst";
 
 const BUILDING_AREA_CODE = "804"; // CJ프레시웨이(상암S시티)
 const SITE_NAME = "상암S시티";
@@ -84,7 +85,9 @@ export async function syncRoomMasterData(userId: string): Promise<RoomSyncResult
   }
 
   const session = await loginAndGetSession(userId);
-  const today = new Date().toISOString().slice(0, 10);
+  // [버그 수정, 20260818] CJ는 한국 시스템이라 UTC 날짜를 넘기면 자정~오전 9시 사이엔
+  // 어제 날짜로 조회하게 된다. KST로 계산한다.
+  const today = toKstDate(new Date());
 
   const floors: RoomSyncFloorResult[] = [];
 

@@ -56,6 +56,7 @@ import { config } from "../config/env";
 import { findUserById } from "../db/repositories/userRepository";
 import { decryptCorporatePassword } from "../security/corporatePassword";
 import { getCachedCjSession, setCachedCjSession } from "./sessionCache";
+import { toKstDate } from "../lib/kst";
 
 const LOGIN_NAV_TIMEOUT_MS = 30_000;
 
@@ -140,7 +141,9 @@ async function warmUpReservationSession(page: Page): Promise<void> {
       return;
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    // [버그 수정, 20260818] CJ는 한국 시스템이라 UTC 날짜를 넘기면 자정~오전 9시 사이엔
+    // 어제 날짜로 워밍업하게 된다. KST로 계산한다.
+    const today = toKstDate(new Date());
     const warmupUrl =
       `${config.cjBaseUrl}/NConf/conferenceRoom/reserve_insmod.aspx` +
       `?area_code=${RESERVE_SESSION_WARMUP_AREA_CODE}&sub_area_code=${RESERVE_SESSION_WARMUP_SUBAREA_CODE}` +
