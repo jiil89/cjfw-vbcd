@@ -4,12 +4,27 @@
 // 각각 별도 필드로 분리해서 로드한다. 필수 값이 비어있으면 부팅 시점에
 // 명확한 에러로 즉시 실패한다 (fail fast).
 
+import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
 
 // process.cwd()가 backend/가 아닐 수도 있으므로(예: 모노레포 루트에서 실행) 이 파일 기준
-// 상대 경로로 backend/.env를 명시적으로 찾는다.
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+// 상대 경로로 backend/.env를 찾는다. 단, 이 파일의 깊이가 실행 방식에 따라 달라진다:
+//   개발(tsx):      backend/src/config/env.ts       -> ../../      = backend/
+//   프로덕션(빌드):  backend/dist/src/config/env.js  -> ../../../   = backend/
+// [2026-08-19 발견] 원래는 ../../ 하나만 봐서, 빌드 산출물로 실행하면(npm start) .env를
+// backend/dist/.env에서 찾다 실패해 "필수 환경변수가 없다"며 부팅이 죽었다. 지금까지
+// 개발 서버(tsx)로만 띄워봐서 드러나지 않았던 문제 — 사내 노트북 서버 구성에서 처음 걸렸다.
+// 후보 경로를 순서대로 확인하고, 하나도 없으면 dotenv를 건너뛴다(실제 환경변수로 주입하는
+// 배포 방식도 유효하므로 여기서 실패시키지 않고, 값이 비면 아래 requireEnv가 잡아준다).
+const envCandidates = [
+  path.resolve(__dirname, "../../.env"),
+  path.resolve(__dirname, "../../../.env"),
+];
+const envPath = envCandidates.find((candidate) => fs.existsSync(candidate));
+if (envPath) {
+  dotenv.config({ path: envPath });
+}
 
 function requireEnv(key: string): string {
   const value = process.env[key];

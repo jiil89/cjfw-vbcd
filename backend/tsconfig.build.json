@@ -1,0 +1,5 @@
+{
+  "//": "프로덕션 빌드 전용 설정. tsconfig.json은 그대로 두어 `tsc --noEmit`과 에디터가 테스트까지 전부 타입체크하게 하고, 여기서는 산출물에서만 테스트를 제외한다. [2026-08-19 발견] 예전에는 build도 tsconfig.json을 써서 dist/에 컴파일된 테스트 파일이 같이 생겼고, 그러면 (1) 프로덕션 서버에 테스트 코드가 함께 배포되고 (2) vitest가 src와 dist의 테스트를 중복으로 주워 담아 실패했다.",
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "**/__tests__/**", "**/*.test.ts"]
+}
