@@ -302,10 +302,18 @@ flowchart LR
 - **완료 조건**:
   - [x] `ALLOWED_ORIGINS` 환경변수로 CORS 허용 목록이 관리되고 코드에 도메인이 하드코딩되지 않음 (BE-1에서 이미 구현됨, `.env.example`에 문서화 보완). curl로 허용 origin은 `Access-Control-Allow-Origin` 헤더 포함, 비허용 origin은 헤더 없음(브라우저 차단)을 실측 확인
   - [x] Dev 환경에서 프론트(Vite) → 백엔드 프록시 — **부분 완료**: FE-1이 아직 시작 전이라 실제 `vite.config.ts`는 만들지 않음(스코프 침범 방지). FE-1에서 바로 쓸 수 있는 `server.proxy` 설정을 문서화해둠. **FE-1 착수 시 결정 필요**: 백엔드 라우트가 현재 `/auth`,`/admin`,`/chat`로 루트 마운트되어 있어, 프록시 경로를 개별 지정하거나 백엔드를 `/api/*`로 리네이밍할지 택1 필요
-  - [x] Prd 배포에서 프론트/백엔드 same-origin 또는 CORS 화이트리스트 — **부분 완료**: `backend/vercel.json` 신규 생성(Hobby 300초 `maxDuration` 반영, 백엔드 단독 배포 시 사용). 프론트/백엔드 통합 rewrite(`/api/*`)는 프론트 디렉터리 구조가 없는 상태라 추측성 설정을 피하기 위해 FE-1 이후로 의도적으로 보류(파일 내 주석에 근거 명시). 분리 배포 시엔 위 `ALLOWED_ORIGINS` 화이트리스트로 대응 가능
+  - [x] Prd 배포에서 프론트/백엔드 same-origin — **완료(2026-08-19)**: 루트 `vercel.json` 작성, 한 Vercel 프로젝트(`cjfwai/cjfw-vbcd`)에 프론트(정적)와 백엔드(Function)를 같이 배포. `backend/vercel.json`은 이 파일로 대체되어 삭제. same-origin이므로 CORS 자체가 동작하지 않고 Refresh Token 쿠키도 `SameSite=Lax`를 유지한다
   - [x] `Secure` 쿠키 플래그가 `NODE_ENV` 기준으로 정확히 토글됨 (BE-2에서 이미 구현됨, `auth.routes.ts`의 `refreshTokenCookieOptions()`가 `secure: config.isProd`로 분기하는 것을 코드 레벨로 재확인)
 
-  **후속 확인 필요 사항**: FE-1 스캐폴딩 시 (1) Vite 프록시 경로 vs 백엔드 라우트 프리픽스 정합성 결정, (2) 프론트/백엔드를 같은 Vercel 프로젝트로 묶을지 분리 배포할지 확정 후 루트 `vercel.json` 작성 필요
+  **[2026-08-19 실제 배포 — 배운 것]** 위 "후속 확인 필요 사항"이 모두 해소됨. 실제로 배포하며 겪은 함정 3가지를 남긴다.
+  1. **레거시 `builds`를 쓰면 modern `rewrites`가 무시된다.** 같은 세대인 `routes`를 써야 한다. 처음엔 `rewrites`로 작성해 모든 경로가 404였다.
+  2. **`@vercel/static-build`의 src가 `frontend/package.json`이면 산출물이 루트가 아니라 `/frontend/` 아래에 배치된다.** 실측: `/frontend/index.html`은 200, `/index.html`은 404. 그래서 `{ "src": "^/(.*)$", "dest": "/frontend/$1", "check": true }`로 먼저 찾아보고 없으면 SPA로 폴백하게 했다(에셋 경로를 하나씩 나열하지 않아도 되게).
+  3. **`/admin`·`/chat` 이름 충돌**은 `missing`으로 Accept 헤더를 검사해 해결 — `text/html`이면 SPA, 아니면 백엔드. `frontend/vite.config.ts`의 `bypassHtmlNavigation`과 같은 발상.
+
+  실측 검증(프로덕션 `https://cjfw-vbcd.vercel.app`): `/health` → `{"status":"ok"}`(Supabase 커넥션 풀러 왕복 성공), `/rooms` → 26개, `/`·`/login`·`/admin`·`/chat` → 200 + SPA HTML, `/admin`에 fetch로 접근 시 백엔드 401 JSON, js/css/favicon 200.
+
+  **배포 차단 이슈(기록용)**: `vercel link`가 GitHub 저장소를 연결한 뒤부터 CLI 배포가 전부 `BLOCKED`됐다 — 사유는 `Git author jiil.jung@cj.net must have access to the team CJFWAI`. 커밋 작성자가 회사 이메일인데 Vercel 계정은 개인 Gmail이라 매칭되지 않아서였다. 이 저장소의 `git config user.email`을 `jiiljung89@gmail.com`으로 바꿔 해결(글로벌 설정은 회사 이메일 그대로 유지). **CLI가 이 상태를 "Building…"으로만 표시해 단순히 느린 것처럼 보이므로, 배포가 지연되면 `vercel api /v6/deployments?...`로 `state`와 `errorMessage`를 직접 확인할 것.**
+  **남은 것**: GitHub push 시 자동 배포는 아직 막혀 있다(`GitHub could not associate the committer with a GitHub user` — Gmail이 GitHub 계정에 등록돼 있지 않음). CLI 배포는 정상이라 급하지 않다.
 
 ### BE-10. 반복 예약 규칙 관리 API
 
