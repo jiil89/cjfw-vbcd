@@ -10,7 +10,7 @@
       "dest": "/backend/api/index.ts"
     },
     { "src": "^/(auth|rooms|me|health)(/.*)?$", "dest": "/backend/api/index.ts" },
-    { "handle": "filesystem" },
-    { "src": "^/(.*)$", "dest": "/index.html" }
+    { "src": "^/(.*)$", "dest": "/frontend/$1", "check": true },
+    { "src": "^/(.*)$", "dest": "/frontend/index.html" }
   ]
 }
