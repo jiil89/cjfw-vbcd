@@ -95,6 +95,22 @@ function isServerlessEnv(): boolean {
   return Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 }
 
+/** ESM 전용 패키지를 CommonJS 빌드에서 불러오기 위한 진짜 동적 import.
+ *
+ * [2026-08-19 Vercel 첫 배포에서 발견] `await import("@sparticuz/chromium")`을 그냥 쓰면,
+ * tsconfig가 `"module": "CommonJS"`라 TypeScript가 이걸 `require()`로 낮춰서 컴파일한다.
+ * 그런데 @sparticuz/chromium은 `"type": "module"`인 순수 ESM 패키지(CJS 빌드 없음)라
+ * 런타임에 `ERR_REQUIRE_ESM`으로 죽는다 — 로컬은 이 분기를 안 타서 여태 드러나지 않았고,
+ * 배포 후 로그인(=CJ 세션 예열)이 전부 401로 실패해서야 드러났다.
+ *
+ * `new Function`으로 감싸면 TypeScript가 그 안의 import를 정적으로 보지 못해 변환하지
+ * 않으므로, Node가 실행 시점에 ESM으로 제대로 로드한다. tsconfig 전체를 Node16으로 바꾸는
+ * 방법도 있지만, 백엔드 전체의 모듈 해석이 바뀌어 영향 범위가 훨씬 커서 이 한 지점만 막는다.
+ */
+const importEsm = new Function("specifier", "return import(specifier)") as (
+  specifier: string
+) => Promise<{ default: { args: string[]; executablePath: () => Promise<string> } }>;
+
 /**
  * Vercel Functions(@sparticuz/chromium)와 로컬 개발(일반 Playwright 로컬 Chromium)을
  * 환경에 따라 자동으로 분기한다. 로컬에서는 `npx playwright install chromium`으로 설치된
@@ -102,7 +118,7 @@ function isServerlessEnv(): boolean {
  */
 async function launchBrowser(): Promise<Browser> {
   if (isServerlessEnv()) {
-    const chromium = (await import("@sparticuz/chromium")).default;
+    const chromium = (await importEsm("@sparticuz/chromium")).default;
     return playwrightChromium.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
