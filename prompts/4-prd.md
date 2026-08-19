@@ -18,9 +18,11 @@ PRD — 회의실 예약 Agent
 | --- | --- | --- |
 | 프론트엔드 | 로컬 PC | **Vercel** |
 | 백엔드 | 로컬 PC | **Vercel** (Serverless Functions) |
-| DB | 로컬 PC | **Supabase** |
+| DB | **로컬 PC(Postgres, 별도 설치)** | **Supabase** |
 
-- Dev 환경은 프론트/백엔드는 로컬 PC에서 구동한다. **DB는 로컬에 별도 설치하지 않고, Supabase 프로젝트(클라우드)에 로컬 백엔드가 직접 연결**하는 방식을 쓴다 — Dev/Prd가 항상 같은 Postgres(Supabase)를 쓰게 되어 환경 차이로 인한 문제를 줄인다. 로컬에 필요한 건 Node.js뿐.
+- **[2026-08-18 결정 변경]** 원래는 Dev/Prd가 같은 Supabase 프로젝트를 공유하는 방식이었으나, Dev와 Prd의 DB를 완전히 분리하기로 바꿨다. Dev(로컬 PC)는 로컬에 직접 설치한 Postgres를 쓰고, Prd(Vercel)만 Supabase에 연결한다.
+  - **이유**: 로컬 개발 중에는 반복 예약 스케줄러 수동 실행, 실사용 데이터 조작 등 실험적인 DB 조작이 잦다 — 이걸 실제 Supabase(향후 실사용자 데이터가 쌓일 곳)와 공유하면 개발 중 실수가 운영 데이터를 오염시킬 위험이 있다. 로컬 PC가 사내망에 없거나 인터넷이 끊겨도 개발이 가능해야 한다는 점도 있다.
+  - **트레이드오프**: 로컬 Postgres와 Supabase(Prd)의 스키마가 어긋나지 않도록 `supabase/migrations/`의 모든 마이그레이션을 **양쪽에 동일하게** 적용해야 한다 — 마이그레이션 파일을 새로 추가할 때마다 로컬 `psql`과 Supabase(MCP 또는 대시보드) 양쪽에 적용하는 걸 원칙으로 한다. 세션 타임존처럼 두 환경이 실제로 다를 수 있는 값(`5-project-principle.md` 41번 참고)에도 더 신경 써야 한다.
 - Prd(운영) 환경은 프론트엔드·백엔드 모두 **Vercel**, DB는 **Supabase**로 통일한다. 텔레그램 Long Polling 방식은 상시 프로세스가 필요해 Vercel과 맞지 않았으나, **1차 채널이 웹 챗봇으로 바뀌면서 이 제약이 해소**되어 백엔드 전체를 Vercel로 가져갈 수 있게 됨.
 
 ### 인프라 제약

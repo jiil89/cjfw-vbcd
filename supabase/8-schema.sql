@@ -45,9 +45,12 @@ create extension if not exists btree_gist;
 -- -----------------------------------------------------------------------------
 
 -- updated_at 컬럼 자동 갱신 트리거 함수 (여러 테이블이 공유하는 단순 유틸리티, 비즈니스 로직 아님)
+-- search_path를 고정한다(20260818230000 마이그레이션 — Supabase Advisor가 실제 프로젝트에서
+-- function_search_path_mutable로 잡아냄. 로컬 Postgres엔 그 어드바이저가 없어 여태 안 드러났다).
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();

@@ -96,20 +96,20 @@ flowchart LR
 
 ### DB-2. 실제 Supabase 프로젝트 생성 및 마이그레이션 적용
 
-- **작업 내용**: supabase.com에 프로젝트 생성(Dev/Prd 공용, PRD 결정사항), `supabase/migrations/` 전체를 순서대로 적용, `.env`의 `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`/`DATABASE_URL`(커넥션 풀러 6543 포트) 채움.
+- **작업 내용**: supabase.com에 **Prd 전용** 프로젝트 생성(`4-prd.md` 2026-08-18 결정 변경 — Dev는 로컬 Postgres로 분리), `supabase/migrations/` 전체를 순서대로 적용, Vercel 배포 시 Vercel 프로젝트 환경변수에 `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`/`DATABASE_URL`(커넥션 풀러 6543 포트) 채움(로컬 `.env`는 그대로 로컬 Postgres를 가리킴).
 - **선행 Task**: DB-1
 - **완료 조건**:
-  - [ ] Supabase 프로젝트 생성 완료
-  - [ ] `supabase/migrations/` 전체(DB-1 포함)가 순서대로 적용되어 오류 없이 끝까지 실행됨
-  - [ ] `.env`의 Supabase/DB 관련 값이 실제 프로젝트 값으로 채워짐 (커넥션 풀러 주소 사용, 5432 직접 연결 아님)
-  - [ ] `psql` 또는 Supabase 대시보드에서 8개 테이블이 모두 생성된 것을 확인
+  - [x] Supabase 프로젝트 생성 완료 (조직 `cjfw-vbcd`, 프로젝트 `PROJECT_REF_REDACTED`, `ap-southeast-1`, Supabase MCP로 적용)
+  - [x] `supabase/migrations/` 전체(DB-1 포함, `20260818230000_fix_set_updated_at_search_path.sql`까지)가 순서대로 적용되어 오류 없이 끝까지 실행됨. 적용 직후 `get_advisors(security)`로 점검해 `set_updated_at()`의 search_path 미고정 결함을 추가로 발견·수정(같은 수정을 로컬 Postgres에도 반영해 동기화)
+  - [ ] Vercel 배포 시점에 위 4개 값을 Vercel 프로젝트 환경변수로 채움 (`service_role` 키/DB 비밀번호는 이미 확보, 아직 미입력 — Vercel 배포 Task에서 진행)
+  - [x] Supabase MCP `list_tables`로 13개 테이블이 모두 생성되고 전부 RLS 활성화된 것을 확인 (도메인 확장으로 8-schema.sql 초안 이후 5개 테이블 추가됨: refresh_tokens/chat_sessions/recurring_reservation_rules/rule_rooms/runs)
 
 ### DB-3. Refresh Token 폐기 테이블 추가
 
 - **작업 내용**: PRD "인증/보안" 절에서 결정된 대로, Refresh Token 발급 이력을 저장해 서버가 개별/전체 폐기(revoke)할 수 있는 테이블(`refresh_tokens` 등)을 설계·추가하는 마이그레이션 작성. `security-reviewer` 권고대로 `users.password_changed_at`(또는 동등한 컬럼) 추가도 함께 검토.
 - **선행 Task**: DB-2
 - **완료 조건**:
-  - [x] `refresh_tokens` 테이블(또는 동등 설계)이 마이그레이션으로 추가됨 (`20260813002000_refresh_tokens.sql`) — 최소 컬럼: 토큰 식별자/해시, `user_id` FK, 발급/만료 시각, 폐기 여부·시각. 로컬 개발 DB(`DB-2` 미완료로 클라우드 Supabase 대신 로컬 Postgres 사용 중)에 실제 적용 확인 완료
+  - [x] `refresh_tokens` 테이블(또는 동등 설계)이 마이그레이션으로 추가됨 (`20260813002000_refresh_tokens.sql`) — 최소 컬럼: 토큰 식별자/해시, `user_id` FK, 발급/만료 시각, 폐기 여부·시각. 로컬 개발 DB(Dev 전용 로컬 Postgres, `4-prd.md` 2026-08-18 결정)에 실제 적용 확인 완료. 이후 DB-2에서 Prd용 Supabase에도 동일하게 적용됨
   - [x] 개별 토큰 폐기(로그아웃)와 사용자 전체 토큰 폐기(비밀번호 변경/보안사고 대응) 두 시나리오 모두 쿼리로 처리 가능한 구조인지 확인 (`(user_id, revoked)` 인덱스, 별도 RPC 불필요)
   - [x] `supabase/8-schema.sql`에도 반영 (`prompts/8-erd.md`도 함께 갱신)
 
@@ -154,7 +154,7 @@ flowchart LR
 - **선행 Task**: DB-2
 - **완료 조건**:
   - [x] `5-project-principle.md` 7번의 폴더 구조가 그대로 생성됨
-  - [x] `pg` Pool이 `DATABASE_URL`로 연결되고, 로컬에서 간단한 쿼리(`select now()`)가 성공함 (DB-2 미완료로 지금은 커넥션 풀러 6543 대신 로컬 Postgres 5432로 대체 — 나중에 `.env`만 교체하면 됨, 코드에 포트/호스트 가정 없음)
+  - [x] `pg` Pool이 `DATABASE_URL`로 연결되고, 로컬에서 간단한 쿼리(`select now()`)가 성공함 (Dev는 로컬 Postgres 5432를 계속 쓴다 — `4-prd.md` 2026-08-18 결정. Prd(Vercel)만 커넥션 풀러 6543을 쓰며, 코드는 포트/호스트를 가정하지 않으므로 그대로 동작)
   - [x] `.env`의 시크릿(JWT 두 키, `CREDENTIAL_ENCRYPTION_KEY`, `OPENAI_API_KEY`)이 서로 다른 변수로 분리 로딩됨을 확인
   - [ ] Vercel Functions로 배포했을 때 헬스체크 엔드포인트(`GET /api/health`)가 정상 응답 (아직 미배포 — 로컬 `GET /health` 정상 응답까지만 확인함)
 
@@ -332,6 +332,11 @@ flowchart LR
   - [ ] 스케줄러 콘솔 로그(Windows 작업 스케줄러가 캡처할 수 있는 stdout) — 실행한 규칙 수, 성공/실패 요약 (앱 내 로그는 BE-10의 `latest_run` 조회로 표시)
   - [ ] `.env.example`에 실행 스크립트 경로/시간대 문서화
   - [ ] [미검증] +7일 예약 창이 정확히 00:01에 열리는지 재확인(도메인 정의서 6번 참고) — 첫 실행 후 확인 필요
+
+**[후속 과제, 2026-08-19 확인 — 아직 미착수, PRD 배포 이후로 미룸]**
+- 2026-08-19 00:01 자동 실행이 아예 안 됨(`Get-ScheduledTaskInfo`의 `LastTaskResult`가 `0x800710E0` = "제약 조건 때문에 미실행"). PC가 그 시각에 꺼져 있었던 것으로 추정.
+- 근본 원인: 스케줄 작업의 `StartWhenAvailable`(놓친 실행을 PC가 다시 켜지면 따라잡기) 옵션이 꺼져 있음. 이걸 켜지 않으면 PC가 자정에 꺼져 있을 때마다 그날 반복 예약이 통째로 스킵된다.
+- 할 일: (1) `Set-ScheduledTask`/`New-ScheduledTaskSettingsSet`으로 `StartWhenAvailable=$true` 적용, (2) KST/UTC 버그 수정(`20260819` 커밋들)이 실제 CJ 예약까지 성공하는지 수동 실행으로 라이브 검증 — 마침 수요일 아침엔 인자 없이 그냥 돌려도 대상일이 정확히 다음 수요일(+7일)이라 조작 없는 진짜 조건으로 테스트 가능.
 
 ---
 
