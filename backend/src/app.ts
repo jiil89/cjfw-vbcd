@@ -5,6 +5,7 @@ import path from "node:path";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type Express } from "express";
+import swaggerUi from "swagger-ui-express";
 import { config } from "./config/env";
 import { pool } from "./db/pool";
 import { adminRouter } from "./routes/admin.routes";
@@ -39,6 +40,19 @@ export function createApp(): Express {
       res.status(503).json({ status: "error", message: "database unreachable" });
     }
   });
+
+  // [20260820 추가] docs/swagger.json을 /api-docs에서 렌더링한다. 실제 API 계약과
+  // 어긋나지 않도록 지금까지는 정적 파일로만 관리했는데, 눈으로 확인하려면 매번
+  // editor.swagger.io에 복붙해야 했다. process.cwd() 기준 상대경로를 쓴다 — 개발(tsx,
+  // cwd=backend/)과 운영(npm start, cwd도 항상 backend/) 둘 다 이 파일 기준으로 실행되므로
+  // config/env.ts의 .env 경로처럼 빌드 산출물 깊이에 따라 어긋나는 문제가 없다.
+  // 프론트 SPA 폴백(아래)보다 반드시 먼저 와야 한다 — 안 그러면 브라우저가 보내는
+  // Accept: text/html 때문에 이 경로도 SPA로 가로채인다.
+  const swaggerPath = path.resolve(process.cwd(), "../docs/swagger.json");
+  if (fs.existsSync(swaggerPath)) {
+    const swaggerDocument = JSON.parse(fs.readFileSync(swaggerPath, "utf-8"));
+    app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  }
 
   // [사내 노트북 서버 구성, 20260819] 빌드된 프론트엔드를 같은 프로세스/같은 포트에서 서빙한다.
   //
