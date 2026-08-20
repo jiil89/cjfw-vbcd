@@ -14,6 +14,7 @@ import {
   RegistrationPendingError,
   RegistrationRejectedError,
   AccountRevokedError,
+  AccountLockedError,
   RefreshTokenInvalidError,
 } from "../services/authService";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/requireAuth";
@@ -117,7 +118,8 @@ authRouter.post("/login", async (req: Request, res: Response) => {
     if (
       error instanceof RegistrationPendingError ||
       error instanceof RegistrationRejectedError ||
-      error instanceof AccountRevokedError
+      error instanceof AccountRevokedError ||
+      error instanceof AccountLockedError
     ) {
       res.status(403).json({ error: { code: error.code, message: error.message } });
       return;
@@ -214,7 +216,8 @@ authRouter.post("/cj-world-password", async (req: Request, res: Response) => {
     if (
       error instanceof RegistrationPendingError ||
       error instanceof RegistrationRejectedError ||
-      error instanceof AccountRevokedError
+      error instanceof AccountRevokedError ||
+      error instanceof AccountLockedError
     ) {
       res.status(403).json({ error: { code: error.code, message: error.message } });
       return;

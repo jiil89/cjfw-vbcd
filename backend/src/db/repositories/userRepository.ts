@@ -9,11 +9,14 @@ export interface User {
   encryptedPassword: string;
   appPasswordHash: string;
   isAdmin: boolean;
-  status: "active" | "revoked";
+  status: "active" | "revoked" | "locked";
   approvedAt: string;
   revokedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** 연속 로그인 실패 횟수. MAX_LOGIN_ATTEMPTS 도달 시 status가 locked로 바뀐다
+   * (20260820 마이그레이션, businessRules.ts 참고). */
+  failedLoginAttempts: number;
   /** 매주 반복 예약을 위해 서버가 이 사용자의 CJ 계정으로 무인(unattended) 로그인하는 것에
    * 동의한 시각. null이면 동의한 적 없음(20260817 마이그레이션, recurringRuleRepository 참고). */
   unattendedBookingConsentAt: string | null;
@@ -27,17 +30,18 @@ interface UserRow {
   encrypted_password: string;
   app_password_hash: string;
   is_admin: boolean;
-  status: "active" | "revoked";
+  status: "active" | "revoked" | "locked";
   approved_at: string;
   revoked_at: string | null;
   created_at: string;
   updated_at: string;
   unattended_booking_consent_at: string | Date | null;
   unattended_booking_consent_revoked_at: string | Date | null;
+  failed_login_attempts: number;
 }
 
 const USER_COLUMNS =
-  "id, email_alias, encrypted_password, app_password_hash, is_admin, status, approved_at, revoked_at, created_at, updated_at, unattended_booking_consent_at, unattended_booking_consent_revoked_at";
+  "id, email_alias, encrypted_password, app_password_hash, is_admin, status, approved_at, revoked_at, created_at, updated_at, unattended_booking_consent_at, unattended_booking_consent_revoked_at, failed_login_attempts";
 
 // unattended_booking_consent_at/revoked_at은 timestamptz라 node-postgres가 실제로는 Date
 // 객체로 돌려준다(reservationRepository.ts와 동일한 이유). 새로 추가하는 이 두 컬럼만
@@ -61,6 +65,7 @@ function toUser(row: UserRow): User {
     updatedAt: row.updated_at,
     unattendedBookingConsentAt: toIsoStringOrNull(row.unattended_booking_consent_at),
     unattendedBookingConsentRevokedAt: toIsoStringOrNull(row.unattended_booking_consent_revoked_at),
+    failedLoginAttempts: row.failed_login_attempts,
   };
 }
 
@@ -128,4 +133,61 @@ export async function updateAppPasswordHash(userId: string, appPasswordHash: str
     `update public.users set app_password_hash = $2, updated_at = now() where id = $1`,
     [userId, appPasswordHash]
   );
+}
+
+// --- 로그인 브루트포스 방어 (20260820 마이그레이션) ---
+//
+// [레이어 원칙] 이 리포지토리는 "몇 회부터 잠그는가"(MAX_LOGIN_ATTEMPTS)를 모른다 — 그 값은
+// tools/businessRules.ts에 있고, db 계층이 tools 계층을 참조하면 5-project-principle.md의
+// 의존 방향(orchestration -> tools -> db)이 거꾸로 된다. 그래서 이 파일은 "1회 증가시키고
+// 그 결과 값을 돌려준다"까지만 하고, 그 값이 임계치를 넘었는지 판단해 lockUser를 호출하는
+// 것은 상위 계층(authService.ts)의 책임이다 — user_preferred_rooms의 MAX_PREFERRED_ROOMS를
+// tools 계층에서만 검사하는 것과 같은 패턴.
+
+/** 로그인 실패 1회를 기록하고, 그 직후의 누적 실패 횟수를 반환한다. */
+export async function incrementFailedLoginAttempts(userId: string): Promise<number> {
+  const result = await pool.query<{ failed_login_attempts: number }>(
+    `update public.users
+     set failed_login_attempts = failed_login_attempts + 1,
+         updated_at = now()
+     where id = $1
+     returning failed_login_attempts`,
+    [userId]
+  );
+  return result.rows[0].failed_login_attempts;
+}
+
+/** 계정을 잠근다(status = 'locked'). Admin이 해제하기 전까지 로그인이 거부된다. */
+export async function lockUser(userId: string): Promise<void> {
+  await pool.query(`update public.users set status = 'locked', updated_at = now() where id = $1`, [
+    userId,
+  ]);
+}
+
+/** 로그인 성공 시 실패 카운터를 리셋한다. */
+export async function resetFailedLoginAttempts(userId: string): Promise<void> {
+  await pool.query(
+    `update public.users set failed_login_attempts = 0, updated_at = now() where id = $1 and failed_login_attempts <> 0`,
+    [userId]
+  );
+}
+
+/** Admin 승인 패널에 표시할 잠긴 계정 목록. */
+export async function findLockedUsers(): Promise<User[]> {
+  const result = await pool.query<UserRow>(
+    `select ${USER_COLUMNS} from public.users where status = 'locked' order by updated_at desc`
+  );
+  return result.rows.map(toUser);
+}
+
+/** Admin이 잠금을 해제한다 — 상태를 active로 되돌리고 실패 카운터도 0으로 리셋한다.
+ * 이미 잠금 상태가 아니면(다른 Admin이 먼저 처리했거나 존재하지 않으면) false를 반환한다. */
+export async function unlockUser(userId: string): Promise<boolean> {
+  const result = await pool.query(
+    `update public.users
+     set status = 'active', failed_login_attempts = 0, updated_at = now()
+     where id = $1 and status = 'locked'`,
+    [userId]
+  );
+  return (result.rowCount ?? 0) > 0;
 }

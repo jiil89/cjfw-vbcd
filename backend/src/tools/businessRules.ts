@@ -17,6 +17,10 @@ export const MAX_SINGLE_ROOM_MINUTES = 120;
 /** 예약 가능 범위 — 오늘부터 7일 뒤까지 (도메인 정의서 6번). */
 export const MAX_ADVANCE_DAYS = 7;
 
+/** 앱 로그인 비밀번호 연속 실패 허용 횟수. 도달하면 계정이 잠기고 Admin이 해제해야 한다
+ * (20260820 마이그레이션 — 사내망 전용 방어막이 사라지는 외부 노출에 대비한 브루트포스 방어). */
+export const MAX_LOGIN_ATTEMPTS = 5;
+
 /** 1차 범위 사업장 — 상암S시티 고정 (도메인 정의서 6번). */
 export const FIXED_SITE = "상암S시티";
 

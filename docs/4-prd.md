@@ -89,8 +89,9 @@ CJ WORLD PW는 사내 정책상 주기적으로 만료된다. 사용자가 CJ에
   - 로그인 상태 — `PATCH /me/cj-world-password` (만료 전 미리 변경)
   - 로그인 불가 상태 — `POST /auth/cj-world-password` (JWT 대신 **앱 로그인 비밀번호로 본인 확인**, 로그인 화면에서 `CJ_LOGIN_FAILED`일 때만 노출)
 - **앱 로그인 비밀번호 변경**(`PATCH /me/app-password`)은 현재 비밀번호를 확인한 뒤에만 교체하고, 성공 시 해당 사용자의 Refresh Token을 **전부 폐기**해 기존 세션을 끊는다. 새 비밀번호는 8자 이상.
+- **[결정됨, 20260820] `POST /auth/login`의 앱 로그인 비밀번호는 MAX_LOGIN_ATTEMPTS(5)회 연속 실패하면 계정이 잠긴다.** Cloudflare Tunnel로 외부 접속을 열기로 하면서 "사내망 안에서만 접속 가능하다"는 실질적 방어막이 사라지는데, `email_alias`는 비밀값이 아니라 사번이라 무작정 대입(brute force) 공격에 그대로 노출된다. 자가 잠금 해제는 지원하지 않는다(아래 미결 항목과 같은 이유) — Admin 승인 패널에 "잠긴 계정" 목록이 뜨고, Admin이 확인 후 직접 해제한다. 상세: `docs/2-usecase.md`, `supabase/migrations/20260820000000_login_lockout.sql`.
 - **[미결] 비밀번호 분실 시 재설정은 아직 불가능하다** — 메일 발송 기능이 없어서 자가 재설정 흐름을 만들 수 없다. 현재는 Admin이 대신 처리하는 방법뿐이며, 메일러 도입 여부는 별도 결정 필요.
-- **[미결] 이 경로들에는 rate limit이 없다** — 틀린 CJ WORLD PW를 반복 시도하면 실제 CJ 계정 잠금 정책을 자극할 수 있다.
+- **[미결] `/auth/cj-world-password`, `/me/cj-world-password`(CJ WORLD PW 변경)에는 아직 rate limit이 없다** — 위 앱 로그인 잠금과는 별개의 미해결 항목이다. 틀린 CJ WORLD PW를 반복 시도하면 실제 CJ 계정 잠금 정책을 자극할 수 있다.
 - **[미결] 가입 시점에는 앱 비밀번호 최소 길이 규칙이 없어** 변경(8자)과 불일치한다. 가입 쪽에도 같은 규칙을 넣을지 결정 필요.
 
 ### 통합 요구사항 (연동)

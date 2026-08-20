@@ -13,3 +13,12 @@ export interface AccountRegistrationRequest {
   preferred_room_ids: string[];
   created_at: string;
 }
+
+// backend/src/routes/admin.routes.ts의 toPublicLockedUser() 응답과 1:1로 맞춘다
+// (20260820 로그인 브루트포스 잠금 — docs/swagger.json LockedUser 스키마도 동일).
+export interface LockedUser {
+  id: string;
+  email_alias: string;
+  failed_login_attempts: number;
+  updated_at: string;
+}

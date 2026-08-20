@@ -117,8 +117,13 @@ create table if not exists public.users (
 
   is_admin boolean not null default false,
 
-  -- 승인 이후 생명주기: active(이용 가능) / revoked(동의 철회, 자격증명 폐기 요청)
-  status text not null default 'active' check (status in ('active', 'revoked')),
+  -- 승인 이후 생명주기: active(이용 가능) / revoked(동의 철회, 자격증명 폐기 요청) /
+  -- locked(로그인 5회 연속 실패로 잠김, Admin 해제 전까지 로그인 불가 — 20260820 마이그레이션)
+  status text not null default 'active' check (status in ('active', 'revoked', 'locked')),
+
+  -- 연속 로그인 실패 횟수. MAX_LOGIN_ATTEMPTS(5) 도달 시 status가 locked로 바뀐다.
+  -- 로그인 성공 또는 Admin의 잠금 해제 시 0으로 리셋된다. (20260820 마이그레이션)
+  failed_login_attempts smallint not null default 0,
 
   approved_at timestamptz not null default now(),  -- 등록 승인 일시
   revoked_at timestamptz,                          -- 동의 철회 일시 (해당 시에만 값 존재)

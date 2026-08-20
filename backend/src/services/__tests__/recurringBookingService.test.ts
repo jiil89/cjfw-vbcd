@@ -94,6 +94,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     updatedAt: "2026-01-01T00:00:00Z",
     unattendedBookingConsentAt: "2026-01-01T00:00:00Z",
     unattendedBookingConsentRevokedAt: null,
+    failedLoginAttempts: 0,
     ...overrides,
   };
 }

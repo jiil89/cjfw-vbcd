@@ -12,6 +12,7 @@ import {
   type RegistrationRequestStatus,
 } from "../db/repositories/registrationRequestRepository";
 import { setPreferredRooms } from "../db/repositories/userPreferredRoomRepository";
+import { findLockedUsers, unlockUser, type User } from "../db/repositories/userRepository";
 
 export class RegistrationRequestNotFoundError extends Error {
   code = "NOT_FOUND";
@@ -34,6 +35,14 @@ export class AdminNotActiveError extends Error {
   constructor() {
     super("요청을 처리하는 Admin 계정이 유효하지 않습니다.");
     this.name = "AdminNotActiveError";
+  }
+}
+
+export class UserNotLockedError extends Error {
+  code = "USER_NOT_LOCKED";
+  constructor() {
+    super("잠긴 계정을 찾을 수 없습니다(이미 해제되었거나 존재하지 않음).");
+    this.name = "UserNotLockedError";
   }
 }
 
@@ -113,6 +122,25 @@ export async function approveRegistrationRequestAsAdmin(
     await setPreferredRooms(updated.resultingUserId, updated.preferredRoomIds);
   }
   return updated;
+}
+
+// [20260820 추가] 로그인 브루트포스 방어 잠금 해제. 등록 요청 승인/거부와 달리 이 조작은
+// 새 계정/권한을 만들지 않으므로(단순히 잠금을 풀 뿐) DB RPC 이중검증까지는 두지 않는다 —
+// adminRouter 전체에 이미 requireAuth + requireAdmin이 걸려 있어 충분하다
+// (registration-request 승인/거부의 RPC 이중검증은 anon key로도 호출 가능한 구멍을 막기
+// 위한 것이었는데, 이 리포지토리 함수는 service role 커넥션으로만 호출되므로 같은 위협이 없다).
+
+/** Admin 승인 패널에 표시할, 로그인 실패로 잠긴 계정 목록. */
+export async function listLockedUsers(): Promise<User[]> {
+  return findLockedUsers();
+}
+
+/** 잠긴 계정의 잠금을 해제한다 — 상태를 active로, 실패 카운터를 0으로 되돌린다. */
+export async function unlockUserAsAdmin(userId: string): Promise<void> {
+  const unlocked = await unlockUser(userId);
+  if (!unlocked) {
+    throw new UserNotLockedError();
+  }
 }
 
 export async function rejectRegistrationRequestAsAdmin(
