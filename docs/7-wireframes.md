@@ -3,12 +3,12 @@
 텍스트 기반 와이어프레임. 색상·폰트 등 비주얼 디자인은 다루지 않고, 화면의 레이아웃·구조·정보 배치만 정리한다.
 
 - 회원가입/로그인/Admin 패널: 기존 목업이 없어 아래 문서에 실제로 언급된 필드/기능만 근거로 설계함
-  - `docs/service-scenarios.md` (7번 시나리오)
-  - `prompts/4-prd.md` ("인증/보안" 절)
-  - `prompts/1-domain-definition-meeting-room-agent.md` (2번 온보딩 프로세스, 4번 핵심 엔티티)
+  - `docs/3-service-scenarios.md` (7번 시나리오)
+  - `docs/4-prd.md` ("인증/보안" 절)
+  - `docs/1-domain-definition-meeting-room-agent.md` (2번 온보딩 프로세스, 4번 핵심 엔티티)
 - 웹 챗봇 UI: `docs/design/chatbot-shell.html`에 이미 있는 완성 레이아웃(상단바 / 채팅 스레드 / 하단 입력창+빠른명령칩 / 오른쪽 사이드바)을 그대로 텍스트로 옮긴 것 — 새로 디자인하지 않음
 
-**[결정됨] 4개 화면 모두 반응형으로 만든다** (`prompts/4-prd.md` 참고 — 사내 직원이 PC뿐 아니라 휴대폰으로도 접근). 기준 브레이크포인트는 `docs/design/chatbot-shell.html`에 이미 있던 값(860px)을 그대로 따른다: **860px 초과 = 데스크톱 레이아웃(위 와이어프레임 그대로), 860px 이하 = 아래 모바일 레이아웃.**
+**[결정됨] 4개 화면 모두 반응형으로 만든다** (`docs/4-prd.md` 참고 — 사내 직원이 PC뿐 아니라 휴대폰으로도 접근). 기준 브레이크포인트는 `docs/design/chatbot-shell.html`에 이미 있던 값(860px)을 그대로 따른다: **860px 초과 = 데스크톱 레이아웃(위 와이어프레임 그대로), 860px 이하 = 아래 모바일 레이아웃.**
 
 ---
 

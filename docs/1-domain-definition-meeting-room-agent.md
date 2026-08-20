@@ -20,7 +20,7 @@
 
 ### 사용자 온보딩(회원가입 → 승인 → 로그인) 프로세스 — 예약 이용 전 최초 1회
 
-**[변경됨]** 1차 채널이 웹 챗봇으로 바뀌면서, 신원 확인 방식도 텔레그램 딥링크에서 **자체 회원가입/로그인(이메일·비밀번호 기반 JWT)** 으로 바뀌었다 (`prompts/4-prd.md` "인증/보안" 참고). 텔레그램 딥링크 방식은 텔레그램 채널이 실제로 추가될 때 별도 신원 확인 수단으로 재검토한다.
+**[변경됨]** 1차 채널이 웹 챗봇으로 바뀌면서, 신원 확인 방식도 텔레그램 딥링크에서 **자체 회원가입/로그인(이메일·비밀번호 기반 JWT)** 으로 바뀌었다 (`docs/4-prd.md` "인증/보안" 참고). 텔레그램 딥링크 방식은 텔레그램 채널이 실제로 추가될 때 별도 신원 확인 수단으로 재검토한다.
 
 1. 사용자가 **회원가입 웹페이지**(= 기존 "등록 웹페이지")에 접속해 CJ WORLD ID/PW, **선호 회의실(우선순위 순서)**, 그리고 **이 앱 전용 로그인 비밀번호**를 함께 입력해 신청
 2. 요청 접수 즉시 두 비밀번호를 각각 다르게 저장한다 — **CJ WORLD PW는 복호화 가능한 암호화**(CJ 자동화 로그인에 필요), **앱 로그인 비밀번호는 단방향 해시**(로그인 검증에만 필요, 복호화 불필요). 평문은 어떤 단계에서도 로그/화면/메일에 노출하지 않음
@@ -236,7 +236,7 @@ CJ WORLD PW는 사내 정책상 주기적으로 만료된다. 사용자가 CJ에
 - 동일 회의실·동일 시간대에 예약이 이미 존재하면 신규 예약 불가 → 이 경우 **대체 가능한 시간/회의실을 추천**해야 한다.
 - 예약의 **변경/취소는 챗봇을 통해 Agent가 직접 처리**한다(별도 시스템 접속 불필요).
 - CJ WORLD 계정과 연동되지 않은 사용자는 예약을 진행할 수 없다.
-- **[변경됨]** 1차 지원 채널은 **웹 챗봇**(React 19, Vercel)이며, 텔레그램/카카오톡은 이후 확장한다 (`prompts/4-prd.md` 참고. 기존 계획은 텔레그램 우선이었으나 변경됨 — Vercel Long Polling 제약이 채널 변경으로 해소됨).
+- **[변경됨]** 1차 지원 채널은 **웹 챗봇**(React 19, Vercel)이며, 텔레그램/카카오톡은 이후 확장한다 (`docs/4-prd.md` 참고. 기존 계획은 텔레그램 우선이었으나 변경됨 — Vercel Long Polling 제약이 채널 변경으로 해소됨).
 - **[확인됨]** 예약 가능 날짜: **오늘부터 7일 뒤까지만** 예약 가능 (매일 하루씩 밀려서 열림). 예: 오늘이 8/12(수)면 ~8/19(수)까지, 하루 지나 8/13이 되면 ~8/20까지. **[미검증]** 이 +7일 예약 창이 정확히 자정(00:01)에 열린다는 것은 아직 실측 확인되지 않았다 — 반복 예약 자동 실행 일시 결정 시 재검증 필요
 - **[확인됨]** 예약 가능 시간: 07:00 ~ 19:00
 - **[확인됨]** 예약 단위: 30분
@@ -252,7 +252,7 @@ CJ WORLD PW는 사내 정책상 주기적으로 만료된다. 사용자가 CJ에
 - **[결정됨]** 신청 ID가 **Admin 화이트리스트**에 있으면 승인 절차 없이 즉시 자동 승인 + Admin 권한 부여. 그 외에는 등록된 Admin 전원에게 알림 메일 발송 → Admin이 웹 패널에서 수동 승인.
 - **[결정됨]** 승인 알림 메일에는 비밀번호(또는 그와 관련된 어떤 정보도) 포함하지 않으며, 메일의 링크는 인증된 Admin 웹 패널로만 연결한다 (메일 링크 클릭만으로 승인되지 않음).
 - **[보류 — 텔레그램 채널 추가 시 재적용]** 텔레그램 사용자 신원 확인은 사용자가 채팅으로 자기신고(自己申告)한 값(예: "제 ID는 OOO입니다")을 신뢰하지 않는다. **등록 시점에 텔레그램 딥링크(`t.me/봇?start=토큰`)로 확보한, 위조 불가능한 텔레그램 사용자ID만을 신원 확인 근거로 사용**한다. (지금은 웹 채널이 1차이므로 아래 웹 로그인 규칙이 우선 적용된다.)
-- **[결정됨]** 웹 채널의 신원 확인은 **자체 회원가입/로그인(JWT)** 으로 한다. 회원가입 시 CJ 계정 비밀번호(암호화 저장, CJ 자동화용)와 앱 로그인 비밀번호(해시 저장, 로그인 검증용)를 분리해서 저장하며, 둘을 혼용하지 않는다. 로그인은 Admin 승인이 완료된 사용자만 가능하다. 상세는 `prompts/4-prd.md` "인증/보안" 참고.
+- **[결정됨]** 웹 채널의 신원 확인은 **자체 회원가입/로그인(JWT)** 으로 한다. 회원가입 시 CJ 계정 비밀번호(암호화 저장, CJ 자동화용)와 앱 로그인 비밀번호(해시 저장, 로그인 검증용)를 분리해서 저장하며, 둘을 혼용하지 않는다. 로그인은 Admin 승인이 완료된 사용자만 가능하다. 상세는 `docs/4-prd.md` "인증/보안" 참고.
 
 ## 7. 바운디드 컨텍스트 (하위 도메인 구분)
 
@@ -264,7 +264,7 @@ CJ WORLD PW는 사내 정책상 주기적으로 만료된다. 사용자가 CJ에
 
 ## 8. 확인이 필요한 사항 (Open Questions)
 
-- ~~**[신규 발견 — 2026-08-14, FE-5 실사용 검증]** `SaveReserve`가 실제로 한 번도 성공한 적이 없었다~~ → **[2026-08-14 최종 해결]** 진짜 원인은 필드 값이 아니라 **세션 워밍업 누락**이었다. cjwappr.cj.net의 예약 ASMX들은 쿠키만으로 신청자를 못 찾는 레거시 ASP.NET Session에 의존하는데, 로그인(#bntConf 클릭) 직후엔 이 Session이 비어있고 실제 예약 폼 페이지(`reserve_insmod.aspx`)를 한 번 방문해야 채워진다는 걸 실사용으로 확인했다(회의실 미지정 방문도 동일하게 작동). `cj-automation/session.ts`의 `loginWithCredentials`에 `warmUpReservationSession()`을 추가해 로그인 시 이 방문을 한 번 수행하도록 고쳤고, 실제 프로덕션 코드 경로(`createReservation`)로 회의실 2곳(3F-4, 3F-9, 3F-12)에 대해 반복 재현 성공을 확인했다(생성 직후 즉시 취소해 흔적 없음). 상세 기록: `prompts/9-plan.md` FE-5 섹션 "SaveReserve Result:0 최종 해결". 아래 1~4번 항목(필드 타입/이중디코딩/Result 판정 등)은 여전히 유효한 수정이지만 그것만으로는 해결되지 않았었고, 5번 세션 워밍업이 실제 마지막 조각이었다.
+- ~~**[신규 발견 — 2026-08-14, FE-5 실사용 검증]** `SaveReserve`가 실제로 한 번도 성공한 적이 없었다~~ → **[2026-08-14 최종 해결]** 진짜 원인은 필드 값이 아니라 **세션 워밍업 누락**이었다. cjwappr.cj.net의 예약 ASMX들은 쿠키만으로 신청자를 못 찾는 레거시 ASP.NET Session에 의존하는데, 로그인(#bntConf 클릭) 직후엔 이 Session이 비어있고 실제 예약 폼 페이지(`reserve_insmod.aspx`)를 한 번 방문해야 채워진다는 걸 실사용으로 확인했다(회의실 미지정 방문도 동일하게 작동). `cj-automation/session.ts`의 `loginWithCredentials`에 `warmUpReservationSession()`을 추가해 로그인 시 이 방문을 한 번 수행하도록 고쳤고, 실제 프로덕션 코드 경로(`createReservation`)로 회의실 2곳(3F-4, 3F-9, 3F-12)에 대해 반복 재현 성공을 확인했다(생성 직후 즉시 취소해 흔적 없음). 상세 기록: `docs/9-plan.md` FE-5 섹션 "SaveReserve Result:0 최종 해결". 아래 1~4번 항목(필드 타입/이중디코딩/Result 판정 등)은 여전히 유효한 수정이지만 그것만으로는 해결되지 않았었고, 5번 세션 워밍업이 실제 마지막 조각이었다.
   1. **실제 CJ 프론트는 JSON으로 호출한다.** 1차 500 에러의 진짜 원인은 인코딩이 아니라 **필수 파라미터 6개(`attendee_count`/`gubun`/`req_list`/`opt_list`/`is_send_mail`/`is_send_alarm`/`admin_alias`/`admin_lang`)를 아예 안 보내고 있었기 때문**이다 — Playwright로 CJ 실제 예약 UI(`reserve_main.aspx` → 빈 슬롯 더블클릭 → `reserve_insmod.aspx`)를 열어 그 페이지가 로드하는 `/NCONF/ConferenceRoom/script/reserve_insmod.js`(`$('#btnConfirm')` 클릭 핸들러 원본)를 직접 확보해 확정함.
   2. 필드별 정확한 타입/기본값(전부 이전 추측과 다름): `attendee_count`=항상 빈 문자열, `gubun`=회의실의 **승인 필요 여부**(`REQUIRED_APPROVAL`, 0=불필요·일반 회의실은 0 고정 — "선호 회의실 카테고리"가 아니었음), `is_send_mail`/`is_send_alarm`=boolean이 아니라 문자열("0"/"1", "True"/"False"), `req_list`/`opt_list`=참석자/참조자 목록(없으면 빈 문자열), `admin_alias`/`admin_lang`=신청자 본인이 아니라 **승인자 목록**(gubun=0이면 빈 문자열).
   3. `.d` 응답은 "JSON 문자열을 담은 JSON 문자열"(이중 인코딩)이라 한 번 더 `JSON.parse`해야 함 — 실제 UI도 `$.parseJSON(data.d)`로 그렇게 한다. 이전엔 이걸 안 해서 `checkRoom` 등의 응답이 항상 원시 문자열로 새어나가고 있었음.
@@ -272,7 +272,7 @@ CJ WORLD PW는 사내 정책상 주기적으로 만료된다. 사용자가 CJ에
   5. **[2026-08-14 진전] 회의실 메타데이터 초기화 호출을 실제로 안 하고 있던 게 맞았다.** 실제 UI는 예약 폼을 열 때마다 `getEmptyRoomInfo`를 먼저 호출해 그 회의실의 `REQUIRED_APPROVAL`(gubun)/`PRE_MAIL_ALARM_YN`(is_send_alarm)/승인자 목록(admin_alias/admin_lang)을 동적으로 채운다 — 우리는 이 호출 자체를 안 하고 전부 고정값(gubun=0 등)을 보내고 있었다. `getEmptyRoomInfo`를 SaveReserve 직전에 호출해 이 네 필드를 동적으로 채우도록 고쳤다(`backend/src/tools/reservation.tool.ts`의 `fetchRoomOptionInfo`).
   6. **그런데도 여전히 실패했었다 — jiil 실 계정으로 `getEmptyRoomInfo`를 호출해보니 승인자 목록(Table3)뿐 아니라 신청자 본인 정보(Table2, 휴대폰번호)까지 항상 비어있었다.** 실제 UI는 이 정보를 정상적으로 채워 보여주는데(사용자가 실제 CJ 웹으로 3F-4를 성공적으로 예약한 스크린샷으로 교차 확인) 우리 세션으로는 못 가져왔다 — 필드 값이 아니라 "이 세션이 누구인지"를 서버가 못 찾고 있다는 신호였다.
   7. **[2026-08-14 최종 해결] 원인: 로그인 직후 서버측 예약 Session이 비어있다.** cjwappr.cj.net의 예약 ASMX들은 쿠키만으로 신청자를 못 찾는 레거시 ASP.NET Session에 의존하며, 이 Session은 `#bntConf` 클릭만으로는 안 채워지고 **실제 예약 폼 페이지(`reserve_insmod.aspx`)를 최소 한 번 방문**해야 채워진다(회의실을 특정하지 않고 방문해도 동일하게 작동함을 확인 — 파라미터가 이상해 `ErrorPage.aspx`로 리다이렉트돼도 워밍업 효과는 남는다). `cj-automation/session.ts`의 `loginWithCredentials`에 `warmUpReservationSession()`을 추가해 로그인 시 이 방문을 자동으로 수행하도록 고쳤다. 실제 프로덕션 코드 경로(`createReservation`)로 회의실 3곳(3F-4, 3F-9, 3F-12)에 대해 반복 재현 성공(`Result:1`, 실제 CJ Seq 발급, 즉시 취소로 흔적 제거)을 확인했다. gubun/admin_alias 등 필드 값 자체는 성공/실패에 실질적 영향이 없었음도 함께 확인됨(워밍업 안 된 세션은 어떤 값을 넣어도 실패, 워밍업된 세션은 부정확한 값으로도 성공) — 5번의 `fetchRoomOptionInfo` 수정은 승인 라우팅 정확도를 위해 여전히 유효하지만 그 자체가 성공/실패를 가르는 원인은 아니었다.
-  - 상세 진단 기록: `prompts/9-plan.md` FE-5 섹션. 관련 코드: `backend/src/cj-automation/session.ts`(`warmUpReservationSession`), `backend/src/cj-automation/client.ts`(`SaveReserveParams`/`GetEmptyRoomInfoResponse` 필드 정의, `.d` 이중디코딩), `backend/src/tools/reservation.tool.ts`(`isCjCheckAffirmative` Result 판정 수정, `fetchRoomOptionInfo`), `backend/src/tools/modifyReservation.tool.ts`(`saveReserveChecked`로 동일 로직 통합).
+  - 상세 진단 기록: `docs/9-plan.md` FE-5 섹션. 관련 코드: `backend/src/cj-automation/session.ts`(`warmUpReservationSession`), `backend/src/cj-automation/client.ts`(`SaveReserveParams`/`GetEmptyRoomInfoResponse` 필드 정의, `.d` 이중디코딩), `backend/src/tools/reservation.tool.ts`(`isCjCheckAffirmative` Result 판정 수정, `fetchRoomOptionInfo`), `backend/src/tools/modifyReservation.tool.ts`(`saveReserveChecked`로 동일 로직 통합).
   - **남은 후속 작업**: `modifyReservation.tool.ts`의 실제 변경 흐름은 아직 라이브로 재검증 안 함(같은 `getValidSession` 경로라 이론상 함께 해결됐을 것으로 예상되나 실측 필요). 워밍업 단계로 로그인 응답 시간이 조금 더 늘어남(프레임 폴링 최대 5초 + 페이지 이동 대기 1.5초) — 재측정 필요.
 - **[신규]** 예약 변경 시 `SaveReserve`가 `reservetype` 값으로 "수정 모드"를 지원하는지, 아니면 `delReserve`(취소) 후 `SaveReserve`(재생성)로 처리해야 하는지 — 실제 변경 흐름으로 라이브 테스트 필요 (2번 "예약 변경" 참고)
 - **[신규]** `checkRoom`/`checkStraightRoom`/`checkDayCountLimit`가 공통으로 받는 `seq` 파라미터가 "이 예약 자신은 충돌/누적시간 계산에서 제외"하는 용도로 추정되나, 신규 생성 흐름에서만 관찰했고 변경 흐름에서는 아직 확인 못함

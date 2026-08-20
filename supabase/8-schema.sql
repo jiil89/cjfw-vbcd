@@ -14,12 +14,12 @@
 --     여기서는 처음부터 완성형 CREATE TABLE에 포함시켜 작성한다.
 --     approve_account_registration_request 함수도 재정의 이력 없이 최종 버전 하나만 담는다.
 --
--- 참고 문서: prompts/1-domain-definition-meeting-room-agent.md (도메인 정의),
---           prompts/prd.txt (PRD), prompts/8-erd.md (ERD)
+-- 참고 문서: docs/1-domain-definition-meeting-room-agent.md (도메인 정의),
+--           docs/4-prd.md (PRD), docs/8-erd.md (ERD)
 --
 -- [참고: Vercel 서버리스 연결] 백엔드는 pg로 Postgres에 직접 연결한다. 요청마다
 -- 커넥션을 새로 여는 서버리스 환경 특성상 5432 직접 연결 대신 Supabase 커넥션
--- 풀러(6543, transaction 모드/Supavisor) 사용을 기본값으로 한다 (prompts/prd.txt 참고).
+-- 풀러(6543, transaction 모드/Supavisor) 사용을 기본값으로 한다 (docs/4-prd.md 참고).
 -- 백엔드는 service role 권한으로 연결하므로 아래 RLS 정책과 무관하게 항상 전체 접근 가능하다.
 --
 -- =============================================================================
@@ -397,7 +397,7 @@ create index if not exists alternative_suggestions_request_id_idx
 -- -----------------------------------------------------------------------------
 -- 6-1. RefreshToken (Refresh Token 발급 이력)
 -- -----------------------------------------------------------------------------
--- prompts/prd.txt "인증/보안": Access Token(짧은 만료, 응답 바디) + Refresh Token(httpOnly
+-- docs/4-prd.md "인증/보안": Access Token(짧은 만료, 응답 바디) + Refresh Token(httpOnly
 -- Secure SameSite 쿠키) 방식. Refresh Token은 서버가 개별/전체 폐기(revoke)할 수 있어야
 -- 하므로 발급 이력을 DB에 남긴다.
 --

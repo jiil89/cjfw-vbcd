@@ -158,4 +158,4 @@ CJ의 예약 시스템은 **오늘부터 7일 뒤까지만** 예약을 받기 �
 
 ---
 
-*이 문서는 `prompts/1-domain-definition-meeting-room-agent.md`(도메인 정의서)에 정리된 설계를 바탕으로, 서비스 소개용으로 요약한 것입니다.*
+*이 문서는 `docs/1-domain-definition-meeting-room-agent.md`(도메인 정의서)에 정리된 설계를 바탕으로, 서비스 소개용으로 요약한 것입니다.*

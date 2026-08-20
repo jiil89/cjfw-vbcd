@@ -1,6 +1,6 @@
 PRD — 회의실 예약 Agent
 
-(상세 도메인 설계는 prompts/1-domain-definition-meeting-room-agent.md 참고. 이 문서는 그걸 보완하는 비즈니스/기술/프로젝트 관리 정보다.)
+(상세 도메인 설계는 docs/1-domain-definition-meeting-room-agent.md 참고. 이 문서는 그걸 보완하는 비즈니스/기술/프로젝트 관리 정보다.)
 
 ## 1. 비즈니스 관련 정보
 
@@ -35,7 +35,7 @@ PRD — 회의실 예약 Agent
 
 - 프론트엔드: **React 19**. 전역 상태관리는 **Zustand** 사용. 백엔드와의 통신은 **TanStack Query**로 처리.
   - 대상 화면: 계정 등록 웹페이지, Admin 승인 패널, **웹 챗봇 UI**(1차 채널) — 전부 React 19. 운영에서는 `vite build` 산출물을 백엔드가 같은 포트에서 서빙한다.
-  - **[결정됨] 4개 화면 모두 반응형(모바일/태블릿 포함)으로 설계한다.** 사내 직원이 PC뿐 아니라 휴대폰으로도 접근할 수 있어야 하므로, 고정폭 데스크톱 전용 레이아웃으로 만들지 않는다 (`prompts/7-wireframes.md` 참고).
+  - **[결정됨] 4개 화면 모두 반응형(모바일/태블릿 포함)으로 설계한다.** 사내 직원이 PC뿐 아니라 휴대폰으로도 접근할 수 있어야 하므로, 고정폭 데스크톱 전용 레이아웃으로 만들지 않는다 (`docs/7-wireframes.md` 참고).
 - 백엔드: **Node.js + Express**, 사내 노트북에서 **상시 프로세스**로 구동(`npm start` → `dist/src/app.js`). DB 접근은 Supabase의 자동 생성 REST API가 아니라 **`pg` 라이브러리로 Postgres에 직접 연결**하는 방식을 쓴다.
   - 참고: DB는 Supabase(Postgres) 그대로 사용하되, RLS 설계상 서버는 service role 수준 권한으로 접근하는 걸 전제로 하고 있어 `pg` 직접 연결 방식과 궁합상 문제없다 (`supabase/migrations/20260813000900_rls.sql` 참고).
   - 대상: 등록/Admin 승인 API, 웹 챗봇 API, CJ 자동화 모듈 — 전부 이 Express 백엔드 위에서 동작
@@ -100,7 +100,7 @@ CJ WORLD PW는 사내 정책상 주기적으로 만료된다. 사용자가 CJ에
 
 ## 3. 프로젝트 관리
 
-- 현재 진행 상태 **(20260816 기준 — 세부 이력은 `prompts/9-plan.md`가 정본)**:
+- 현재 진행 상태 **(20260816 기준 — 세부 이력은 `docs/9-plan.md`가 정본)**:
   - 도메인 설계(유스케이스/비즈니스 규칙/API 명세) — 완료, 지속 보완 중
   - Supabase DB 스키마 — 완료 (`supabase/migrations/`). Refresh Token 테이블 포함
   - 아키텍처 개요 다이어그램 — 완료 (`docs/diagrams/architecture-overview.html`)

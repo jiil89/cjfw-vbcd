@@ -1,8 +1,8 @@
 -- Refresh Token 발급 이력 테이블.
 --
--- [배경] prompts/prd.txt "인증/보안": Access Token(짧은 만료, 응답 바디) + Refresh Token
+-- [배경] docs/4-prd.md "인증/보안": Access Token(짧은 만료, 응답 바디) + Refresh Token
 -- (httpOnly Secure SameSite 쿠키) 방식. Refresh Token은 서버가 개별/전체 폐기(revoke)할 수
--- 있어야 하므로, "발급 이력을 DB에 남긴다"는 원칙(prompts/5-project-principle.md 5번)에 따라
+-- 있어야 하므로, "발급 이력을 DB에 남긴다"는 원칙(docs/5-project-principle.md 5번)에 따라
 -- 이 테이블을 추가한다.
 --
 -- [평문을 저장하지 않는 이유] 이 프로젝트는 사내 계정 비밀번호/앱 로그인 비밀번호 등 어떤

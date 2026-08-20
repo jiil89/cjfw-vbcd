@@ -1,8 +1,8 @@
 # 프로젝트 구조 설계 원칙 — 회의실 예약 Agent
 
-이 문서는 `prompts/4-prd.md`(PRD)와 `prompts/1-domain-definition-meeting-room-agent.md`(도메인 정의서), `supabase/migrations/`(실제 DB 스키마)에서 이미 확정된 결정사항을 바탕으로, 실제 코드를 작성할 때 따라야 할 구조 원칙을 정리한 것이다. 여기 나오는 원칙은 전부 이 프로젝트의 실제 스택(React 19 + Zustand + TanStack Query, Node.js + Express + `pg`, Vercel, Supabase, Playwright)에 한정된다 — 범용 아키텍처론을 늘어놓지 않는다.
+이 문서는 `docs/4-prd.md`(PRD)와 `docs/1-domain-definition-meeting-room-agent.md`(도메인 정의서), `supabase/migrations/`(실제 DB 스키마)에서 이미 확정된 결정사항을 바탕으로, 실제 코드를 작성할 때 따라야 할 구조 원칙을 정리한 것이다. 여기 나오는 원칙은 전부 이 프로젝트의 실제 스택(React 19 + Zustand + TanStack Query, Node.js + Express + `pg`, Vercel, Supabase, Playwright)에 한정된다 — 범용 아키텍처론을 늘어놓지 않는다.
 
-이 문서는 실제 구현이 진행되면서 계속 다듬어진다 — 실사용에서 발견된 버그의 재발 방지 규칙도 여기에 누적한다(진행 상태는 `prompts/4-prd.md` 3번, 세부 이력은 `prompts/9-plan.md` 참고).
+이 문서는 실제 구현이 진행되면서 계속 다듬어진다 — 실사용에서 발견된 버그의 재발 방지 규칙도 여기에 누적한다(진행 상태는 `docs/4-prd.md` 3번, 세부 이력은 `docs/9-plan.md` 참고).
 
 ---
 
@@ -37,7 +37,7 @@
 ## 3. 코드/네이밍 원칙
 
 - **DB 컬럼은 스네이크케이스(`email_alias`, `encrypted_password`, `app_password_hash`), 서버/프론트 JS·TS 코드는 camelCase.** `pg`로 쿼리 결과를 받는 지점(리포지토리 계층)에서 한 번만 camelCase로 변환하고, 그 위 계층부터는 camelCase만 쓴다. 변환 지점을 여러 곳에 흩어두지 않는다.
-- **[2026-08-14 실사용 버그로 추가] `timestamptz` 컬럼은 리포지토리 계층에서 반드시 실제 문자열(ISO)로 정규화한다.** node-postgres는 `timestamptz`를 JS `Date` 객체로 돌려주는데, `Reservation.startAt: string`처럼 타입을 `string`으로 선언만 하고 실제 변환을 안 하면 그 타입은 거짓말이 된다 — HTTP 응답은 `JSON.stringify`가 Date를 자동으로 문자열화해줘서 겉으론 안 드러나지만, 백엔드 안에서 그 값에 `.slice()`/`.split()` 같은 문자열 메서드를 직접 호출하는 코드는 조용히 죽는다(실제로 예약 변경/취소 대상 특정이 이 버그로 항상 실패했었다 — `prompts/9-plan.md` FE-5 섹션 참고). 리포지토리의 row-매핑 함수(`toReservation()` 등)에서 항상 `.toISOString()`으로 정규화할 것.
+- **[2026-08-14 실사용 버그로 추가] `timestamptz` 컬럼은 리포지토리 계층에서 반드시 실제 문자열(ISO)로 정규화한다.** node-postgres는 `timestamptz`를 JS `Date` 객체로 돌려주는데, `Reservation.startAt: string`처럼 타입을 `string`으로 선언만 하고 실제 변환을 안 하면 그 타입은 거짓말이 된다 — HTTP 응답은 `JSON.stringify`가 Date를 자동으로 문자열화해줘서 겉으론 안 드러나지만, 백엔드 안에서 그 값에 `.slice()`/`.split()` 같은 문자열 메서드를 직접 호출하는 코드는 조용히 죽는다(실제로 예약 변경/취소 대상 특정이 이 버그로 항상 실패했었다 — `docs/9-plan.md` FE-5 섹션 참고). 리포지토리의 row-매핑 함수(`toReservation()` 등)에서 항상 `.toISOString()`으로 정규화할 것.
 - **날짜/시간을 문자열로 조립해 DB에 쓸 때는 타임존 오프셋을 반드시 명시한다.** 이 프로젝트는 상암S시티(한국, KST=UTC+9) 하나만 지원하므로 `backend/src/lib/kst.ts`의 `toKstTimestamp`/`kstDayRange`로 항상 `+09:00`을 붙여서 저장하고, 읽을 때도 `toKstHHmm`/`toKstDate`로 명시적으로 KST 변환한다. 오프셋 없는 문자열(`"2026-08-17T09:00:00"`)을 그대로 넘기면 그 해석이 **DB 연결 세션의 TimeZone 설정에 의존**하게 되어, 로컬 개발 DB와 배포 환경(Supabase 등)의 세션 타임존이 다르면 같은 코드가 환경에 따라 다른(최악의 경우 9시간 어긋난) 시각으로 저장되는 조용한 버그가 된다.
 - **두 비밀번호의 네이밍을 DB와 동일하게 코드에서도 그대로 따른다.**
   - CJ 계정: `encryptedPassword` / `encryptCorporatePassword()` / `decryptCorporatePassword()` — "암호화(encrypt)"라는 단어만 쓴다.

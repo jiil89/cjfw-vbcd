@@ -10,7 +10,7 @@
 **CJ 예약 시스템(`cjwappr.cj.net`)이 사내망에서만 접근 가능하다**(2026-08-19 확인).
 Vercel 같은 외부 클라우드에서는 아무리 배포해도 CJ에 닿을 수 없어 예약 기능이
 원천적으로 동작하지 않는다. 실제로 Vercel 배포까지 마쳤지만 이 이유로 폐기했다
-(`prompts/4-prd.md`의 결정 변경 이력 참고).
+(`docs/4-prd.md`의 결정 변경 이력 참고).
 
 역할 분담은 이렇게 된다.
 
@@ -317,7 +317,7 @@ Start-ScheduledTask -TaskName "cjfw-vbcd-server"
 
 > DB 마이그레이션이 포함된 업데이트라면 `supabase/migrations/`의 새 파일을
 > Supabase에도 적용해야 한다. Dev(로컬)와 Prd(Supabase)가 분리되어 있으므로
-> **양쪽에 모두 적용**하는 것이 원칙이다(`prompts/4-prd.md` 참고).
+> **양쪽에 모두 적용**하는 것이 원칙이다(`docs/4-prd.md` 참고).
 
 **로그**
 
