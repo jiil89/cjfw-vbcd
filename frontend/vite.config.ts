@@ -35,6 +35,12 @@ export default defineConfig({
     // 사내망의 다른 PC에서 내 PC의 LAN IP로 접속해 같이 쓸 수 있게 0.0.0.0으로 바인딩한다
     // (임시 공유용, 20260818) — 기본값(localhost only)이면 같은 PC에서만 접속 가능하다.
     host: true,
+    // [20260821] Cloudflare Quick Tunnel(cloudflared tunnel --url http://localhost:5173)로
+    // 외부 접속을 테스트할 때, Vite가 DNS 리바인딩 방지로 낯선 Host 헤더를 차단해서
+    // "Blocked request... allowedHosts" 에러가 났다. Quick Tunnel은 실행할 때마다
+    // 무작위 서브도메인(*.trycloudflare.com)이 새로 발급돼 하나씩 등록할 수 없으므로,
+    // 접두사에 점(.)을 붙여 이 도메인의 모든 서브도메인을 허용한다(Vite 문법).
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/auth': proxyTo(),
       '/admin': proxyTo(),
