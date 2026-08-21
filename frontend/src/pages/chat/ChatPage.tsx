@@ -61,6 +61,21 @@ function makeLocalId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+/** 챗봇 답변의 '**강조**' 문법만 굵게 렌더링한다(systemPrompt.ts 5-2 — 이 채팅 UI는
+ * 굵게 하나만 지원하기로 정했다. 다른 마크다운 문법을 쓰면 별표 등이 그대로 노출된다).
+ * 전체 마크다운 파서 의존성을 새로 들이는 대신, 필요한 문법 하나만 정규식으로 처리한다. */
+function renderChatText(text: string): ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, index) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={index}>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    )
+  );
+}
+
 /** 에이전트 아바타 아이콘 — 답변 상황에 맞는 캐릭터를 고른다.
  *
  * 어떤 도구가 실행됐는지는 이미 응답의 `proposal.tool`로 내려오므로, LLM에게 따로
@@ -452,7 +467,7 @@ function ChatMessageGroup({
                   확인 중입니다…
                 </span>
               ) : (
-                message.text
+                renderChatText(message.text)
               )}
             </div>
             {!message.pending && message.proposal && (
