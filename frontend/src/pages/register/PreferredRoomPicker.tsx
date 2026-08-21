@@ -20,7 +20,13 @@ export interface PreferredRoomPickerProps {
  * 칩을 누른 순서가 그대로 우선순위가 된다(다시 누르면 해제 + 뒤 순번이 앞당겨짐).
  * 챗봇 카드(ChatPage.tsx)의 회의실 칩과 동일한 `Chip` 컴포넌트를 재사용한다.
  */
-export function PreferredRoomPicker({ rooms, isLoading, loadError, value, onChange }: PreferredRoomPickerProps) {
+export function PreferredRoomPicker({
+  rooms,
+  isLoading,
+  loadError,
+  value,
+  onChange,
+}: PreferredRoomPickerProps) {
   const disabled = isLoading || loadError;
 
   function toggleRoom(roomId: string) {

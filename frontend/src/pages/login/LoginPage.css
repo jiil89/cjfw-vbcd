@@ -23,17 +23,14 @@
   gap: var(--space-sm);
 }
 
+/* 로봇 캐릭터 이미지가 이미 완결된 아이콘이라 배경/색을 따로 씌우지 않는다
+   (BrandMarkIcon 주석 참고) — 크기만 담당. */
 .login-logo {
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-md);
-  background: var(--ink);
-  color: var(--canvas);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  font-weight: 700;
   flex: none;
 }
 
@@ -79,6 +76,65 @@
   background: var(--semantic-error-soft);
   color: var(--semantic-error);
   font-size: var(--fs-body-sm);
+}
+
+/* CJ WORLD PW 재등록 폼 — CJ_LOGIN_FAILED일 때만 노출된다. 이 상태의 사용자는 앱에
+   들어올 수 없어서(로그인 거부) 여기가 유일한 복구 지점이다. */
+.login-recovery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.login-recovery-title {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.login-recovery-hint {
+  margin: 0;
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.login-recovery-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  outline: none;
+  transition: border-color 120ms ease;
+}
+
+.login-recovery-input:focus {
+  border-color: var(--ink);
+}
+
+.login-recovery-error {
+  margin: 0;
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+  color: var(--semantic-error);
+}
+
+.login-recovery-done {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  line-height: 1.5;
+  color: var(--semantic-success);
 }
 
 /* [2026-08-14] 로그인 시점에 CJ 세션을 함께 예열하느라 로그인 자체가 몇~수십 초

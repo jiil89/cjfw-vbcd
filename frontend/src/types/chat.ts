@@ -51,6 +51,10 @@ export interface ConfirmedResultData {
 export interface CheckAvailabilityData {
   preferred: Room[];
   others: Room[];
+  /** 요청한 층(requestedFloorLabel)에 자리가 하나도 없을 때만 채워진다 — 같은 날짜·시간에
+   * 다른 층에서 예약 가능한 회의실. 되묻지 않고 바로 대안으로 보여주기 위한 값. */
+  sameTimeOtherFloors?: Room[];
+  requestedFloorLabel?: string | null;
   date: string;
   startTime: string;
   endTime: string;

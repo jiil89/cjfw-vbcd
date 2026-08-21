@@ -14,6 +14,7 @@ import {
   RegistrationPendingError,
   RegistrationRejectedError,
   AccountRevokedError,
+  AccountLockedError,
   RefreshTokenInvalidError,
 } from "../services/authService";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/requireAuth";
@@ -21,6 +22,7 @@ import type { User } from "../db/repositories/userRepository";
 import { getValidSession } from "../cj-automation/session";
 import { clearCachedCjSession } from "../cj-automation/sessionCache";
 import { withTimeout } from "../lib/withTimeout";
+import { changeCjWorldPassword, CjWorldPasswordInvalidError } from "../services/passwordService";
 
 export const authRouter = Router();
 
@@ -91,7 +93,8 @@ authRouter.post("/login", async (req: Request, res: Response) => {
       res.status(401).json({
         error: {
           code: "CJ_LOGIN_FAILED",
-          message: "CJ 사내 계정 인증에 실패했습니다. 계정 ID·비밀번호를 확인하거나 관리자에게 문의해주세요.",
+          message:
+            "CJ WORLD 계정 인증에 실패했습니다. CJ WORLD PW를 바꾸셨다면 앱에도 다시 등록해야 합니다.",
         },
       });
       return;
@@ -115,7 +118,8 @@ authRouter.post("/login", async (req: Request, res: Response) => {
     if (
       error instanceof RegistrationPendingError ||
       error instanceof RegistrationRejectedError ||
-      error instanceof AccountRevokedError
+      error instanceof AccountRevokedError ||
+      error instanceof AccountLockedError
     ) {
       res.status(403).json({ error: { code: error.code, message: error.message } });
       return;
@@ -169,4 +173,62 @@ authRouter.post("/logout", requireAuth, async (req: AuthenticatedRequest, res: R
 
   res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { ...refreshTokenCookieOptions(), maxAge: undefined });
   res.status(204).send();
+});
+
+// CJ WORLD PW 재등록(로그인 전 복구 경로).
+//
+// 왜 인증 없이 열어두는가: 위 POST /login은 CJ 세션 확보에 실패하면 로그인 자체를 거부한다.
+// 그래서 사용자가 CJ에서 비밀번호를 바꾼 순간부터는 앱에 들어올 수 없고, 로그인 후 화면에 있는
+// 재등록 기능에도 영원히 도달할 수 없다 — 정확히 그 상황을 위한 기능인데도. 이 경로는 JWT 대신
+// **앱 로그인 비밀번호로 본인을 확인**하고(authenticateUser: 승인 상태/폐기 여부까지 검사),
+// 새 CJ WORLD PW는 실제 CJ 로그인으로 검증한 뒤에만 저장한다.
+authRouter.post("/cj-world-password", async (req: Request, res: Response) => {
+  const { email_alias, app_password, new_cj_world_password } = req.body ?? {};
+
+  if (
+    typeof email_alias !== "string" ||
+    typeof app_password !== "string" ||
+    typeof new_cj_world_password !== "string" ||
+    new_cj_world_password === ""
+  ) {
+    res.status(400).json({
+      error: {
+        code: "INVALID_REQUEST",
+        message: "email_alias, app_password, new_cj_world_password는 필수입니다.",
+      },
+    });
+    return;
+  }
+
+  try {
+    const user = await authenticateUser(email_alias, app_password);
+    await changeCjWorldPassword(user.id, new_cj_world_password);
+    res.status(204).end();
+  } catch (error) {
+    if (error instanceof CjWorldPasswordInvalidError) {
+      res.status(400).json({ error: { code: error.code, message: error.message } });
+      return;
+    }
+    if (error instanceof InvalidCredentialsError) {
+      res.status(401).json({ error: { code: error.code, message: error.message } });
+      return;
+    }
+    if (
+      error instanceof RegistrationPendingError ||
+      error instanceof RegistrationRejectedError ||
+      error instanceof AccountRevokedError ||
+      error instanceof AccountLockedError
+    ) {
+      res.status(403).json({ error: { code: error.code, message: error.message } });
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.error("[auth.routes] CJ WORLD PW 재등록 실패", error);
+    res.status(502).json({
+      error: {
+        code: "CJ_INTEGRATION_ERROR",
+        message: "CJ 시스템 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+      },
+    });
+  }
 });

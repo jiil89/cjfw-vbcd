@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "../api/httpClient";
-import type { AccountRegistrationRequest } from "../types/admin";
+import type { AccountRegistrationRequest, LockedUser } from "../types/admin";
 
 const PENDING_KEY = ["admin", "registration-requests", "pending"];
 const PROCESSED_KEY = ["admin", "registration-requests", "processed"];
+const LOCKED_USERS_KEY = ["admin", "locked-users"];
 
 // GET /admin/registration-requests — status 생략 시 pending만 반환(백엔드 기본값).
 export function usePendingRequestsQuery() {
@@ -42,4 +43,23 @@ export function useApproveRequestMutation() {
 
 export function useRejectRequestMutation() {
   return useRegistrationRequestActionMutation("reject");
+}
+
+// GET /admin/locked-users — 로그인 5회 실패로 잠긴 계정 목록(20260820 브루트포스 방어).
+export function useLockedUsersQuery() {
+  return useQuery({
+    queryKey: LOCKED_USERS_KEY,
+    queryFn: () => httpClient<LockedUser[]>("/admin/locked-users"),
+  });
+}
+
+export function useUnlockUserMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      httpClient<void>(`/admin/locked-users/${userId}/unlock`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: LOCKED_USERS_KEY });
+    },
+  });
 }

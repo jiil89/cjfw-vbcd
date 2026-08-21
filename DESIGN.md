@@ -517,7 +517,7 @@ Intercom resists drop shadows. Depth is communicated by the white-on-cream surfa
 
 ## Responsive Behavior
 
-**[2026-08-14 참고 — 회의실 예약 챗봇 앱]** 아래 5단계 표는 Intercom 마케팅 사이트를 역분석한 값이다. 이 프로젝트(회의실 예약 챗봇)의 실제 브레이크포인트는 `prompts/7-wireframes.md`가 정의하는 **860px 단일 기준**(초과=데스크톱, 이하=모바일)이며 이 표를 따르지 않는다 — 색상/타이포/spacing/radius 토큰만 이 문서를 따르고, 반응형 레이아웃은 와이어프레임 문서가 source of truth다.
+**[2026-08-14 참고 — 회의실 예약 챗봇 앱]** 아래 5단계 표는 Intercom 마케팅 사이트를 역분석한 값이다. 이 프로젝트(회의실 예약 챗봇)의 실제 브레이크포인트는 `docs/7-wireframes.md`가 정의하는 **860px 단일 기준**(초과=데스크톱, 이하=모바일)이며 이 표를 따르지 않는다 — 색상/타이포/spacing/radius 토큰만 이 문서를 따르고, 반응형 레이아웃은 와이어프레임 문서가 source of truth다.
 
 ### Breakpoints (Intercom 마케팅 사이트 원본 분석값 — 이 앱에는 미적용)
 

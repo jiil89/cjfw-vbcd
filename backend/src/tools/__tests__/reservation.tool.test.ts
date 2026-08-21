@@ -117,7 +117,6 @@ describe("createReservation -- getEmptyRoomInfo로 gubun/is_send_alarm/admin_ali
       {
         title: "회의",
         contents: "내용",
-        phoneNum: "",
         date: "2026-08-14",
         startTime: "10:00",
         endTime: "11:00",
@@ -143,7 +142,6 @@ describe("createReservation -- getEmptyRoomInfo로 gubun/is_send_alarm/admin_ali
       {
         title: "회의",
         contents: "내용",
-        phoneNum: "",
         date: "2026-08-14",
         startTime: "10:00",
         endTime: "11:00",
@@ -171,7 +169,6 @@ describe("createReservation -- getEmptyRoomInfo로 gubun/is_send_alarm/admin_ali
       {
         title: "회의",
         contents: "내용",
-        phoneNum: "",
         date: "2026-08-14",
         startTime: "10:00",
         endTime: "11:00",
@@ -209,7 +206,6 @@ describe("createSplitReservation -- 부분 실패 시 보상 트랜잭션 (BE-6 
     const result = await createSplitReservation("user-1", {
       title: "긴 회의",
       contents: "내용",
-      phoneNum: "010-0000-0000",
       date: "2026-08-14",
       plan,
     }, "2026-08-13");
@@ -233,7 +229,7 @@ describe("createSplitReservation -- 부분 실패 시 보상 트랜잭션 (BE-6 
     await expect(
       createSplitReservation(
         "user-1",
-        { title: "긴 회의", contents: "내용", phoneNum: "010-0000-0000", date: "2026-08-14", plan },
+        { title: "긴 회의", contents: "내용", date: "2026-08-14", plan },
         "2026-08-13"
       )
     ).rejects.toBeInstanceOf(SegmentReservationFailedError);
@@ -262,7 +258,7 @@ describe("createSplitReservation -- 부분 실패 시 보상 트랜잭션 (BE-6 
     await expect(
       createSplitReservation(
         "user-1",
-        { title: "긴 회의", contents: "내용", phoneNum: "010-0000-0000", date: "2026-08-14", plan },
+        { title: "긴 회의", contents: "내용", date: "2026-08-14", plan },
         "2026-08-13"
       )
     ).rejects.toBeInstanceOf(SegmentReservationFailedError);

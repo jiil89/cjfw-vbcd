@@ -9,6 +9,16 @@
 // 자신을 검증에서 제외"하는 용도인지는 신규 생성 흐름에서만 확인됐고 변경 흐름에서는
 // 아직 라이브 테스트한 적이 없다(도메인 정의서 8번). 이 파일은 그 가정을 그대로 적용해
 // seq를 넘기지만, 실사용 확인 후 도메인 정의서 9번/8번과 함께 갱신해야 한다.
+//
+// [2026-08-16 실사용 버그 — CJ checkRoom을 신뢰하면 안 된다] 사용자가 14F-3 예약을
+// 09:00~10:00으로 변경하려다 실패했다. 라이브로 직접 확인해보니:
+//   - 우리 자체 가용성 판정(findAvailableRooms)  : 14F-3 09:00~10:00 **불가** (정확)
+//   - CJ checkRoom                              : Result:"1" = **가능이라고 거짓 응답**
+//   - 실제 SaveReserve                          : Result:0 실패
+// 즉 CJ의 checkRoom은 이미 점유된 슬롯도 "가능"이라고 답한다. 이 파일은 checkRoom만 믿고
+// **원본을 delReserve로 먼저 지운 뒤** saveReserve를 시도하는 구조라, 이 거짓 응답이
+// 그대로 "원본 삭제 → 재생성 실패 → 원본 복구"라는 위험한 왕복으로 이어졌다. 그래서
+// delReserve 하기 전에 우리 자체 가용성 판정으로 한 번 더 막는다(아래 assertTargetSlotIsFree).
 import { checkDayCountLimit, checkRoom, checkStraightRoom, delReserve, saveReserve } from "../cj-automation/client";
 import { getValidSession, type CjSession } from "../cj-automation/session";
 import {
@@ -19,7 +29,7 @@ import {
 } from "../db/repositories/reservationRepository";
 import { findRoomById } from "../db/repositories/roomRepository";
 import type { Room } from "../db/repositories/roomRepository";
-import { resolveEmailAlias } from "./availability.tool";
+import { findAvailableRooms, resolveEmailAlias } from "./availability.tool";
 import { assertValidReservationWindow, BusinessRuleViolationError } from "./businessRules";
 import { fetchRoomOptionInfo, ReservationConflictError } from "./reservation.tool";
 import { ReservationNotFoundError } from "./reservationTargeting";
@@ -99,6 +109,59 @@ function splitTimestamp(ts: string): { date: string; time: string } {
   return { date: toKstDate(ts), time: toKstHHmm(ts) };
 }
 
+/** "HH:mm" 두 구간이 겹치는지. */
+function timeRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+/**
+ * 변경하려는 슬롯이 **우리 자체 가용성 판정 기준으로** 실제 비어 있는지 확인한다.
+ *
+ * CJ의 checkRoom이 이미 점유된 슬롯도 "가능"이라고 답하는 게 실사용에서 확인됐기 때문에
+ * (파일 상단 주석), delReserve로 원본을 지우기 **전에** 여기서 먼저 막는다. 이렇게 해야
+ * "원본 삭제 → 재생성 실패 → 복구" 왕복 자체가 일어나지 않고, 사용자에게도 실패 사유를
+ * 정확히 알려줄 수 있다("그 시간엔 이미 다른 예약이 있어요").
+ *
+ * 단, 변경 대상 예약 **자기 자신**이 그 슬롯을 점유하고 있는 경우(같은 회의실에서 시간만
+ * 조금 늘리는 등)는 충돌로 보면 안 된다 — 같은 회의실이면서 원래 시간대와 겹칠 때는
+ * 이 검사를 건너뛴다.
+ */
+async function assertTargetSlotIsFree(params: {
+  userId: string;
+  newRoom: Room;
+  newDate: string;
+  newStartTime: string;
+  newEndTime: string;
+  originalRoomId: string;
+  originalDate: string;
+  originalStartTime: string;
+  originalEndTime: string;
+}): Promise<void> {
+  const isSameRoom = params.newRoom.id === params.originalRoomId;
+  const isSameDate = params.newDate === params.originalDate;
+  if (
+    isSameRoom &&
+    isSameDate &&
+    timeRangesOverlap(params.newStartTime, params.newEndTime, params.originalStartTime, params.originalEndTime)
+  ) {
+    // 자기 자신과 겹치는 변경(같은 방에서 시간 연장/축소 등) — 여기서 판정할 수 없으므로
+    // 기존 CJ 검증 + SaveReserve 결과에 맡긴다.
+    return;
+  }
+
+  const available = await findAvailableRooms(params.userId, {
+    date: params.newDate,
+    startTime: params.newStartTime,
+    endTime: params.newEndTime,
+  });
+  const isFree = [...available.preferred, ...available.others].some((room) => room.id === params.newRoom.id);
+  if (!isFree) {
+    throw new ReservationConflictError(
+      `${params.newRoom.roomName}은 ${params.newDate} ${params.newStartTime}~${params.newEndTime}에 이미 다른 예약이 있어요.`
+    );
+  }
+}
+
 /**
  * [2026-08-14 실사용 검증 완료] gubun/is_send_alarm/admin_alias/admin_lang을 회의실별로
  * getEmptyRoomInfo에서 동적으로 채운다(reservation.tool.ts와 동일 이유 — client.ts의
@@ -109,7 +172,7 @@ function splitTimestamp(ts: string): { date: string; time: string } {
 async function saveReserveChecked(
   session: CjSession,
   room: Room,
-  params: { date: string; startTime: string; endTime: string; title: string; contents: string; phoneNum: string }
+  params: { date: string; startTime: string; endTime: string; title: string; contents: string }
 ): Promise<string> {
   const roomOption = await fetchRoomOptionInfo(session, {
     roomCode: room.roomCode,
@@ -128,7 +191,6 @@ async function saveReserveChecked(
     endTime: params.endTime,
     title: params.title,
     contents: params.contents,
-    phoneNum: params.phoneNum,
     isSendMail: "0",
     attendeeCount: "",
     gubun: roomOption.gubun,
@@ -188,7 +250,9 @@ export async function modifyReservation(
 
   assertValidReservationWindow({
     date: newDate,
-    today: today ?? new Date().toISOString().slice(0, 10),
+    // [버그 수정, 20260818] UTC 기본값이면 한국시간 00:00~08:59 사이 정확히 7일 뒤로
+    // 변경하려는 요청이 부당하게 거부된다(reservation.tool.ts와 동일한 버그).
+    today: today ?? toKstDate(new Date()),
     startTime: newStartTime,
     endTime: newEndTime,
   });
@@ -233,6 +297,21 @@ export async function modifyReservation(
     throw new ReservationConflictError("일일 예약 가능 건수 제한을 초과했습니다.");
   }
 
+  // [2026-08-16] CJ checkRoom이 거짓으로 "가능"을 답하는 게 확인됐으므로(파일 상단 주석),
+  // 원본을 지우기 전에 우리 자체 가용성 판정으로 한 번 더 막는다. 이 검사가 없으면
+  // "원본 삭제 → 재생성 실패 → 복구"라는 위험한 왕복이 그대로 일어난다.
+  await assertTargetSlotIsFree({
+    userId,
+    newRoom,
+    newDate,
+    newStartTime,
+    newEndTime,
+    originalRoomId: reservation.roomId,
+    originalDate: original.date,
+    originalStartTime: original.time,
+    originalEndTime: originalEnd.time,
+  });
+
   // "delReserve 후 saveReserve" 전략 (파일 상단 주석 -- 8번 Open Question).
   if (reservation.cjSeq) {
     await delReserve(session, reservation.cjSeq);
@@ -246,7 +325,6 @@ export async function modifyReservation(
       endTime: newEndTime,
       title: reservation.title,
       contents: reservation.contents ?? "",
-      phoneNum: "",
     });
   } catch (err) {
     const originalRoom = await findRoomById(reservation.roomId);
@@ -259,7 +337,6 @@ export async function modifyReservation(
           endTime: originalEnd.time,
           title: reservation.title,
           contents: reservation.contents ?? "",
-          phoneNum: "",
         });
         await markReservationModified(reservation.id, { cjSeq: restoredSeq });
         restored = true;

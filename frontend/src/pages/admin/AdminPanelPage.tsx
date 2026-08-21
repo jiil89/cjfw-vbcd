@@ -7,11 +7,13 @@ import { useLogoutMutation } from "../../queries/authQueries";
 import { useRoomsQuery } from "../../queries/registrationQueries";
 import {
   useApproveRequestMutation,
+  useLockedUsersQuery,
   usePendingRequestsQuery,
   useProcessedRequestsQuery,
   useRejectRequestMutation,
+  useUnlockUserMutation,
 } from "../../queries/adminQueries";
-import type { AccountRegistrationRequest } from "../../types/admin";
+import type { AccountRegistrationRequest, LockedUser } from "../../types/admin";
 import type { Room } from "../../types/room";
 
 /** "2026-08-13T09:10:00.000Z" -> "08/13 09:10" (7-wireframes.md 3번 표기 그대로). */
@@ -46,6 +48,8 @@ export function AdminPanelPage() {
   const roomsQuery = useRoomsQuery();
   const approveMutation = useApproveRequestMutation();
   const rejectMutation = useRejectRequestMutation();
+  const lockedUsersQuery = useLockedUsersQuery();
+  const unlockMutation = useUnlockUserMutation();
 
   const roomsById = new Map((roomsQuery.data ?? []).map((room) => [room.id, room]));
 
@@ -61,6 +65,11 @@ export function AdminPanelPage() {
   function handleReject(request: AccountRegistrationRequest) {
     if (!window.confirm(`${request.email_alias} 신청을 거부할까요? 되돌릴 수 없습니다.`)) return;
     rejectMutation.mutate(request.id);
+  }
+
+  function handleUnlock(user: LockedUser) {
+    if (!window.confirm(`${user.email_alias} 계정의 잠금을 해제할까요?`)) return;
+    unlockMutation.mutate(user.id);
   }
 
   const historyContent = renderHistory(processedQuery.data, processedQuery.isLoading);
@@ -83,6 +92,40 @@ export function AdminPanelPage() {
         </div>
       </header>
 
+      {/* [20260820 추가] 로그인 5회 실패로 잠긴 계정 — 브루트포스 방어. 잠긴 계정이
+          없으면 섹션 자체를 숨긴다(등록 요청과 달리 "0건"이 정상 상태라 매번 빈 카드를
+          보여줄 필요가 없다). */}
+      {lockedUsersQuery.data && lockedUsersQuery.data.length > 0 && (
+        <section className="admin-section">
+          <h2 className="admin-section-title">잠긴 계정 ({lockedUsersQuery.data.length})</h2>
+          <div className="admin-request-list">
+            {lockedUsersQuery.data.map((user) => {
+              const isUnlocking = unlockMutation.isPending && unlockMutation.variables === user.id;
+              return (
+                <Card key={user.id} radius="lg" className="admin-request-card">
+                  <div className="admin-request-row">
+                    <span className="admin-request-label">CJ WORLD ID:</span>
+                    <span className="admin-request-value">{user.email_alias}</span>
+                    <span className="admin-request-meta">
+                      잠긴 시각: {formatShortDateTime(user.updated_at)}
+                    </span>
+                  </div>
+                  <div className="admin-request-row">
+                    <span className="admin-request-label">사유:</span>
+                    <Badge tone="warn">로그인 {user.failed_login_attempts}회 연속 실패</Badge>
+                  </div>
+                  <div className="admin-request-actions">
+                    <Button size="sm" onClick={() => handleUnlock(user)} loading={isUnlocking}>
+                      잠금 해제
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <section className="admin-section">
         <h2 className="admin-section-title">대기중인 등록 요청</h2>
 
@@ -99,7 +142,7 @@ export function AdminPanelPage() {
             return (
               <Card key={request.id} radius="lg" className="admin-request-card">
                 <div className="admin-request-row">
-                  <span className="admin-request-label">사내 계정 ID:</span>
+                  <span className="admin-request-label">CJ WORLD ID:</span>
                   <span className="admin-request-value">{request.email_alias}</span>
                   <span className="admin-request-meta">신청일시: {formatShortDateTime(request.created_at)}</span>
                 </div>

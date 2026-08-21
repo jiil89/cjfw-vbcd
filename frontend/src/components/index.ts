@@ -15,3 +15,5 @@ export type { BadgeProps, BadgeTone } from "./Badge";
 
 export { CatLoader } from "./CatLoader";
 export type { CatLoaderProps } from "./CatLoader";
+
+export { BrandMarkIcon } from "./BrandMarkIcon";

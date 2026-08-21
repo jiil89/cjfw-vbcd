@@ -3,7 +3,7 @@ import type { IncomingMessage } from 'node:http'
 import react from '@vitejs/plugin-react'
 
 // backend/src/app.ts는 /auth, /admin, /chat, /rooms 네 경로를 루트 마운트한다(리네이밍하지 않음 —
-// prompts/9-plan.md BE-9 완료조건 참고: 이미 테스트로 검증된 기존 라우트를 건드리지 않기로
+// docs/9-plan.md BE-9 완료조건 참고: 이미 테스트로 검증된 기존 라우트를 건드리지 않기로
 // 결정됨). 그래서 프록시도 이 경로들을 각각 개별 지정한다. changeOrigin은 백엔드가
 // Host 헤더를 신뢰하지 않으므로 필요 없지만, 로컬 개발 관례상 켜둔다.
 // /rooms는 FE-2(회원가입 페이지, GET /rooms 공개 조회)에서 신규 추가.
@@ -32,6 +32,15 @@ function proxyTo(): ProxyOptions {
 export default defineConfig({
   plugins: [react()],
   server: {
+    // 사내망의 다른 PC에서 내 PC의 LAN IP로 접속해 같이 쓸 수 있게 0.0.0.0으로 바인딩한다
+    // (임시 공유용, 20260818) — 기본값(localhost only)이면 같은 PC에서만 접속 가능하다.
+    host: true,
+    // [20260821] Cloudflare Quick Tunnel(cloudflared tunnel --url http://localhost:5173)로
+    // 외부 접속을 테스트할 때, Vite가 DNS 리바인딩 방지로 낯선 Host 헤더를 차단해서
+    // "Blocked request... allowedHosts" 에러가 났다. Quick Tunnel은 실행할 때마다
+    // 무작위 서브도메인(*.trycloudflare.com)이 새로 발급돼 하나씩 등록할 수 없으므로,
+    // 접두사에 점(.)을 붙여 이 도메인의 모든 서브도메인을 허용한다(Vite 문법).
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/auth': proxyTo(),
       '/admin': proxyTo(),

@@ -63,3 +63,14 @@ export async function revokeRefreshTokenByHash(tokenHash: string): Promise<void>
     [tokenHash]
   );
 }
+
+/** 해당 사용자의 살아있는 refresh 토큰을 전부 폐기한다. 앱 비밀번호를 바꾸면 기존에
+ * 발급된 세션은 더 이상 유효하면 안 되므로(다른 기기/탈취 세션 정리) 함께 끊는다. */
+export async function revokeAllRefreshTokensByUserId(userId: string): Promise<void> {
+  await pool.query(
+    `update public.refresh_tokens
+     set revoked = true, revoked_at = now()
+     where user_id = $1 and revoked = false`,
+    [userId]
+  );
+}

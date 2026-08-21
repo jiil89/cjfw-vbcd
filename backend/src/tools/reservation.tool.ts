@@ -38,10 +38,13 @@ import {
   RESERVATION_UNIT_MINUTES,
 } from "./businessRules";
 import { findAvailableRooms, resolveEmailAlias } from "./availability.tool";
-import { toKstTimestamp } from "../lib/kst";
+import { toKstDate, toKstTimestamp } from "../lib/kst";
 
+// [버그 수정, 20260818] UTC 기본값이면 한국시간 00:00~08:59 사이 정확히 7일 뒤 요청이
+// 부당하게 "범위 밖"으로 거부된다. createReservation/planLongMeetingSegments/
+// createSplitReservation 전부 이 함수를 기본값으로 쓰므로 여기 한 곳만 고치면 된다.
 function isoToday(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toKstDate(new Date());
 }
 
 /**
@@ -201,7 +204,6 @@ interface SaveOneSegmentParams {
   endTime: string;
   title: string;
   contents: string;
-  phoneNum: string;
 }
 
 async function saveOneSegmentToCj(params: SaveOneSegmentParams): Promise<string> {
@@ -260,7 +262,6 @@ async function saveOneSegmentToCj(params: SaveOneSegmentParams): Promise<string>
       endTime: params.endTime,
       title: params.title,
       contents: params.contents,
-      phoneNum: params.phoneNum,
       isSendMail: "0",
       attendeeCount: "",
       gubun: roomOption.gubun,
@@ -315,7 +316,6 @@ export class SegmentReservationFailedError extends Error {
 export interface CreateReservationInput {
   title: string;
   contents: string;
-  phoneNum: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -373,7 +373,6 @@ export async function createReservation(
       endTime: input.endTime,
       title: input.title,
       contents: input.contents,
-      phoneNum: input.phoneNum,
     });
   } catch (err) {
     throw err instanceof ReservationConflictError
@@ -497,7 +496,7 @@ export async function planLongMeetingSegments(
 }
 export async function createSplitReservation(
   userId: string,
-  input: { title: string; contents: string; phoneNum: string; date: string; plan: RoomedSegmentPlan[] },
+  input: { title: string; contents: string; date: string; plan: RoomedSegmentPlan[] },
   today?: string
 ): Promise<CreatedReservationSummary[]> {
   if (input.plan.length < 2) {
@@ -541,7 +540,6 @@ export async function createSplitReservation(
         endTime: segment.endTime,
         title: input.title,
         contents: input.contents,
-        phoneNum: input.phoneNum,
       });
       createdCjSeqs.push(cjSeq);
 

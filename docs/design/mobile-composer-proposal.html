@@ -1,0 +1,352 @@
+<title>모바일 컴포저 축소안</title>
+<style>
+  :root {
+    --ink: #111111;
+    --ink-muted: #626260;
+    --ink-subtle: #7b7b78;
+    --ink-tertiary: #9c9fa5;
+    --canvas: #f5f1ec;
+    --surface-1: #ffffff;
+    --surface-2: #ebe7e1;
+    --hairline: #d3cec6;
+    --hairline-soft: #ebe7e1;
+    --fin-orange: #ff5600;
+    --font-sans: "Inter", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  }
+
+  body {
+    margin: 0;
+    padding: 32px 20px 64px;
+    background: #faf8f5;
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  h1 { font-size: 26px; font-weight: 500; letter-spacing: -0.4px; margin: 0 0 6px; }
+  .sub { color: var(--ink-muted); font-size: 14px; margin: 0 0 8px; line-height: 1.55; }
+  .note {
+    font-size: 13px; color: var(--ink-muted); line-height: 1.6;
+    background: var(--surface-1); border: 1px solid var(--hairline-soft);
+    border-left: 3px solid var(--fin-orange);
+    border-radius: 8px; padding: 12px 14px; margin: 16px 0 28px;
+  }
+
+  .row { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start; }
+  .col { flex: 1 1 300px; min-width: 290px; }
+
+  .col-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .col-title { font-size: 15px; font-weight: 600; }
+  .tag {
+    font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 9999px;
+    font-family: var(--font-mono);
+  }
+  .tag-now { background: var(--surface-2); color: var(--ink-muted); }
+  .tag-a { background: rgba(255, 86, 0, 0.12); color: #b83e00; }
+  .tag-b { background: rgba(17, 17, 17, 0.08); color: var(--ink); }
+  .col-desc { font-size: 12.5px; color: var(--ink-subtle); line-height: 1.5; margin: 0 0 12px; min-height: 36px; }
+
+  /* ---- phone frame ---- */
+  .phone {
+    width: 100%; max-width: 340px;
+    border: 1px solid var(--hairline);
+    border-radius: 22px;
+    background: var(--canvas);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    height: 470px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-bottom: 1px solid var(--hairline);
+    background: var(--surface-1); flex: none;
+  }
+  .brand { display: flex; align-items: center; gap: 7px; }
+  .brand-mark {
+    width: 22px; height: 22px; border-radius: 6px; background: var(--ink);
+    color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center;
+  }
+  .brand-name { font-size: 13.5px; font-weight: 500; }
+  .trigger {
+    font-size: 11.5px; border: 1px solid var(--hairline); border-radius: 8px;
+    padding: 5px 8px; color: var(--ink); background: transparent;
+  }
+
+  .thread {
+    flex: 1; min-height: 0; padding: 12px; display: flex;
+    flex-direction: column; gap: 9px; overflow: hidden;
+    position: relative;
+  }
+  .thread-label {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 11.5px; font-family: var(--font-mono); color: var(--ink-tertiary);
+    letter-spacing: 0.2px; pointer-events: none;
+  }
+  .bubble {
+    max-width: 80%; font-size: 12.5px; line-height: 1.45;
+    padding: 8px 11px; border-radius: 12px;
+  }
+  .b-agent { background: var(--surface-1); border: 1px solid var(--hairline-soft); align-self: flex-start; }
+  .b-user { background: var(--ink); color: #fff; align-self: flex-end; }
+
+  /* ---- composer ---- */
+  .composer { flex: none; border-top: 1px solid var(--hairline); background: var(--canvas); }
+  .composer-measured { position: relative; }
+
+  .chips { display: flex; gap: 4px; overflow: hidden; }
+  .chip {
+    font-size: 12px; padding: 6px 12px; min-height: 32px; box-sizing: border-box;
+    border: 1px solid var(--hairline); border-radius: 9999px;
+    background: var(--surface-1); color: var(--ink); white-space: nowrap;
+    display: inline-flex; align-items: center;
+  }
+  .chip-sm {
+    font-size: 11.5px; padding: 0 10px; min-height: 28px;
+  }
+  .chip-more {
+    border-style: dashed; color: var(--ink-muted);
+  }
+
+  .input-row { display: flex; gap: 8px; align-items: center; }
+  .input {
+    flex: 1; height: 46px; box-sizing: border-box;
+    border: 1px solid var(--hairline); border-radius: 8px;
+    background: var(--surface-1); padding: 0 12px;
+    display: flex; align-items: center;
+    font-size: 13px; color: var(--ink-tertiary);
+  }
+  .input-sm { height: 44px; }
+  .send {
+    width: 46px; height: 46px; flex: none; border-radius: 8px;
+    background: var(--ink); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .send-sm { width: 44px; height: 44px; }
+  .send svg { width: 15px; height: 15px; }
+  .hint { font-size: 11.5px; color: var(--ink-tertiary); margin: 4px 0 0; }
+
+  /* current */
+  .composer-now { padding: 12px 24px 16px; }
+  .composer-now .chips { margin-bottom: 12px; }
+
+  /* option A */
+  .composer-a { padding: 8px 16px 12px; }
+  .composer-a .chips { margin-bottom: 8px; }
+
+  /* option B */
+  .composer-b { padding: 10px 16px 12px; }
+
+  .plus {
+    width: 44px; height: 44px; flex: none; border-radius: 8px;
+    border: 1px solid var(--hairline); background: var(--surface-1);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink-muted); font-size: 19px; line-height: 1;
+  }
+
+  .measure {
+    margin-top: 12px; display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-family: var(--font-mono);
+  }
+  .bar { height: 7px; border-radius: 9999px; background: var(--surface-2); flex: 1; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 9999px; }
+  .bar-now > i { background: var(--ink-tertiary); }
+  .bar-a > i { background: var(--fin-orange); }
+  .bar-b > i { background: var(--ink); }
+  .px { color: var(--ink); font-weight: 500; }
+  .save { color: #1a7f37; font-weight: 500; }
+
+  table { border-collapse: collapse; width: 100%; margin-top: 34px; font-size: 13px; }
+  caption { text-align: left; font-size: 15px; font-weight: 600; padding-bottom: 10px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--hairline-soft); vertical-align: top; }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-subtle); font-weight: 500; }
+  td.num { font-family: var(--font-mono); white-space: nowrap; }
+  .del { color: #b42318; }
+  .keep { color: var(--ink-muted); }
+</style>
+
+<div class="wrap">
+  <h1>모바일 컴포저 축소안</h1>
+  <p class="sub">화면 폭 860px 이하 기준. 모바일에서 사이드바(<code>.chat-rail</code>)는 이미 숨겨져 있으므로, 하단을 차지하는 것은 <strong>컴포저 영역</strong>(빠른명령 칩 + 입력창 + 안내문구) 하나뿐입니다.</p>
+
+  <p class="note">
+    <strong>지금 문제</strong> — 컴포저가 <strong>약 138px</strong>을 항상 차지합니다. 375×667 화면에서 상단바까지 더하면 대화가 보이는 영역은 절반 남짓이고, 키보드가 올라오면 메시지 한두 개밖에 안 보입니다.
+    <br>특히 <strong>"Enter로 보내기"는 모바일에서 의미가 없습니다</strong> — 모바일 키보드에는 해당하는 동작이 없고 사용자는 전송 버튼을 누릅니다.
+  </p>
+
+  <div class="row">
+
+    <!-- ============ NOW ============ -->
+    <div class="col">
+      <div class="col-head">
+        <span class="col-title">현재</span>
+        <span class="tag tag-now">138px</span>
+      </div>
+      <p class="col-desc">칩 44px + 입력 46px + 안내문구 20px + 상하 패딩 28px.</p>
+
+      <div class="phone">
+        <div class="topbar">
+          <div class="brand"><span class="brand-mark">회</span><span class="brand-name">회의실 예약</span></div>
+          <span class="trigger">☰ 내 정보</span>
+        </div>
+        <div class="thread">
+          <div class="bubble b-agent">안녕하세요! 무엇을 도와드릴까요?</div>
+          <div class="bubble b-user">내일 오전 10시 회의실</div>
+          <div class="bubble b-agent">조건에 맞는 회의실이 4곳 비어있어요.</div>
+        </div>
+        <div class="composer composer-now">
+          <div class="chips">
+            <span class="chip">내 예약 조회</span>
+            <span class="chip">자주 쓰는 회의실</span>
+          </div>
+          <div class="input-row">
+            <div class="input">내일 오전 10시 회의실 잡아줘</div>
+            <div class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg></div>
+          </div>
+          <p class="hint">Enter로 보내기</p>
+        </div>
+      </div>
+
+      <div class="measure">
+        <span class="px">138px</span>
+        <span class="bar bar-now"><i style="width:100%"></i></span>
+      </div>
+    </div>
+
+    <!-- ============ OPTION A ============ -->
+    <div class="col">
+      <div class="col-head">
+        <span class="col-title">A안 · 칩 유지 + 군살 제거</span>
+        <span class="tag tag-a">추천</span>
+      </div>
+      <p class="col-desc">안내문구를 없애고 칩을 한 단계 작게, 패딩을 줄입니다. 빠른명령은 그대로 보입니다.</p>
+
+      <div class="phone">
+        <div class="topbar">
+          <div class="brand"><span class="brand-mark">회</span><span class="brand-name">회의실 예약</span></div>
+          <span class="trigger">☰ 내 정보</span>
+        </div>
+        <div class="thread">
+          <div class="bubble b-agent">안녕하세요! 무엇을 도와드릴까요?</div>
+          <div class="bubble b-user">내일 오전 10시 회의실</div>
+          <div class="bubble b-agent">조건에 맞는 회의실이 4곳 비어있어요.</div>
+          <div class="bubble b-user">3F-4로 할래요</div>
+          <div class="bubble b-agent">예약해 드렸어요. 좋은 회의 되세요!</div>
+        </div>
+        <div class="composer composer-a">
+          <div class="chips">
+            <span class="chip chip-sm">내 예약 조회</span>
+            <span class="chip chip-sm">자주 쓰는 회의실</span>
+          </div>
+          <div class="input-row">
+            <div class="input input-sm">회의실 예약을 말씀해 주세요</div>
+            <div class="send send-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="measure">
+        <span class="px">92px</span>
+        <span class="bar bar-a"><i style="width:67%"></i></span>
+        <span class="save">−46px</span>
+      </div>
+    </div>
+
+    <!-- ============ OPTION B ============ -->
+    <div class="col">
+      <div class="col-head">
+        <span class="col-title">B안 · 칩을 + 버튼으로</span>
+        <span class="tag tag-b">최대 축소</span>
+      </div>
+      <p class="col-desc">칩 줄을 없애고 <strong>+</strong> 버튼에 넣습니다. 누르면 빠른명령이 위로 펼쳐집니다.</p>
+
+      <div class="phone">
+        <div class="topbar">
+          <div class="brand"><span class="brand-mark">회</span><span class="brand-name">회의실 예약</span></div>
+          <span class="trigger">☰ 내 정보</span>
+        </div>
+        <div class="thread">
+          <div class="bubble b-agent">안녕하세요! 무엇을 도와드릴까요?</div>
+          <div class="bubble b-user">내일 오전 10시 회의실</div>
+          <div class="bubble b-agent">조건에 맞는 회의실이 4곳 비어있어요.</div>
+          <div class="bubble b-user">3F-4로 할래요</div>
+          <div class="bubble b-agent">예약해 드렸어요. 좋은 회의 되세요!</div>
+          <div class="bubble b-user">그거 취소해줘</div>
+          <div class="bubble b-agent">취소했어요.</div>
+        </div>
+        <div class="composer composer-b">
+          <div class="input-row">
+            <div class="plus">+</div>
+            <div class="input input-sm">회의실 예약을 말씀해 주세요</div>
+            <div class="send send-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="measure">
+        <span class="px">66px</span>
+        <span class="bar bar-b"><i style="width:48%"></i></span>
+        <span class="save">−72px</span>
+      </div>
+    </div>
+
+  </div>
+
+  <table>
+    <caption>무엇을 바꾸나 (모바일 ≤860px 에서만 적용, 데스크톱은 그대로)</caption>
+    <thead>
+      <tr><th>요소</th><th>현재</th><th>A안</th><th>B안</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"Enter로 보내기" 안내</td>
+        <td class="num">20px</td>
+        <td class="num del">삭제</td>
+        <td class="num del">삭제</td>
+      </tr>
+      <tr>
+        <td>빠른명령 칩</td>
+        <td class="num">32px + 여백 12px</td>
+        <td class="num">28px + 여백 8px</td>
+        <td class="num del">+ 버튼으로 이동</td>
+      </tr>
+      <tr>
+        <td>입력창 / 전송 버튼</td>
+        <td class="num">46px</td>
+        <td class="num">44px</td>
+        <td class="num">44px</td>
+      </tr>
+      <tr>
+        <td>좌우 패딩</td>
+        <td class="num">24px</td>
+        <td class="num">16px</td>
+        <td class="num">16px</td>
+      </tr>
+      <tr>
+        <td>상하 패딩</td>
+        <td class="num">12 / 16px</td>
+        <td class="num">8 / 12px</td>
+        <td class="num">10 / 12px</td>
+      </tr>
+      <tr>
+        <td>플레이스홀더</td>
+        <td class="keep">내일 오전 10시 회의실 잡아줘</td>
+        <td colspan="2" class="keep">짧게 — 좁은 폭에서 잘리지 않도록</td>
+      </tr>
+      <tr>
+        <td>홈 인디케이터 여백</td>
+        <td class="keep">없음</td>
+        <td colspan="2" class="keep">safe-area-inset-bottom 추가 (아이폰 하단 바 겹침 방지)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="note" style="margin-top:28px">
+    <strong>두 안의 차이</strong> — A안은 <strong>빠른명령이 계속 보인다</strong>는 점이 장점입니다(처음 쓰는 사람이 뭘 할 수 있는지 바로 압니다). B안은 26px 더 줄지만 빠른명령이 한 번 눌러야 나오므로 <strong>발견성이 떨어집니다</strong>.
+    <br>44px는 터치 목표 최소 권장치라 입력/전송 버튼은 그 아래로 줄이지 않았습니다.
+  </p>
+</div>

@@ -1,0 +1,16 @@
+{
+  "builds": [
+    { "src": "frontend/package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } },
+    { "src": "backend/api/index.ts", "use": "@vercel/node", "config": { "maxDuration": 300 } }
+  ],
+  "routes": [
+    {
+      "src": "^/(admin|chat)(/.*)?$",
+      "missing": [{ "type": "header", "key": "accept", "value": ".*text/html.*" }],
+      "dest": "/backend/api/index.ts"
+    },
+    { "src": "^/(auth|rooms|me|health)(/.*)?$", "dest": "/backend/api/index.ts" },
+    { "src": "^/(.*)$", "dest": "/frontend/$1", "check": true },
+    { "src": "^/(.*)$", "dest": "/frontend/index.html" }
+  ]
+}

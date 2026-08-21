@@ -12,11 +12,19 @@ import {
 } from "../db/repositories/userPreferredRoomRepository";
 import { findBookableRooms } from "../db/repositories/roomRepository";
 import type { Room } from "../db/repositories/roomRepository";
+import { MAX_PREFERRED_ROOMS } from "./businessRules";
 
 export class RoomNotFoundError extends Error {
   constructor(roomName: string) {
     super(`"${roomName}" 회의실을 찾을 수 없습니다.`);
     this.name = "RoomNotFoundError";
+  }
+}
+
+export class PreferredRoomLimitExceededError extends Error {
+  constructor() {
+    super(`선호 회의실은 최대 ${MAX_PREFERRED_ROOMS}개까지만 등록할 수 있어요.`);
+    this.name = "PreferredRoomLimitExceededError";
   }
 }
 
@@ -32,6 +40,14 @@ async function resolveRoomByName(roomName: string): Promise<Room> {
 
 export async function addPreferredRoom(userId: string, roomName: string): Promise<Room[]> {
   const room = await resolveRoomByName(roomName);
+  const current = await findPreferredRoomsByUserId(userId);
+  // 이미 등록된 회의실이면 상한과 무관하게 통과시킨다 — addPreferredRoomRow가 on conflict
+  // do nothing이라 어차피 아무 변화도 없으므로, 여기서 막으면 "이미 있는데 왜 막냐"는
+  // 혼란만 준다. 상한은 "새로 추가"하려는 경우에만 의미가 있다.
+  const alreadyPreferred = current.some((r) => r.id === room.id);
+  if (!alreadyPreferred && current.length >= MAX_PREFERRED_ROOMS) {
+    throw new PreferredRoomLimitExceededError();
+  }
   await addPreferredRoomRow(userId, room.id);
   return findPreferredRoomsByUserId(userId);
 }

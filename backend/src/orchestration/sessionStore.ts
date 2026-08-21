@@ -2,12 +2,26 @@
 //
 // BE-7 완료조건: "세션 상태(진행 중인 예약 등)가 대화록 텍스트가 아니라 서버 상태로
 // 관리됨". 이 파일은 사용자별 대화 히스토리(비용 절감을 위해 개수 제한)와, 예약
-// 확정 전 필수로 거쳐야 하는 "확인 대기(pendingConfirmation)" 상태를 순수 서버
-// 메모리 객체로 관리한다 — LLM이 스스로 "확인했다"고 주장하는 텍스트를 신뢰하지 않고,
-// 이 객체의 존재/일치 여부로만 확정 실행을 허용한다 (orchestrator.ts에서 강제).
+// 확정 전 필수로 거쳐야 하는 "확인 대기(pendingConfirmation)" 상태를 관리한다 —
+// LLM이 스스로 "확인했다"고 주장하는 텍스트를 신뢰하지 않고, 이 객체의 존재/일치
+// 여부로만 확정 실행을 허용한다 (orchestrator.ts에서 강제).
 //
-// 이 파일은 다른 어떤 계층도 의존하지 않는 순수 상태 저장소다 (tools/db/cj-automation
-// 전혀 모름) — 유닛 테스트로 검증 가능하다.
+// [2026-08-16 변경] 원래는 모듈 전역 `Map`(순수 메모리)이었는데, Vercel 서버리스에서는
+// 함수 인스턴스가 바뀌면 그 메모리가 통째로 사라져 대화 기억이 유실된다(로컬은 프로세스가
+// 계속 떠있어 이 문제가 절대 드러나지 않았다). 그래서 턴 시작 시 DB에서 로드하고 턴이
+// 끝날 때 DB에 저장하는 방식으로 바꿨다 — 상태를 들고 있는 필드/판정 로직(§ 아래 함수들)은
+// 전부 그대로고, "어디에 보관하느냐"만 바뀐다.
+//
+// [의도된 예외] 이 파일은 `db/repositories/chatSessionRepository`를 직접 부른다 —
+// `orchestration → tools → db` 의존 방향(5-project-principle.md §2)을 우회하는 것처럼
+// 보이지만, 이건 예약 비즈니스 로직이 아니라 오케스트레이션 자신의 상태를 어디에
+// 영속화할지 정하는 순수 인프라 관심사라 tools/에 억지로 끼워넣지 않는다(로그인 시
+// CJ 세션을 예열하는 auth.routes.ts의 기존 예외와 같은 성격).
+// 세션의 "판정 로직"(validatePendingConfirmation, wasSlotOfferedBefore 등)은 여전히
+// 순수 함수라 DB/네트워크 없이 유닛 테스트할 수 있다 — DB를 만지는 건 로드/저장 두
+// 함수(getOrCreateSession, saveSession)뿐이다.
+
+import { loadChatSessionState, saveChatSessionState } from "../db/repositories/chatSessionRepository";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
@@ -43,10 +57,26 @@ export interface PendingConfirmation {
   createdAtTurn: number;
 }
 
+/** check_availability로 사용자에게 실제로 보여준 "예약 가능 슬롯". 사용자가 목록에서
+ * 하나를 고르면 그건 이미 명시적 선택이므로 확인 버튼을 한 번 더 누르게 하지 않는데,
+ * 그 판정을 LLM의 주장이 아니라 이 서버 기록으로만 한다. */
+export interface OfferedSlot {
+  roomId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
 export interface OrchestrationSession {
   userId: string;
   messages: StoredChatMessage[];
   pendingConfirmation: PendingConfirmation | null;
+  /** 직전에 사용자에게 보여준 슬롯 목록과, 그걸 보여준 turnIndex. */
+  offeredSlots: OfferedSlot[];
+  offeredSlotsTurn: number;
+  /** find_reservation_candidates가 "후보 정확히 1건"으로 확정한 예약 id.
+   * 변경/취소 대상이 서버 기준으로 유일하다는 증거로만 쓴다. */
+  resolvedTargetReservationId: string | null;
   turnIndex: number;
   createdAt: number;
   lastActivityAt: number;
@@ -59,45 +89,66 @@ const MAX_HISTORY_MESSAGES = 20;
 /** 무응답이 이 시간(ms) 이상 지속되면 다음 요청 처리 전에 세션을 리셋한다. */
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30분
 
-const sessions = new Map<string, OrchestrationSession>();
-
 function createEmptySession(userId: string): OrchestrationSession {
   const now = Date.now();
   return {
     userId,
     messages: [],
     pendingConfirmation: null,
+    offeredSlots: [],
+    offeredSlotsTurn: -1,
+    resolvedTargetReservationId: null,
     turnIndex: 0,
     createdAt: now,
     lastActivityAt: now,
   };
 }
 
+/** DB에서 읽어온 값은 구조적으로 신뢰하지 않는다 — 필드가 없거나(마이그레이션 전 데이터,
+ * 수동 조작 등) 타입이 안 맞으면 빈 세션으로 취급한다. 이 정도만 확인하고 나머지는
+ * OrchestrationSession으로 그대로 캐스팅한다(JSON 스키마 검증 라이브러리까지는 과함 —
+ * 이 값은 우리 서버가 쓴 것만 다시 읽는 내부 상태라 신뢰 수준이 사용자 입력과 다르다). */
+function isPlausibleSessionState(value: unknown): value is OrchestrationSession {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as { messages?: unknown }).messages) &&
+    typeof (value as { turnIndex?: unknown }).turnIndex === "number"
+  );
+}
+
 /** userId를 세션 키로 사용한다 — 이 서비스는 사용자당 챗봇 대화가 1개뿐이라는 전제
  * (도메인 정의서 1번: 1차 채널은 웹 챗봇 하나) 하에 오버엔지니어링을 피한 단순한 설계다. */
-export function getOrCreateSession(userId: string): OrchestrationSession {
-  const existing = sessions.get(userId);
-  if (!existing) {
-    const created = createEmptySession(userId);
-    sessions.set(userId, created);
-    return created;
+export async function getOrCreateSession(userId: string): Promise<OrchestrationSession> {
+  const raw = await loadChatSessionState(userId);
+  const loaded = isPlausibleSessionState(raw) ? raw : null;
+
+  if (!loaded) {
+    return createEmptySession(userId);
   }
 
-  const idleMs = Date.now() - existing.lastActivityAt;
+  const idleMs = Date.now() - loaded.lastActivityAt;
   if (idleMs > SESSION_TIMEOUT_MS) {
-    const fresh = createEmptySession(userId);
-    sessions.set(userId, fresh);
-    return fresh;
+    return createEmptySession(userId);
   }
 
-  return existing;
+  return loaded;
+}
+
+/** 지금 시점의 세션 상태를 저장한다. [버그 수정, 20260818] 예전엔 턴이 끝날 때 한
+ * 번만 호출했는데, 도구가 이미 CJ에 실제로 반영되는 부작용(예약 확정 등)을 낸 직후
+ * 다음 OpenAI 호출이 실패하면 그 사실이 저장 안 된 채 사라지는 문제가 있었다. 그래서
+ * orchestrator.ts는 이제 도구 호출이 끝날 때마다(부작용 여부와 무관하게) 이 함수를
+ * 호출한다 — 매번 호출해도 이 앱 규모에서는 비용 문제가 없다. */
+export async function saveSession(session: OrchestrationSession): Promise<void> {
+  await saveChatSessionState(session.userId, session, new Date(session.lastActivityAt));
 }
 
 /** 예약 완료/취소 등 "이번 용건이 끝났다"고 판단되는 시점에 컨텍스트를 리셋한다
  * (BE-7 요구사항: 예약 완료/취소 또는 무응답 타임아웃 시 컨텍스트 리셋). */
-export function resetSession(userId: string): OrchestrationSession {
+export async function resetSession(userId: string): Promise<OrchestrationSession> {
   const fresh = createEmptySession(userId);
-  sessions.set(userId, fresh);
+  await saveSession(fresh);
   return fresh;
 }
 
@@ -126,6 +177,36 @@ export function setPendingConfirmation(
   pending: PendingConfirmation | null
 ): void {
   session.pendingConfirmation = pending;
+}
+
+export function setOfferedSlots(session: OrchestrationSession, slots: OfferedSlot[]): void {
+  session.offeredSlots = slots;
+  session.offeredSlotsTurn = session.turnIndex;
+}
+
+/**
+ * 이 슬롯이 "사용자가 이전 턴에 실제로 보고 나서 고른 것"인지 판정한다.
+ * 이전 턴(offeredSlotsTurn < turnIndex)이어야 한다는 조건이 핵심이다 — 같은 턴에
+ * 조회하고 곧바로 예약하면 사용자는 목록을 본 적조차 없으므로 선택으로 볼 수 없다.
+ */
+export function wasSlotOfferedBefore(session: OrchestrationSession, slot: OfferedSlot): boolean {
+  if (session.offeredSlotsTurn >= session.turnIndex) return false;
+  return session.offeredSlots.some(
+    (offered) =>
+      offered.roomId === slot.roomId &&
+      offered.date === slot.date &&
+      offered.startTime === slot.startTime &&
+      offered.endTime === slot.endTime
+  );
+}
+
+export function setResolvedTarget(session: OrchestrationSession, reservationId: string | null): void {
+  session.resolvedTargetReservationId = reservationId;
+}
+
+/** 변경/취소 대상이 서버가 직접 "후보 1건"으로 좁힌 그 예약과 동일한지. */
+export function isResolvedTarget(session: OrchestrationSession, reservationId: string): boolean {
+  return session.resolvedTargetReservationId === reservationId;
 }
 
 /**
@@ -158,9 +239,4 @@ export function validatePendingConfirmation(
     };
   }
   return { ok: true, pending };
-}
-
-/** 테스트 전용 — 모듈 전역 Map을 초기화한다. */
-export function __resetAllSessionsForTest(): void {
-  sessions.clear();
 }

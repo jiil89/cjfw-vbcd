@@ -12,7 +12,7 @@
 //
 // [2026-08-13 실사용 재검증] 모든 ASMX 엔드포인트는 baseUrl 바로 아래가 아니라
 // `NCONF/Common/WebService/` 경로 아래에 있다(예: 실제 URL은
-// `https://cjwappr.cj.net/NCONF/Common/WebService/WSConferenceReserve.asmx/getDayPilotConfReserveList`).
+// `baseUrl/NCONF/Common/WebService/WSConferenceReserve.asmx/getDayPilotConfReserveList`).
 // 이 접두사 없이 호출하면 500(런타임 오류 HTML)이 반환된다 — 이전 버전은 이 접두사가
 // 빠져 있었다. IIS 라우팅은 대소문자를 구분하지 않음을 확인했으므로(실측: 일부 엔드포인트는
 // 실제 페이지가 `Webservice`로 쓰지만 `WebService`로 호출해도 정상 동작), 이 파일에서는
@@ -346,7 +346,6 @@ export interface SaveReserveParams {
   endTime: string;
   title: string;
   contents: string;
-  phoneNum: string;
   /** [2026-08-14 실사용 검증 완료] CJ 실제 웹 UI가 브라우저에서 보내는 요청을 Playwright로
    * 직접 재현/캡처해서(`/NCONF/ConferenceRoom/script/reserve_insmod.js`의 `$('#btnConfirm')`
    * click 핸들러 원본을 확보함) 아래 필드들과 정확한 타입/기본값을 확정했다. 이전 버전의
@@ -362,7 +361,7 @@ export interface SaveReserveParams {
    * 회의실 마스터데이터의 `REQUIRED_APPROVAL` 값을 그대로 전달하는 필드 — 0=승인 불필요,
    * 1=승인 필요. 이 프로젝트가 다루는 일반 회의실은 전부 승인 불필요이므로 0 고정. */
   gubun: 0 | 1;
-  /** 참석자(TO) 목록 — 사내 계정 alias를 쉼표로 이어붙인 문자열. 참석자 없으면 빈 문자열. */
+  /** 참석자(TO) 목록 — CJ WORLD ID(alias)를 쉼표로 이어붙인 문자열. 참석자 없으면 빈 문자열. */
   reqList: string;
   /** 참조자(CC) 목록 — reqList와 동일 형식. */
   optList: string;
@@ -393,7 +392,10 @@ export async function saveReserve(
     title: params.title,
     contents: params.contents,
     attendee_count: params.attendeeCount,
-    phone_num: params.phoneNum,
+    // [20260816] 비상 연락처는 항상 비워서 저장한다 — 사용자가 챗봇에 뭐라고 답했든
+    // 무관하게 이 API 호출 지점 한 곳에서 고정한다(상위 계층 어디서도 값을 흘려보내지
+    // 않고 아예 필드를 받지 않게 만들었다. 이 파일 상단 SaveReserveParams 참고).
+    phone_num: "",
     gubun: params.gubun,
     req_list: params.reqList,
     opt_list: params.optList,

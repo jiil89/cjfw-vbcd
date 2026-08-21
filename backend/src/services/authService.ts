@@ -9,9 +9,17 @@ import {
   findActiveRefreshTokenByHash,
   revokeRefreshTokenByHash,
 } from "../db/repositories/refreshTokenRepository";
-import { findUserByEmailAlias, findUserById, type User } from "../db/repositories/userRepository";
+import {
+  findUserByEmailAlias,
+  findUserById,
+  incrementFailedLoginAttempts,
+  lockUser,
+  resetFailedLoginAttempts,
+  type User,
+} from "../db/repositories/userRepository";
 import { findLatestRegistrationRequestByEmailAlias } from "../db/repositories/registrationRequestRepository";
 import { verifyAppPassword } from "../security/appPassword";
+import { MAX_LOGIN_ATTEMPTS } from "../tools/businessRules";
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15분
 export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7일
@@ -109,7 +117,7 @@ export class RefreshTokenInvalidError extends Error {
 export class InvalidCredentialsError extends Error {
   code = "INVALID_CREDENTIALS";
   constructor() {
-    super("사내 계정 ID 또는 비밀번호가 일치하지 않습니다.");
+    super("CJ WORLD ID 또는 비밀번호가 일치하지 않습니다.");
     this.name = "InvalidCredentialsError";
   }
 }
@@ -138,6 +146,19 @@ export class AccountRevokedError extends Error {
   }
 }
 
+// [20260820 추가] 로그인 브루트포스 방어. businessRules.ts의 MAX_LOGIN_ATTEMPTS 참고.
+export class AccountLockedError extends Error {
+  code = "ACCOUNT_LOCKED";
+  constructor(justLocked: boolean) {
+    super(
+      justLocked
+        ? `로그인 ${MAX_LOGIN_ATTEMPTS}회 연속 실패로 계정이 잠겼습니다. 관리자에게 잠금 해제를 요청하세요.`
+        : "잠긴 계정입니다. 관리자에게 잠금 해제를 요청하세요."
+    );
+    this.name = "AccountLockedError";
+  }
+}
+
 /**
  * 로그인 자격증명(email_alias + appPassword)을 검증한다. 실패 사유를 승인 대기/거부/
  * 자격증명 오류로 구분해 서로 다른 에러 타입으로 던진다. 평문 비밀번호는 어디에도 로깅하지 않는다.
@@ -160,9 +181,24 @@ export async function authenticateUser(emailAlias: string, appPassword: string):
     throw new AccountRevokedError();
   }
 
+  // 이미 잠긴 계정이면 비밀번호를 검증할 필요조차 없다 — 여기서 바로 거부한다.
+  if (user.status === "locked") {
+    throw new AccountLockedError(false);
+  }
+
   const isValid = await verifyAppPassword(appPassword, user.appPasswordHash);
   if (!isValid) {
+    const attempts = await incrementFailedLoginAttempts(user.id);
+    if (attempts >= MAX_LOGIN_ATTEMPTS) {
+      await lockUser(user.id);
+      throw new AccountLockedError(true);
+    }
     throw new InvalidCredentialsError();
+  }
+
+  // 성공했으면 그동안 쌓인 실패 카운트를 지운다(다음 번엔 다시 0부터 5회를 채워야 잠긴다).
+  if (user.failedLoginAttempts > 0) {
+    await resetFailedLoginAttempts(user.id);
   }
 
   return user;

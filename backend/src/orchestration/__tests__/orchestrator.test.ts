@@ -38,8 +38,18 @@ vi.mock("../../tools/reservationTargeting", () => ({
   ReservationNotFoundError: class ReservationNotFoundError extends Error {},
 }));
 
+// [2026-08-16] sessionStore.ts가 chatSessionRepository(DB)를 통해 세션을 로드/저장하도록
+// 바뀌어서, 여기서도 실제 DB 대신 메모리 기반 페이크로 대체한다(sessionStore.test.ts와
+// 같은 패턴).
+const fakeSessionDb = new Map<string, unknown>();
+vi.mock("../../db/repositories/chatSessionRepository", () => ({
+  loadChatSessionState: vi.fn(async (userId: string) => fakeSessionDb.get(userId) ?? null),
+  saveChatSessionState: vi.fn(async (userId: string, state: unknown) => {
+    fakeSessionDb.set(userId, JSON.parse(JSON.stringify(state)));
+  }),
+}));
+
 import { createReservation } from "../../tools/reservation.tool";
-import { __resetAllSessionsForTest } from "../sessionStore";
 import { handleUserMessage } from "../orchestrator";
 
 // businessRules.ts는 실제 모듈을 그대로 쓰므로(순수 함수, mock 불필요), 예약 가능
@@ -79,7 +89,7 @@ function textMessage(text: string) {
 
 describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", () => {
   beforeEach(() => {
-    __resetAllSessionsForTest();
+    fakeSessionDb.clear();
     vi.clearAllMocks();
   });
 
@@ -92,7 +102,6 @@ describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", ()
           toolCallMessage("propose_create_reservation", {
             title: "주간회의",
             contents: "주간회의",
-            phoneNum: "",
             date: TOMORROW,
             startTime: "15:00",
             endTime: "16:00",
@@ -135,7 +144,6 @@ describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", ()
           toolCallMessage("propose_create_reservation", {
             title: "주간회의",
             contents: "주간회의",
-            phoneNum: "",
             date: TOMORROW,
             startTime: "15:00",
             endTime: "16:00",
@@ -156,7 +164,7 @@ describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", ()
     // 실제로는 모델이 이전 tool 응답 content에서 읽어온 토큰을 그대로 재사용한다.
     // 여기서는 내부 sessionStore를 통해 그 토큰 값을 확보해 재사용한다.
     const { getOrCreateSession } = await import("../sessionStore");
-    const session = getOrCreateSession("user-2");
+    const session = await getOrCreateSession("user-2");
     capturedToken = session.pendingConfirmation?.token ?? "";
     expect(capturedToken).not.toBe("");
 
@@ -176,6 +184,63 @@ describe("orchestrator.handleUserMessage -- 확정 실행 2단계 게이트", ()
       expect.objectContaining({ title: "주간회의", startTime: "15:00", endTime: "16:00" })
     );
     expect(result2.reply).toContain("완료");
+
+    vi.unstubAllGlobals();
+  });
+
+  // [버그 수정, 20260818] 예전엔 세션을 턴이 끝난 뒤 한 번만 저장해서, confirm_create_reservation이
+  // 이미 실제로 CJ에 반영된 뒤 그 다음 OpenAI 호출이 실패하면 그 사실(pendingConfirmation
+  // 해제 등)이 저장되지 않고 날아갔다. 재시도 시 서버가 "아직 아무 일도 없었던 걸로" 착각해
+  // 중복 예약을 시도할 위험이 있었다 — 도구 호출 직후 즉시 저장하는지 확인한다.
+  it("도구 호출이 성공한 뒤 다음 OpenAI 호출이 실패해도, 그 도구 호출의 결과는 이미 저장돼 있다", async () => {
+    (createReservation as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      reservationId: "res-2",
+      roomName: "3F-1",
+      startTime: "15:00",
+      endTime: "16:00",
+      cjSeq: "1002",
+    });
+
+    const fetchMockTurn1 = vi
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(
+          toolCallMessage("propose_create_reservation", {
+            title: "주간회의",
+            contents: "주간회의",
+            date: TOMORROW,
+            startTime: "15:00",
+            endTime: "16:00",
+            room: SAMPLE_ROOM,
+          })
+        )
+      )
+      .mockResolvedValueOnce(chatResponse(textMessage("3F-1 15:00~16:00으로 예약할까요?")));
+    vi.stubGlobal("fetch", fetchMockTurn1);
+    await handleUserMessage("user-3", "내일 오후 3시 3F-1 예약해줘");
+
+    const { getOrCreateSession } = await import("../sessionStore");
+    const session = await getOrCreateSession("user-3");
+    const capturedToken = session.pendingConfirmation?.token ?? "";
+    expect(capturedToken).not.toBe("");
+
+    // 도구 호출(confirm_create_reservation, 실제로 예약을 만듦)은 성공하지만, 그 직후
+    // 이어지는 OpenAI 호출이 실패하는 상황을 재현한다.
+    const fetchMockTurn2 = vi
+      .fn()
+      .mockResolvedValueOnce(
+        chatResponse(toolCallMessage("confirm_create_reservation", { confirmationToken: capturedToken }))
+      )
+      .mockRejectedValueOnce(new Error("네트워크 오류(시뮬레이션)"));
+    vi.stubGlobal("fetch", fetchMockTurn2);
+
+    await expect(handleUserMessage("user-3", "네, 확정해주세요")).rejects.toThrow();
+
+    // 턴 전체는 실패했지만, 이미 성공한 도구 호출(실제 CJ 예약)의 결과는 저장돼 있어야 한다.
+    expect(createReservation).toHaveBeenCalledTimes(1);
+    const persisted = await getOrCreateSession("user-3");
+    expect(persisted.pendingConfirmation).toBeNull();
+    expect(persisted.messages.some((m) => m.role === "tool" && m.content?.includes("res-2"))).toBe(true);
 
     vi.unstubAllGlobals();
   });

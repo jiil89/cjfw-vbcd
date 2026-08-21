@@ -17,11 +17,17 @@
 
 import { randomUUID } from "node:crypto";
 import { config } from "../config/env";
+import { toKstDate } from "../lib/kst";
 import {
   appendMessage,
   getOrCreateSession,
+  saveSession,
+  isResolvedTarget,
+  setOfferedSlots,
   setPendingConfirmation,
+  setResolvedTarget,
   validatePendingConfirmation,
+  wasSlotOfferedBefore,
   type OrchestrationSession,
   type PendingConfirmation,
   type StoredChatMessage,
@@ -39,7 +45,12 @@ import {
   type RoomedSegmentPlan,
 } from "../tools/reservation.tool";
 import { getMyReservations } from "../tools/myReservations.tool";
-import { addPreferredRoom, removePreferredRoom, RoomNotFoundError } from "../tools/preferredRooms.tool";
+import {
+  addPreferredRoom,
+  removePreferredRoom,
+  RoomNotFoundError,
+  PreferredRoomLimitExceededError,
+} from "../tools/preferredRooms.tool";
 import {
   modifyReservation,
   resolveSingleReservationTarget,
@@ -58,6 +69,7 @@ import {
   durationMinutes,
   FIXED_SITE,
   MAX_SINGLE_ROOM_MINUTES,
+  normalizeReservationTitle,
 } from "../tools/businessRules";
 
 // ---------------------------------------------------------------------------
@@ -162,6 +174,15 @@ interface OpenAiRequestMessage {
   tool_calls?: OpenAiToolCall[];
 }
 
+interface OpenAiUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  // 프롬프트 캐싱이 실제로 적중했는지는 이 필드로만 확인할 수 있다 — prompt_tokens 자체는
+  // 캐시 적중 여부와 무관하게 항상 "이번 요청에 넣은 프롬프트 토큰 수"를 그대로 보여준다.
+  prompt_tokens_details?: { cached_tokens?: number };
+}
+
 interface OpenAiChatCompletionResponse {
   choices: Array<{
     message: {
@@ -171,12 +192,18 @@ interface OpenAiChatCompletionResponse {
     };
     finish_reason: string;
   }>;
+  usage?: OpenAiUsage;
   error?: { message: string };
 }
 
 const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
 
-async function callOpenAi(messages: OpenAiRequestMessage[]): Promise<OpenAiChatCompletionResponse["choices"][0]["message"]> {
+/** [2026-08-16 추가] 턴당 실제 토큰 사용량을 알 방법이 없어("대략 얼마나 쓰냐"는 질문에
+ * 프롬프트 글자 수로 추측만 할 수 있었다) OpenAI 응답의 usage를 그대로 실어 돌려준다.
+ * 매 턴 여러 번(도구 호출 루프) 호출되므로, 합산은 호출부(handleUserMessage)가 한다. */
+async function callOpenAi(
+  messages: OpenAiRequestMessage[]
+): Promise<{ message: OpenAiChatCompletionResponse["choices"][0]["message"]; usage: OpenAiUsage | null }> {
   const response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
     method: "POST",
     headers: {
@@ -205,7 +232,7 @@ async function callOpenAi(messages: OpenAiRequestMessage[]): Promise<OpenAiChatC
   if (!message) {
     throw new Error("[orchestration/orchestrator] OpenAI 응답에 message가 없습니다.");
   }
-  return message;
+  return { message, usage: body.usage ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +240,9 @@ async function callOpenAi(messages: OpenAiRequestMessage[]): Promise<OpenAiChatC
 // ---------------------------------------------------------------------------
 interface ToolExecutionResult {
   content: unknown;
+  /** 서버가 propose 단계에서 곧바로 실행까지 끝낸 경우, 프론트가 "제안 카드"가 아니라
+   * "완료 카드"를 그리도록 결과에 붙일 도구 이름을 바꿔준다. */
+  toolNameOverride?: string;
 }
 
 function errorResult(message: string): ToolExecutionResult {
@@ -252,6 +282,116 @@ function requireRoomInput(args: Record<string, unknown>, key: string): RoomInput
   };
 }
 
+// ---------------------------------------------------------------------------
+// 실제 실행(runner) — confirm_* 도구와, 서버가 확인 단계를 생략해도 된다고 판정했을 때의
+// propose_* 즉시 실행이 이 함수들을 공유한다.
+// ---------------------------------------------------------------------------
+async function runCreateReservation(
+  session: OrchestrationSession,
+  userId: string,
+  pending: PendingConfirmation
+): Promise<ToolExecutionResult> {
+  try {
+    const result = await createReservation(userId, pending.params as Parameters<typeof createReservation>[1]);
+    setPendingConfirmation(session, null);
+    return { content: { status: "confirmed", reservation: result }, toolNameOverride: "confirm_create_reservation" };
+  } catch (err) {
+    setPendingConfirmation(session, null);
+    if (err instanceof ReservationConflictError || err instanceof BusinessRuleViolationError) {
+      // [FE-5 실사용 검증에서 발견, 20260814] confirm_* 실패는 사용자에게는 "다시
+      // 시도해달라"는 안내로 자연스럽게 흡수되지만, 서버 로그에는 아무것도 남지 않아
+      // CJ 연동이 반복 실패해도 운영자가 알 방법이 없었다 — 원인 메시지만 남긴다.
+      console.warn(`[orchestration/orchestrator] 예약 생성 실패: ${err.message}`);
+      return errorResult(err.message);
+    }
+    throw err;
+  }
+}
+
+async function runSplitReservation(
+  session: OrchestrationSession,
+  userId: string,
+  pending: PendingConfirmation
+): Promise<ToolExecutionResult> {
+  try {
+    const results = await createSplitReservation(
+      userId,
+      pending.params as Parameters<typeof createSplitReservation>[1]
+    );
+    setPendingConfirmation(session, null);
+    return { content: { status: "confirmed", reservations: results }, toolNameOverride: "confirm_split_reservation" };
+  } catch (err) {
+    setPendingConfirmation(session, null);
+    if (err instanceof SegmentReservationFailedError) {
+      console.warn(`[orchestration/orchestrator] 분할 예약 실패: ${err.message}`);
+      return errorResult(err.message);
+    }
+    if (err instanceof BusinessRuleViolationError) return errorResult(err.message);
+    throw err;
+  }
+}
+
+async function runModifyReservation(
+  session: OrchestrationSession,
+  userId: string,
+  pending: PendingConfirmation
+): Promise<ToolExecutionResult> {
+  try {
+    const result = await modifyReservation(userId, pending.params as Parameters<typeof modifyReservation>[1]);
+    setPendingConfirmation(session, null);
+    setResolvedTarget(session, null);
+    return { content: { status: "confirmed", reservation: result }, toolNameOverride: "confirm_modify_reservation" };
+  } catch (err) {
+    setPendingConfirmation(session, null);
+    if (
+      err instanceof ReservationNotFoundError ||
+      err instanceof SplitGroupModifyNotSupportedError ||
+      err instanceof ReservationModifyFailedError ||
+      err instanceof ReservationConflictError ||
+      err instanceof BusinessRuleViolationError
+    ) {
+      console.warn(`[orchestration/orchestrator] 예약 변경 실패: ${err.message}`);
+      return errorResult(err.message);
+    }
+    throw err;
+  }
+}
+
+async function runCancelReservation(
+  session: OrchestrationSession,
+  userId: string,
+  pending: PendingConfirmation
+): Promise<ToolExecutionResult> {
+  try {
+    const results = await cancelReservation(userId, pending.params as Parameters<typeof cancelReservation>[1]);
+    setPendingConfirmation(session, null);
+    setResolvedTarget(session, null);
+    return { content: { status: "confirmed", cancelled: results }, toolNameOverride: "confirm_cancel_reservation" };
+  } catch (err) {
+    setPendingConfirmation(session, null);
+    if (err instanceof SplitGroupCancelScopeRequiredError) {
+      // 도메인 정의서 2번: 기본값을 임의로 정하지 않는다 — 아직 아무것도 취소되지
+      // 않았으므로 사용자에게 되묻도록 안내만 반환한다.
+      return {
+        content: {
+          status: "scope_required",
+          message: err.message,
+          segments: err.groupSegments.map((s) => ({
+            reservationId: s.id,
+            roomId: s.roomId,
+            startAt: s.startAt,
+            endAt: s.endAt,
+          })),
+        },
+      };
+    }
+    if (err instanceof ReservationNotFoundError || err instanceof ReservationAlreadyCancelledError) {
+      return errorResult(err.message);
+    }
+    throw err;
+  }
+}
+
 async function executeTool(
   session: OrchestrationSession,
   userId: string,
@@ -271,6 +411,28 @@ async function executeTool(
         const floorLabel = typeof args.floorLabel === "string" ? args.floorLabel : undefined;
         try {
           const result = await findAvailableRooms(userId, { date, startTime, endTime, minCapacity, floorLabel });
+
+          // [20260816 실사용] 특정 층으로 걸러 0곳이면 "다른 층으로 찾아드릴까요?"라고
+          // 되묻기만 하고 끝나는 경우가 있었다 — 정작 같은 시간 다른 층에는 8곳이나
+          // 비어 있었는데도. 층 필터 결과가 비면 같은 조건으로 층 없이 한 번 더 조회해
+          // 대안을 함께 실어준다(사용자를 한 턴 더 기다리게 하지 않는다).
+          let sameTimeOtherFloors: typeof result.others = [];
+          if (floorLabel && result.preferred.length === 0 && result.others.length === 0) {
+            const fallback = await findAvailableRooms(userId, { date, startTime, endTime, minCapacity });
+            sameTimeOtherFloors = [...fallback.preferred, ...fallback.others];
+          }
+
+          // 사용자에게 실제로 보여준 슬롯을 서버가 기록해둔다 — 다음 턴에 사용자가 이
+          // 중 하나를 고르면 확인 버튼을 한 번 더 누르지 않고 바로 예약한다(3-5b).
+          setOfferedSlots(
+            session,
+            [...result.preferred, ...result.others, ...sameTimeOtherFloors].map((room) => ({
+              roomId: room.id,
+              date,
+              startTime,
+              endTime,
+            }))
+          );
           // date/startTime/endTime을 결과에도 그대로 실어준다 — FE-5 카드가 "8월 17일(월)
           // 10:00-11:00"처럼 조건을 다시 보여줄 때, reply 텍스트를 파싱하지 않고 이 값을
           // 그대로 쓴다(propose_create_reservation과 동일한 패턴).
@@ -278,6 +440,10 @@ async function executeTool(
             content: {
               preferred: result.preferred.map(toRoomSummary),
               others: result.others.map(toRoomSummary),
+              // 요청한 층에 아무것도 없을 때만 채워진다. 비어있지 않으면 모델이 이걸
+              // 그대로 대안으로 제시해야 한다(3-2b).
+              sameTimeOtherFloors: sameTimeOtherFloors.map(toRoomSummary),
+              requestedFloorLabel: floorLabel ?? null,
               date,
               startTime,
               endTime,
@@ -338,6 +504,9 @@ async function executeTool(
         const roomName = typeof args.roomName === "string" ? args.roomName : undefined;
         try {
           const reservation = await resolveSingleReservationTarget(userId, { date, startTime, endTime, roomName });
+          // 후보가 정확히 1건이라는 건 서버가 직접 좁힌 사실이다 — 이 예약을 대상으로
+          // 한 변경/취소는 확인 절차 없이 바로 실행해도 된다는 근거로 기록한다(3-6b).
+          setResolvedTarget(session, reservation.id);
           return {
             content: {
               status: "resolved",
@@ -352,6 +521,8 @@ async function executeTool(
             },
           };
         } catch (err) {
+          // 이번 조회로 대상이 좁혀지지 않았다면 예전 조회의 확정 기록이 남아있으면 안 된다.
+          setResolvedTarget(session, null);
           if (err instanceof ReservationNotFoundError) {
             return { content: { status: "not_found" } };
           }
@@ -381,18 +552,21 @@ async function executeTool(
       //  반드시 사용자의 다음 메시지 이후에만 가능하다.)
       // -----------------------------------------------------------------
       case "propose_create_reservation": {
-        const title = requireString(args, "title");
+        // 회의명은 비어있거나 "회의" 같은 placeholder면 서버가 기본 제목으로 교정한다
+        // (businessRules.normalizeReservationTitle 주석 — 프롬프트 지시만으로는 안 막혔다).
+        const title = normalizeReservationTitle(requireString(args, "title"));
         const contents = requireString(args, "contents") ?? "";
-        const phoneNum = typeof args.phoneNum === "string" ? args.phoneNum : "";
         const date = requireString(args, "date");
         const startTime = requireString(args, "startTime");
         const endTime = requireString(args, "endTime");
         const room = requireRoomInput(args, "room");
-        if (!title || !date || !startTime || !endTime || !room) {
-          return errorResult("title/date/startTime/endTime/room은 필수입니다.");
+        if (!date || !startTime || !endTime || !room) {
+          return errorResult("date/startTime/endTime/room은 필수입니다.");
         }
         try {
-          assertValidReservationWindow({ date, today: new Date().toISOString().slice(0, 10), startTime, endTime });
+          // [버그 수정, 20260818] toISOString()은 UTC라 한국시간 00:00~08:59 사이에는 "오늘"이
+          // 어제로 계산돼, 정확히 7일 뒤를 요청한 예약이 부당하게 거부됐다. KST로 계산한다.
+          assertValidReservationWindow({ date, today: toKstDate(new Date()), startTime, endTime });
           if (durationMinutes(startTime, endTime) > MAX_SINGLE_ROOM_MINUTES) {
             return errorResult(`${MAX_SINGLE_ROOM_MINUTES}분을 초과하는 요청은 plan_long_meeting으로 분할 계획을 먼저 세워야 합니다.`);
           }
@@ -401,7 +575,7 @@ async function executeTool(
           throw err;
         }
 
-        const params = { title, contents, phoneNum, date, startTime, endTime, room: toRoomLike(room) };
+        const params = { title, contents, date, startTime, endTime, room: toRoomLike(room) };
         const summary = `${room.roomName} ${date} ${startTime}~${endTime} "${title}"`;
         const pending: PendingConfirmation = {
           token: randomUUID(),
@@ -411,6 +585,14 @@ async function executeTool(
           createdAtTurn: session.turnIndex,
         };
         setPendingConfirmation(session, pending);
+
+        // 사용자가 이전 턴에 본 목록에서 고른 슬롯이면 확인 버튼을 한 번 더 누르게 하지
+        // 않는다 — 목록에서 고른 행위 자체가 이미 명시적 선택이기 때문이다. 판정 근거는
+        // LLM의 주장이 아니라 서버가 직접 남긴 offeredSlots 기록이다.
+        if (wasSlotOfferedBefore(session, { roomId: room.id, date, startTime, endTime })) {
+          return runCreateReservation(session, userId, pending);
+        }
+
         // room/date/startTime/endTime을 요약 문자열과 별개 필드로도 내려준다 — FE-5가 이
         // 결과를 그대로 "회의실 제안 카드"에 바인딩한다(문자열 파싱 없이).
         return {
@@ -431,36 +613,16 @@ async function executeTool(
         if (!token) return errorResult("confirmationToken은 필수입니다.");
         const check = validatePendingConfirmation(session, token, "create_reservation");
         if (!check.ok) return errorResult(check.reason);
-
-        try {
-          const result = await createReservation(
-            userId,
-            check.pending.params as Parameters<typeof createReservation>[1]
-          );
-          setPendingConfirmation(session, null);
-          return { content: { status: "confirmed", reservation: result } };
-        } catch (err) {
-          setPendingConfirmation(session, null);
-          if (err instanceof ReservationConflictError || err instanceof BusinessRuleViolationError) {
-            // [FE-5 실사용 검증에서 발견, 20260814] confirm_* 실패는 사용자에게는 "다시
-            // 시도해달라"는 안내로 자연스럽게 흡수되지만, 서버 로그에는 아무것도 남지 않아
-            // CJ 연동이 반복 실패해도 운영자가 알 방법이 없었다 — 원인 메시지만 남긴다
-            // (사용자 응답 내용은 바꾸지 않는다).
-            console.warn(`[orchestration/orchestrator] confirm_create_reservation 실패: ${err.message}`);
-            return errorResult(err.message);
-          }
-          throw err;
-        }
+        return runCreateReservation(session, userId, check.pending);
       }
 
       case "propose_split_reservation": {
-        const title = requireString(args, "title");
+        const title = normalizeReservationTitle(requireString(args, "title"));
         const contents = requireString(args, "contents") ?? "";
-        const phoneNum = typeof args.phoneNum === "string" ? args.phoneNum : "";
         const date = requireString(args, "date");
         const planRaw = args.plan;
-        if (!title || !date || !Array.isArray(planRaw) || planRaw.length < 2) {
-          return errorResult("title/date/plan(2개 이상)은 필수입니다. plan_long_meeting 결과의 segments를 그대로 전달하세요.");
+        if (!date || !Array.isArray(planRaw) || planRaw.length < 2) {
+          return errorResult("date/plan(2개 이상)은 필수입니다. plan_long_meeting 결과의 segments를 그대로 전달하세요.");
         }
 
         const plan: RoomedSegmentPlan[] = [];
@@ -480,7 +642,7 @@ async function executeTool(
           token: randomUUID(),
           kind: "split_reservation",
           summary,
-          params: { title, contents, phoneNum, date, plan },
+          params: { title, contents, date, plan },
           createdAtTurn: session.turnIndex,
         };
         setPendingConfirmation(session, pending);
@@ -500,23 +662,7 @@ async function executeTool(
         if (!token) return errorResult("confirmationToken은 필수입니다.");
         const check = validatePendingConfirmation(session, token, "split_reservation");
         if (!check.ok) return errorResult(check.reason);
-
-        try {
-          const results = await createSplitReservation(
-            userId,
-            check.pending.params as Parameters<typeof createSplitReservation>[1]
-          );
-          setPendingConfirmation(session, null);
-          return { content: { status: "confirmed", reservations: results } };
-        } catch (err) {
-          setPendingConfirmation(session, null);
-          if (err instanceof SegmentReservationFailedError) {
-            console.warn(`[orchestration/orchestrator] confirm_split_reservation 실패: ${err.message}`);
-            return errorResult(err.message);
-          }
-          if (err instanceof BusinessRuleViolationError) return errorResult(err.message);
-          throw err;
-        }
+        return runSplitReservation(session, userId, check.pending);
       }
 
       case "propose_modify_reservation": {
@@ -550,6 +696,10 @@ async function executeTool(
           createdAtTurn: session.turnIndex,
         };
         setPendingConfirmation(session, pending);
+        // 대상이 서버가 직접 1건으로 좁힌 그 예약이면 바로 변경한다(3-6b).
+        if (isResolvedTarget(session, reservationId)) {
+          return runModifyReservation(session, userId, pending);
+        }
         return { content: { confirmationToken: pending.token, summary, requiresUserConfirmation: true } };
       }
 
@@ -558,28 +708,7 @@ async function executeTool(
         if (!token) return errorResult("confirmationToken은 필수입니다.");
         const check = validatePendingConfirmation(session, token, "modify_reservation");
         if (!check.ok) return errorResult(check.reason);
-
-        try {
-          const result = await modifyReservation(
-            userId,
-            check.pending.params as Parameters<typeof modifyReservation>[1]
-          );
-          setPendingConfirmation(session, null);
-          return { content: { status: "confirmed", reservation: result } };
-        } catch (err) {
-          setPendingConfirmation(session, null);
-          if (
-            err instanceof ReservationNotFoundError ||
-            err instanceof SplitGroupModifyNotSupportedError ||
-            err instanceof ReservationModifyFailedError ||
-            err instanceof ReservationConflictError ||
-            err instanceof BusinessRuleViolationError
-          ) {
-            console.warn(`[orchestration/orchestrator] confirm_modify_reservation 실패: ${err.message}`);
-            return errorResult(err.message);
-          }
-          throw err;
-        }
+        return runModifyReservation(session, userId, check.pending);
       }
 
       case "propose_cancel_reservation": {
@@ -597,6 +726,11 @@ async function executeTool(
           createdAtTurn: session.turnIndex,
         };
         setPendingConfirmation(session, pending);
+        // 대상이 서버가 직접 1건으로 좁힌 그 예약이면 바로 취소한다(3-6b). 분할 예약이라
+        // 범위를 정해야 하는 경우는 runCancelReservation이 scope_required로 되돌려준다.
+        if (isResolvedTarget(session, reservationId)) {
+          return runCancelReservation(session, userId, pending);
+        }
         return { content: { confirmationToken: pending.token, summary, requiresUserConfirmation: true } };
       }
 
@@ -605,37 +739,7 @@ async function executeTool(
         if (!token) return errorResult("confirmationToken은 필수입니다.");
         const check = validatePendingConfirmation(session, token, "cancel_reservation");
         if (!check.ok) return errorResult(check.reason);
-
-        try {
-          const results = await cancelReservation(
-            userId,
-            check.pending.params as Parameters<typeof cancelReservation>[1]
-          );
-          setPendingConfirmation(session, null);
-          return { content: { status: "confirmed", cancelled: results } };
-        } catch (err) {
-          setPendingConfirmation(session, null);
-          if (err instanceof SplitGroupCancelScopeRequiredError) {
-            // 도메인 정의서 2번: 기본값을 임의로 정하지 않는다 — 아직 아무것도 취소되지
-            // 않았으므로(파일 상단 설계 노트 참고) 사용자에게 되묻도록 안내만 반환한다.
-            return {
-              content: {
-                status: "scope_required",
-                message: err.message,
-                segments: err.groupSegments.map((s) => ({
-                  reservationId: s.id,
-                  roomId: s.roomId,
-                  startAt: s.startAt,
-                  endAt: s.endAt,
-                })),
-              },
-            };
-          }
-          if (err instanceof ReservationNotFoundError || err instanceof ReservationAlreadyCancelledError) {
-            return errorResult(err.message);
-          }
-          throw err;
-        }
+        return runCancelReservation(session, userId, check.pending);
       }
 
       case "add_preferred_room": {
@@ -646,6 +750,7 @@ async function executeTool(
           return { content: { rooms: rooms.map(toRoomSummary) } };
         } catch (err) {
           if (err instanceof RoomNotFoundError) return errorResult(err.message);
+          if (err instanceof PreferredRoomLimitExceededError) return errorResult(err.message);
           throw err;
         }
       }
@@ -706,16 +811,21 @@ function collapseDuplicateLines(text: string): string {
  * 이 함수는 그 상태를 읽고 갱신할 뿐 자체적으로 전역 상태를 만들지 않는다.
  */
 export async function handleUserMessage(userId: string, userMessage: string): Promise<OrchestratorReply> {
-  const session = getOrCreateSession(userId);
+  const session = await getOrCreateSession(userId);
   session.turnIndex += 1;
 
   appendMessage(session, { role: "user", content: userMessage });
 
   const rooms = await getRoomContext();
-  const today = new Date().toISOString().slice(0, 10);
+  // [버그 수정, 20260818] toISOString()은 UTC라 한국시간 00:00~08:59 사이에는 모델에게
+  // "오늘"을 어제로 알려줬다 — "내일"/"모레" 같은 상대 날짜 해석이 전부 하루씩 밀렸다.
+  const today = toKstDate(new Date());
 
   let finalReply: string | null = null;
   let lastToolResult: ChatProposal | null = null;
+  // 이번 턴 안에서 OpenAI를 여러 번 부를 수 있어(도구 호출 루프) 합산해서 한 번만 로그로
+  // 남긴다 — "턴당 토큰이 대략 얼마나 드는지"를 실측할 방법이 이거 말고 없었다.
+  const turnTokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cached_tokens: 0, calls: 0 };
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
     const systemPrompt = buildSystemPrompt({
@@ -737,7 +847,14 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
       })),
     ];
 
-    const assistantMessage = await callOpenAi(messages);
+    const { message: assistantMessage, usage } = await callOpenAi(messages);
+    if (usage) {
+      turnTokenUsage.prompt_tokens += usage.prompt_tokens;
+      turnTokenUsage.completion_tokens += usage.completion_tokens;
+      turnTokenUsage.total_tokens += usage.total_tokens;
+      turnTokenUsage.cached_tokens += usage.prompt_tokens_details?.cached_tokens ?? 0;
+      turnTokenUsage.calls += 1;
+    }
 
     const storedAssistantMessage: StoredChatMessage = {
       role: "assistant",
@@ -778,13 +895,20 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
       }
 
       const result = await executeTool(session, userId, name, args);
-      lastToolResult = { tool: name, data: result.content };
+      lastToolResult = { tool: result.toolNameOverride ?? name, data: result.content };
       appendMessage(session, {
         role: "tool",
         tool_call_id: toolCall.id,
         name,
         content: JSON.stringify(result.content),
       });
+      // [버그 수정, 20260818] 예전엔 턴이 끝난 뒤(919번째 줄) 딱 한 번만 저장했다. 그런데
+      // executeTool은 confirm_create_reservation처럼 이미 CJ에 실제로 반영되는 부작용을
+      // 낼 수 있는데, 그 직후 다음 OpenAI 호출이 타임아웃/오류로 실패하면 실제로는 예약이
+      // 됐는데도 그 사실(pendingConfirmation 해제, tool 응답 메시지)이 저장 안 된 채
+      // 사라진다. 사용자가 재시도하면 서버는 "아직 아무 일도 없었던 걸로" 착각해 중복
+      // 예약을 시도할 수 있다. 그래서 도구 호출 하나가 끝날 때마다 바로 저장한다.
+      await saveSession(session);
     }
   }
 
@@ -794,6 +918,17 @@ export async function handleUserMessage(userId: string, userMessage: string): Pr
   } else {
     finalReply = collapseDuplicateLines(finalReply);
   }
+
+  console.log(
+    `[orchestration/orchestrator] 토큰 사용량 (userId=${userId}, OpenAI 호출 ${turnTokenUsage.calls}회): ` +
+      `prompt=${turnTokenUsage.prompt_tokens}(캐시적중=${turnTokenUsage.cached_tokens}) ` +
+      `completion=${turnTokenUsage.completion_tokens} total=${turnTokenUsage.total_tokens}`
+  );
+
+  // 도구 호출이 있었던 턴은 이미 도구 호출 루프 안에서 매번 저장했다(위 주석 참고).
+  // 여기서는 마지막 assistant 메시지(finalReply)까지 포함해 한 번 더 저장해 마무리한다 —
+  // 도구 호출이 아예 없었던 턴(순수 대화)은 이게 유일한 저장 시점이다.
+  await saveSession(session);
 
   return { reply: finalReply, proposal: lastToolResult };
 }

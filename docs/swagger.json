@@ -2,38 +2,57 @@
   "openapi": "3.0.3",
   "info": {
     "title": "CJ프레시웨이 회의실 예약 웹 챗봇 Agent API",
-    "description": "CJ프레시웨이 임직원이 웹 챗봇을 통해 사내 회의실을 조회·예약·변경·취소할 수 있게 해주는 백엔드 API 명세서.\n\n- 아직 실제 백엔드 코드는 구현되지 않은 상태이며, 이 문서는 설계 문서(`prompts/1-domain-definition-meeting-room-agent.md`, `prompts/prd.txt`, `docs/service-scenarios.md`, `prompts/8-erd.md`, `supabase/8-schema.sql`, `prompts/9-plan.md`)를 근거로 먼저 정의한 API 계약(contract)이다.\n- 백엔드는 Vercel Serverless Functions(Node.js + Express) 위에서 동작하며, 프론트엔드(React 19 웹 챗봇)와 같은 origin에서 서비스된다. 모든 API의 base path는 `/api`.\n- 인증은 JWT Access Token(짧은 만료, 응답 바디로 전달, 클라이언트는 메모리에만 보관) + Refresh Token(httpOnly + Secure + SameSite 쿠키, 응답 바디에는 절대 노출되지 않음) 이중 토큰 방식을 사용한다.\n- **두 종류의 비밀번호를 절대 혼동하지 말 것**: `corporate_password`(CJ 사내 계정 비밀번호, 클라이언트는 평문으로 전송하고 서버가 복호화 가능한 AES 등으로 암호화하여 저장 — CJ 자동화 로그인용)와 `app_password`(이 서비스 자체 로그인 비밀번호, 클라이언트는 평문으로 전송하고 서버가 bcrypt/argon2 같은 단방향 해시로 저장 — 로그인 검증 전용, 복호화 불가)는 완전히 별개의 값이다.\n- 회원가입 신청은 화이트리스트(`admin_whitelist`)에 해당하면 자동 승인, 아니면 Admin이 웹 패널에서 수동 승인/거부한다. 승인 완료 전에는 로그인 및 챗봇 이용이 불가하다.\n- 에러 응답 포맷은 `{ \"error\": { \"code\": \"...\", \"message\": \"...\" } }`로 통일한다.",
+    "description": "CJ프레시웨이 임직원이 웹 챗봇을 통해 사내 회의실을 조회·예약·변경·취소할 수 있게 해주는 백엔드 API 명세서.\n\n- [20260816 갱신] 백엔드는 **구현 완료**되었고 이 문서는 실제 구현과 맞춰 유지되는 API 계약(contract)이다. 설계 근거 문서: `docs/1-domain-definition-meeting-room-agent.md`, `docs/4-prd.md`, `docs/3-service-scenarios.md`, `docs/8-erd.md`, `supabase/8-schema.sql`, `docs/9-plan.md`.\n- [20260820 갱신] CJ 예약 시스템이 사내망 전용이라 운영 환경은 Vercel이 아니라 **사내 전용 노트북**이다(`docs/laptop-server-setup.md` 참고). 백엔드(Express)가 빌드된 프론트엔드를 같은 포트에서 함께 서빙하므로 same-origin이며, **base path는 없다**(경로를 그대로 `/auth/login`처럼 호출한다 — `/api` 접두사 아님).\n- 인증은 JWT Access Token(짧은 만료, 응답 바디로 전달, 클라이언트는 메모리에만 보관) + Refresh Token(httpOnly + Secure + SameSite 쿠키, 응답 바디에는 절대 노출되지 않음) 이중 토큰 방식을 사용한다.\n- **두 종류의 비밀번호를 절대 혼동하지 말 것**: `corporate_password`(**CJ WORLD PW**, 사용자에게는 이 이름으로 보인다. 클라이언트는 평문으로 전송하고 서버가 복호화 가능한 AES 등으로 암호화하여 저장 — CJ 자동화 로그인용)와 `app_password`(이 서비스 자체 로그인 비밀번호, 클라이언트는 평문으로 전송하고 서버가 bcrypt/argon2 같은 단방향 해시로 저장 — 로그인 검증 전용, 복호화 불가)는 완전히 별개의 값이다.\n- 회원가입 신청은 화이트리스트(`admin_whitelist`)에 해당하면 자동 승인, 아니면 Admin이 웹 패널에서 수동 승인/거부한다. 승인 완료 전에는 로그인 및 챗봇 이용이 불가하다.\n- 에러 응답 포맷은 `{ \"error\": { \"code\": \"...\", \"message\": \"...\" } }`로 통일한다.",
     "version": "0.1.0"
   },
   "servers": [
     {
-      "url": "/api",
-      "description": "같은 origin(Vercel)에 배포된 백엔드 API (Dev/Prd 공통 base path)"
+      "url": "/",
+      "description": "같은 origin(사내 노트북 서버)에서 서비스되는 백엔드 API. base path 없음 — 경로를 그대로 호출한다"
     }
   ],
   "tags": [
-    { "name": "Auth", "description": "회원가입 신청, 로그인, 토큰 재발급/폐기 (자체 JWT 인증, CJ 사내 SSO와 별개)" },
-    { "name": "Admin", "description": "Admin 전용 — 계정 등록 요청 승인/거부. 모든 엔드포인트에 Admin 권한이 필요하다." },
-    { "name": "Rooms", "description": "회의실 목록 조회 및 조건(인원수/시간대) 검색" },
-    { "name": "Users", "description": "내 계정 정보 및 선호 회의실 관리" },
+    {
+      "name": "Auth",
+      "description": "회원가입 신청, 로그인, 토큰 재발급/폐기 (자체 JWT 인증, CJ 사내 SSO와 별개)"
+    },
+    {
+      "name": "Admin",
+      "description": "Admin 전용 — 계정 등록 요청 승인/거부. 모든 엔드포인트에 Admin 권한이 필요하다."
+    },
+    {
+      "name": "Rooms",
+      "description": "회의실 목록 조회 및 조건(인원수/시간대) 검색"
+    },
+    {
+      "name": "Users",
+      "description": "내 계정 정보 및 선호 회의실 관리"
+    },
     {
       "name": "Chat",
       "description": "웹 챗봇 메시지 처리 (LLM 오케스트레이션 트리거 — 가용성 조회/예약 생성/변경/취소/이력 조회 등 모든 예약 유스케이스의 진입점)"
     },
-    { "name": "Me", "description": "로그인한 본인 컨텍스트 읽기 전용 조회(챗봇 UI 사이드바용) — 예약 생성/변경/취소는 여기 없고 Chat(POST /chat/messages)로만 가능하다." }
+    {
+      "name": "Me",
+      "description": "로그인한 본인 컨텍스트 읽기 전용 조회(챗봇 UI 사이드바용) — 예약 생성/변경/취소는 여기 없고 Chat(POST /chat/messages)로만 가능하다."
+    }
   ],
   "paths": {
     "/auth/register": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "회원가입(계정 등록) 신청",
-        "description": "회원가입 웹페이지에서 사내 계정 ID/PW, 이 앱 전용 로그인 비밀번호, 선호 회의실(우선순위)을 함께 제출한다. 인증이 필요 없는 공개 엔드포인트(anon)다.\n\n- 신청한 사내 계정 ID가 Admin 화이트리스트에 있으면 **자동 승인**되어 즉시 로그인이 가능해진다.\n- 화이트리스트에 없으면 **대기(Pending)** 상태로 접수되며, 등록된 모든 Admin에게 알림 메일(비밀번호는 절대 포함하지 않음)이 발송되어 Admin의 수동 승인/거부를 기다린다.\n- 평문 비밀번호는 어떤 단계에서도 로그/화면/메일에 노출되지 않는다.",
+        "description": "회원가입 웹페이지에서 CJ WORLD ID/PW, 이 앱 전용 로그인 비밀번호, 선호 회의실(우선순위)을 함께 제출한다. 인증이 필요 없는 공개 엔드포인트(anon)다.\n\n- 신청한 CJ WORLD ID가 Admin 화이트리스트에 있으면 **자동 승인**되어 즉시 로그인이 가능해진다.\n- 화이트리스트에 없으면 **대기(Pending)** 상태로 접수되며, 등록된 모든 Admin에게 알림 메일(비밀번호는 절대 포함하지 않음)이 발송되어 Admin의 수동 승인/거부를 기다린다.\n- 평문 비밀번호는 어떤 단계에서도 로그/화면/메일에 노출되지 않는다.",
         "security": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
             }
           }
         },
@@ -42,15 +61,23 @@
             "description": "신청 접수 완료 (자동승인 또는 대기)",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/RegisterResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
           "409": {
-            "description": "이미 등록되었거나 처리 대기 중인 사내 계정 ID",
+            "description": "이미 등록되었거나 처리 대기 중인 CJ WORLD ID",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
             }
           }
         }
@@ -58,7 +85,9 @@
     },
     "/auth/login": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "로그인",
         "description": "승인이 완료된 사용자만 로그인할 수 있다. 로그인 성공 시 Access Token은 응답 바디로, Refresh Token은 httpOnly+Secure+SameSite 쿠키로 발급된다(Refresh Token은 응답 바디에 절대 포함되지 않는다). 인증이 필요 없는 공개 엔드포인트다. [2026-08-14] 앱 로그인(app_password) 검증 후 실제 CJ 사내 계정으로도 로그인을 시도해 성공한 세션을 짧게(TTL) 캐싱한다 — 이후 채팅에서 회의실 조회/예약 도구를 쓸 때 로그인 지연 없이 바로 시작하기 위함. 그만큼 로그인 응답 자체가 몇~수십 초 걸릴 수 있다. [2026-08-14 수정] 이 CJ 계정 인증이 실패하면(존재하지 않거나 틀린 CJ 계정) 앱 로그인 자체를 401(CJ_LOGIN_FAILED)로 거부한다 — CJ 세션 없이는 이 앱의 모든 기능(예약 조회/생성 등)이 동작하지 않으므로, 가짜 CJ 계정으로 앱에는 들어와지지만 아무것도 못 하는 상태를 막기 위함.",
         "security": [],
@@ -66,7 +95,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
             }
           }
         },
@@ -76,29 +107,47 @@
             "headers": {
               "Set-Cookie": {
                 "description": "httpOnly, Secure, SameSite 속성의 refresh_token 쿠키",
-                "schema": { "type": "string" }
+                "schema": {
+                  "type": "string"
+                }
               }
             },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TokenResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
               }
             }
           },
           "401": {
-            "description": "인증 실패 — 사내 계정 ID/앱 로그인 비밀번호가 일치하지 않거나(INVALID_CREDENTIALS), 실제 CJ 사내 계정 인증에 실패함(CJ_LOGIN_FAILED)",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "description": "인증 실패 — CJ WORLD ID/앱 로그인 비밀번호가 일치하지 않거나(INVALID_CREDENTIALS), 실제 CJ 사내 계정 인증에 실패함(CJ_LOGIN_FAILED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "승인 대기 중이거나 거부/철회된 계정 — 로그인 불가",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "description": "승인 대기 중이거나 거부/철회/잠긴(ACCOUNT_LOCKED — 로그인 5회 연속 실패) 계정 — 로그인 불가. 잠긴 계정은 Admin이 잠금을 해제해야 한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/auth/refresh": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Access Token 재발급",
         "description": "httpOnly 쿠키로 전달된 Refresh Token을 검증해 새 Access Token을 발급한다. 요청 바디는 필요 없으며, 브라우저가 자동으로 쿠키를 전송한다. 인증이 필요 없는 공개 엔드포인트이지만 유효한 refresh_token 쿠키가 있어야 한다.",
         "security": [],
@@ -107,35 +156,141 @@
             "description": "재발급 성공",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TokenResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
               }
             }
           },
           "401": {
             "description": "Refresh Token이 없거나 만료/폐기됨 — 재로그인 필요",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/auth/logout": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "로그아웃 (Refresh Token 폐기)",
         "description": "현재 Refresh Token을 서버 DB에서 폐기(revoke)하고 쿠키를 만료시킨다. Access Token은 만료 시간이 짧아 별도 폐기 목록 없이 자연 만료된다.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
-          "204": { "description": "로그아웃 처리 완료" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "204": {
+            "description": "로그아웃 처리 완료"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/auth/cj-world-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "CJ WORLD PW 재등록 (로그인 전 복구 경로)",
+        "description": "[20260816 신규] `POST /auth/login`은 CJ 세션 확보에 실패하면 로그인 자체를 거부한다(CJ_LOGIN_FAILED). 그래서 사용자가 CJ WORLD에서 비밀번호를 바꾼 순간부터는 앱에 들어올 수 없고, 로그인 후 화면에 있는 `PATCH /me/cj-world-password`에도 영원히 도달할 수 없다 — 정확히 그 상황을 위한 기능인데도. 이 경로는 JWT 대신 **앱 로그인 비밀번호로 본인을 확인**하고(승인 상태·폐기 여부까지 검사), 새 CJ WORLD PW는 실제 CJ 로그인으로 검증한 뒤에만 저장한다. 브라우저 자동화로 검증하므로 응답이 수 초 걸릴 수 있다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email_alias",
+                  "app_password",
+                  "new_cj_world_password"
+                ],
+                "properties": {
+                  "email_alias": {
+                    "type": "string",
+                    "description": "CJ WORLD ID"
+                  },
+                  "app_password": {
+                    "type": "string",
+                    "description": "이 앱의 로그인 비밀번호(본인 확인용)"
+                  },
+                  "new_cj_world_password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "재등록 성공(본문 없음). 이후 정상 로그인 가능."
+          },
+          "400": {
+            "description": "필수값 누락 또는 새 CJ WORLD PW로 CJ 로그인 실패(CJ_WORLD_PASSWORD_INVALID)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "CJ WORLD ID 또는 앱 로그인 비밀번호 불일치(INVALID_CREDENTIALS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "승인 대기/거부/폐기/잠긴(ACCOUNT_LOCKED — 로그인 5회 연속 실패) 계정",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "외부 사내 예약 시스템(CJ) 연동 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/admin/registration-requests": {
       "get": {
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "summary": "계정 등록 요청 목록 조회 (Admin 권한 필요)",
         "description": "Admin 웹 패널에서 처리 대기 중인(또는 상태별) 계정 등록 요청 목록을 조회한다. 비밀번호(암호화본/해시 포함)는 응답에 절대 포함되지 않는다.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "status",
@@ -143,7 +298,13 @@
             "description": "상태 필터. 생략 시 pending만 반환. `processed`는 auto_approved/approved/rejected 3종을 처리 시각 최신순으로 묶어 반환하는 편의 값(FE-4 '처리 완료 이력')이며 최근 50건으로 제한된다.",
             "schema": {
               "type": "string",
-              "enum": ["pending", "auto_approved", "approved", "rejected", "processed"]
+              "enum": [
+                "pending",
+                "auto_approved",
+                "approved",
+                "rejected",
+                "processed"
+              ]
             }
           }
         ],
@@ -154,71 +315,209 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/AccountRegistrationRequest" }
+                  "items": {
+                    "$ref": "#/components/schemas/AccountRegistrationRequest"
+                  }
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
     "/admin/registration-requests/{id}/approve": {
       "post": {
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "summary": "계정 등록 요청 승인 (Admin 권한 필요)",
         "description": "대기 중인 등록 요청을 승인 처리한다. 승인 시 `users` 레코드가 생성되며, 이후 신청자는 앱 로그인 비밀번호로 로그인할 수 있다.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/RegistrationRequestId" }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RegistrationRequestId"
+          }
+        ],
         "responses": {
           "200": {
             "description": "승인 완료",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AccountRegistrationRequest" }
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRegistrationRequest"
+                }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
           "409": {
             "description": "이미 처리된 요청 (pending 상태가 아님)",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/admin/registration-requests/{id}/reject": {
       "post": {
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "summary": "계정 등록 요청 거부 (Admin 권한 필요)",
         "description": "대기 중인 등록 요청을 거부 처리한다. 거부 시 저장되어 있던 사내 계정 비밀번호(암호화본)와 앱 로그인 비밀번호(해시)는 즉시 폐기된다.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/RegistrationRequestId" }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RegistrationRequestId"
+          }
+        ],
         "responses": {
           "200": {
             "description": "거부 완료",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AccountRegistrationRequest" }
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRegistrationRequest"
+                }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
           "409": {
             "description": "이미 처리된 요청 (pending 상태가 아님)",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/locked-users": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "잠긴 계정 목록 조회 (Admin 권한 필요)",
+        "description": "앱 로그인 비밀번호를 MAX_LOGIN_ATTEMPTS(5)회 연속 틀려 잠긴 계정 목록을 반환한다(20260820 브루트포스 방어). 비밀번호/암호문은 응답에 포함되지 않는다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LockedUser"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/admin/locked-users/{id}/unlock": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "계정 잠금 해제 (Admin 권한 필요)",
+        "description": "잠긴 계정의 status를 active로, failed_login_attempts를 0으로 되돌린다. 자가 재설정은 지원하지 않는다 — 본인 확인 메일 발송 수단이 없어 Admin 대행으로만 처리한다(비밀번호 변경 절과 동일한 이유).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "잠긴 users.id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "잠금 해제 완료"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "잠긴 계정을 찾을 수 없음(이미 해제되었거나 존재하지 않음)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/rooms": {
       "get": {
-        "tags": ["Rooms"],
+        "tags": [
+          "Rooms"
+        ],
         "summary": "회의실 목록/조건 검색",
         "description": "예약 가능한(`is_bookable=true`) 회의실 목록을 조회한다. 1차 범위는 상암S시티, 3F·12F~16F로 고정된다. `date`+`start_time`+`end_time`을 함께 넘기면 해당 시간대의 실시간 가용 여부(`available`)를 CJ 사내 예약 시스템 조회 결과와 결합해 함께 반환한다(콜드스타트로 응답이 다소 지연될 수 있음). 인증이 필요 없는 공개 엔드포인트다(회원가입 웹페이지의 선호 회의실 선택 UI에서도 사용).",
         "security": [],
@@ -227,31 +526,45 @@
             "name": "min_capacity",
             "in": "query",
             "description": "최소 수용 인원 조건 (예: 8명 이상)",
-            "schema": { "type": "integer", "minimum": 1 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
           },
           {
             "name": "floor_label",
             "in": "query",
             "description": "층 필터 (예: '3F', '14F')",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "date",
             "in": "query",
             "description": "가용성 조회 대상 날짜 (오늘 ~ 7일 뒤까지만 유효). 생략 시 가용성 정보 없이 회의실 기본 정보만 반환",
-            "schema": { "type": "string", "format": "date" }
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
           },
           {
             "name": "start_time",
             "in": "query",
             "description": "가용성 조회 시작 시각 (07:00~19:00, 30분 단위). date와 함께 사용",
-            "schema": { "type": "string", "format": "time" }
+            "schema": {
+              "type": "string",
+              "format": "time"
+            }
           },
           {
             "name": "end_time",
             "in": "query",
             "description": "가용성 조회 종료 시각 (07:00~19:00, 30분 단위). date와 함께 사용",
-            "schema": { "type": "string", "format": "time" }
+            "schema": {
+              "type": "string",
+              "format": "time"
+            }
           }
         ],
         "responses": {
@@ -261,18 +574,24 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/RoomWithAvailability" }
+                  "items": {
+                    "$ref": "#/components/schemas/RoomWithAvailability"
+                  }
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
         }
       }
     },
     "/rooms/{id}": {
       "get": {
-        "tags": ["Rooms"],
+        "tags": [
+          "Rooms"
+        ],
         "summary": "회의실 상세 조회",
         "security": [],
         "parameters": [
@@ -280,39 +599,70 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "조회 성공",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Room" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Room"
+                }
+              }
+            }
           },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/users/me": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "내 계정 정보 조회",
         "description": "로그인된 사용자 본인의 정보를 조회한다. 비밀번호(암호화본/해시)는 응답에 포함되지 않는다.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "조회 성공",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
     "/users/me/preferred-rooms": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "내 선호 회의실 목록 조회",
         "description": "가입 시(또는 이후) 등록한 선호 회의실을 우선순위(priority, 1이 최우선) 순서로 반환한다. 예약 요청 시 Agent가 이 목록을 먼저 확인한다.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "조회 성공",
@@ -320,24 +670,36 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/PreferredRoom" }
+                  "items": {
+                    "$ref": "#/components/schemas/PreferredRoom"
+                  }
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       },
       "put": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "내 선호 회의실 목록 전체 갱신",
         "description": "선호 회의실 목록을 우선순위 순서(배열 순서 = 우선순위)로 통째로 교체한다.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PreferredRoomsUpdateRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/PreferredRoomsUpdateRequest"
+              }
             }
           }
         },
@@ -348,27 +710,41 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/PreferredRoom" }
+                  "items": {
+                    "$ref": "#/components/schemas/PreferredRoom"
+                  }
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
     "/chat/messages": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "summary": "챗봇 메시지 전송 (예약 관련 모든 유스케이스의 진입점)",
         "description": "웹 챗봇 UI에서 사용자 발화를 전달하면, 서버의 LLM 오케스트레이션 계층이 의도를 파악해 가용성 조회/예약 생성/조건 검색/이력 기반 추천/긴 회의 분할/내 예약 조회/예약 변경/예약 취소 중 적절한 도구를 호출하고 자연어 응답과 함께 구조화된 결과(제안 회의실, 확정된 예약, 확인 필요 여부 등)를 반환한다.\n\n로그인(승인 완료) 상태의 사용자만 호출할 수 있다. CJ 사내 예약 시스템 연동(Playwright 자동화) 특성상 응답까지 수 초가 걸릴 수 있다.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ChatMessageRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ChatMessageRequest"
+              }
             }
           }
         },
@@ -377,61 +753,541 @@
             "description": "처리 완료",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ChatMessageResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageResponse"
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "403": {
             "description": "승인 대기 중이거나 거부/철회된 사용자 — 챗봇 이용 불가",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "502": {
             "description": "외부 사내 예약 시스템(CJ) 연동 실패 — 재시도 또는 실패 안내 필요",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/me/preferred-rooms": {
       "get": {
-        "tags": ["Me"],
+        "tags": [
+          "Me"
+        ],
         "summary": "내 선호 회의실 조회 (우선순위 순)",
         "description": "[FE-5 착수 시 신규 추가, 20260814] 로그인한 사용자가 가입 시 등록한 선호 회의실을 우선순위(1이 최우선) 순으로 반환한다. 챗봇 UI 사이드바용 읽기 전용 엔드포인트 — 선호 회의실을 나중에 바꾸는 별도 write API는 아직 없다(가입 시 1회 입력만 지원).",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "조회 성공. 배열 순서가 곧 우선순위(첫 번째가 1순위) — 배열 자체이며 priority 필드를 별도로 내려주지 않는다.",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Room" } }
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Room"
+                  }
+                }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
     "/me/reservations/today": {
       "get": {
-        "tags": ["Me"],
+        "tags": [
+          "Me"
+        ],
         "summary": "오늘 내 예약 조회",
         "description": "[FE-5 착수 시 신규 추가, 20260814] 로그인한 사용자 본인의 오늘 예약만 조회한다(챗봇 UI 사이드바 \"오늘 예약\" 전용, 범위 고정). 다른 기간 조회나 예약 생성/변경/취소는 여기 없다 — 그건 `POST /chat/messages`로만 가능하다(BE-7의 propose→confirm 2단계 확인 게이트를 우회하는 별도 write 경로를 만들지 않기 위함). 같은 `reservationRequestId`를 공유하는 예약(긴 회의 분할)은 `segments`로 묶여서 반환된다.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "조회 성공",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MyReservationGroup" } }
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MyReservationGroup"
+                  }
+                }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
           "502": {
             "description": "외부 사내 예약 시스템(CJ) 연동 실패",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/cj-world-password": {
+      "patch": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "CJ WORLD PW 재등록 (로그인 상태)",
+        "description": "[20260816 신규] 사용자가 CJ WORLD에서 비밀번호를 바꾸면 우리가 보관 중인 암호문이 낡은 값이 되어 조회/예약이 전부 실패한다. 그때 앱에도 다시 등록하는 경로. 저장 전에 새 비밀번호로 CJ에 **실제 로그인해서 검증**하고(오타 저장으로 인한 조용한 잠김 방지) 성공한 값만 저장하며, 옛 비밀번호로 맺어둔 CJ 세션 캐시를 즉시 버린다. 브라우저 자동화로 검증하므로 응답이 수 초 걸릴 수 있다. 로그인 자체가 막힌 상태(CJ_LOGIN_FAILED)라면 이 경로에 도달할 수 없으므로 `POST /auth/cj-world-password`를 쓴다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "new_cj_world_password"
+                ],
+                "properties": {
+                  "new_cj_world_password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "재등록 성공(본문 없음)"
+          },
+          "400": {
+            "description": "필수값 누락 또는 새 CJ WORLD PW로 CJ 로그인 실패(CJ_WORLD_PASSWORD_INVALID)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "사용자를 찾을 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "외부 사내 예약 시스템(CJ) 연동 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/app-password": {
+      "patch": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "앱 로그인 비밀번호 변경",
+        "description": "[20260816 신규] 이 앱 자체 로그인 비밀번호(단방향 해시)를 바꾼다. 현재 비밀번호를 확인한 뒤에만 교체하고, 성공하면 해당 사용자의 refresh 토큰을 전부 폐기해 기존 세션을 끊는다. 새 비밀번호는 8자 이상이어야 한다(가입 시점에는 아직 같은 규칙이 없다 — 후속 정리 대상).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "current_app_password",
+                  "new_app_password"
+                ],
+                "properties": {
+                  "current_app_password": {
+                    "type": "string"
+                  },
+                  "new_app_password": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "변경 성공(본문 없음). 기존 refresh 토큰은 모두 폐기된다."
+          },
+          "400": {
+            "description": "필수값 누락, 8자 미만, 또는 현재 비밀번호 불일치(CURRENT_PASSWORD_MISMATCH)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "사용자를 찾을 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/recurring-rules": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "내 반복 예약 규칙 목록 조회",
+        "description": "[신규] 로그인한 사용자가 등록한 반복 예약 규칙을 모두 반환한다. 각 규칙마다 시도 회의실(우선순위 순), 최근 자동 실행 결과가 함께 포함된다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecurringReservationRule"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "반복 예약 규칙 등록",
+        "description": "새로운 반복 예약 규칙을 등록한다. 무인 예약 동의가 없으면 400/CONSENT_REQUIRED로 거부(게이트 ①).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "weekday",
+                  "start_time",
+                  "end_time",
+                  "title",
+                  "room_ids"
+                ],
+                "properties": {
+                  "weekday": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6
+                    ],
+                    "description": "요일 (0=일요일, 6=토요일, JS Date.getDay() 규약)"
+                  },
+                  "start_time": {
+                    "type": "string",
+                    "format": "time",
+                    "description": "시작 시각 (07:00~19:00, 30분 단위)"
+                  },
+                  "end_time": {
+                    "type": "string",
+                    "format": "time",
+                    "description": "종료 시각 (07:00~19:00, 30분 단위)"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "회의명"
+                  },
+                  "contents": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "회의 내용 (선택사항)"
+                  },
+                  "room_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "description": "시도할 회의실 ID 목록 (배열 순서 = 우선순위)",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "규칙 생성 완료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringReservationRule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/me/recurring-rules/{id}": {
+      "patch": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "반복 예약 규칙 활성화/비활성화",
+        "description": "규칙의 `is_active` 상태를 토글한다. 수정(시간, 회의실 변경)은 삭제 후 재생성으로 유도한다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "is_active"
+                ],
+                "properties": {
+                  "is_active": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "토글 완료(본문 없음)"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "반복 예약 규칙 삭제",
+        "description": "규칙을 삭제한다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "삭제 완료(본문 없음)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/me/unattended-consent": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "무인 예약 동의 상태 조회",
+        "description": "[신규] 현재 무인 예약 동의 여부를 반환한다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "consented": {
+                      "type": "boolean",
+                      "description": "현재 동의 상태 (유효한 동의 = consent_at not null and revoked_at is null)"
+                    },
+                    "consented_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true,
+                      "description": "최초 동의 시각"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "무인 예약 동의 (게이트 ①)",
+        "description": "[신규] 무인 예약 동의를 기록한다(또는 철회 이력이 있다면 갱신). 이후 반복 예약 규칙 생성이 가능해진다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "동의 기록 완료(본문 없음)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "무인 예약 동의 철회 (게이트 ③)",
+        "description": "[신규] 무인 예약 동의를 철회한다. 현존하는 모든 규칙이 자동으로 비활성화되고, 철회 이력이 기록되어 다시 규칙을 생성하려면 새로운 동의가 필요하다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "철회 완료(본문 없음)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -452,35 +1308,67 @@
         "in": "path",
         "required": true,
         "description": "AccountRegistrationRequest의 ID",
-        "schema": { "type": "string", "format": "uuid" }
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
       }
     },
     "responses": {
       "BadRequest": {
         "description": "요청 값이 유효하지 않음",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
       },
       "Unauthorized": {
         "description": "인증되지 않음 — Access Token이 없거나 만료됨",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
       },
       "Forbidden": {
         "description": "권한 없음 — Admin 권한이 필요한 요청을 일반 사용자가 호출함",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
       },
       "NotFound": {
         "description": "리소스를 찾을 수 없음",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
       }
     },
     "schemas": {
       "ErrorResponse": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "error": {
             "type": "object",
-            "required": ["code", "message"],
+            "required": [
+              "code",
+              "message"
+            ],
             "properties": {
               "code": {
                 "type": "string",
@@ -498,7 +1386,11 @@
       },
       "RegisterRequest": {
         "type": "object",
-        "required": ["email_alias", "corporate_password", "app_password"],
+        "required": [
+          "email_alias",
+          "corporate_password",
+          "app_password"
+        ],
         "properties": {
           "email_alias": {
             "type": "string",
@@ -518,27 +1410,46 @@
           "preferred_room_ids": {
             "type": "array",
             "description": "선호 회의실 ID 목록. 배열 순서가 곧 우선순위(첫 번째가 1순위)다. 생략 가능.",
-            "items": { "type": "string", "format": "uuid" }
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
       "RegisterResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid", "description": "생성된 AccountRegistrationRequest ID" },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "생성된 AccountRegistrationRequest ID"
+          },
           "status": {
             "type": "string",
-            "enum": ["pending", "auto_approved"],
+            "enum": [
+              "pending",
+              "auto_approved"
+            ],
             "description": "화이트리스트 매칭 시 auto_approved(즉시 로그인 가능), 아니면 pending(Admin 승인 대기)"
           },
-          "message": { "type": "string", "example": "등록 신청이 접수되었습니다. 승인되면 로그인하실 수 있어요." }
+          "message": {
+            "type": "string",
+            "example": "등록 신청이 접수되었습니다. 승인되면 로그인하실 수 있어요."
+          }
         }
       },
       "LoginRequest": {
         "type": "object",
-        "required": ["email_alias", "app_password"],
+        "required": [
+          "email_alias",
+          "app_password"
+        ],
         "properties": {
-          "email_alias": { "type": "string", "example": "hong.gildong" },
+          "email_alias": {
+            "type": "string",
+            "example": "hong.gildong"
+          },
           "app_password": {
             "type": "string",
             "format": "password",
@@ -553,32 +1464,71 @@
             "type": "string",
             "description": "짧은 만료(예: 15분)의 JWT Access Token. 클라이언트는 이 값을 메모리에만 보관하고 localStorage에는 저장하지 않는다."
           },
-          "token_type": { "type": "string", "example": "Bearer" },
-          "expires_in": { "type": "integer", "description": "Access Token 만료까지 남은 초", "example": 900 },
-          "user": { "$ref": "#/components/schemas/User" }
+          "token_type": {
+            "type": "string",
+            "example": "Bearer"
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Access Token 만료까지 남은 초",
+            "example": 900
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
         }
       },
       "User": {
         "type": "object",
         "description": "온보딩 승인을 마친 사용자. 비밀번호(암호화본/해시)는 API 응답에 절대 포함하지 않는다.",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "email_alias": { "type": "string", "example": "hong.gildong" },
-          "is_admin": { "type": "boolean" },
-          "status": { "type": "string", "enum": ["active", "revoked"] },
-          "approved_at": { "type": "string", "format": "date-time" },
-          "created_at": { "type": "string", "format": "date-time" }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email_alias": {
+            "type": "string",
+            "example": "hong.gildong"
+          },
+          "is_admin": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "revoked"
+            ]
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "AccountRegistrationRequest": {
         "type": "object",
         "description": "회원가입 웹페이지에서 제출한 계정 등록 신청 건. 비밀번호(암호화본/해시)는 API 응답에 절대 포함하지 않는다.",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "email_alias": { "type": "string" },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email_alias": {
+            "type": "string"
+          },
           "status": {
             "type": "string",
-            "enum": ["pending", "auto_approved", "approved", "rejected"]
+            "enum": [
+              "pending",
+              "auto_approved",
+              "approved",
+              "rejected"
+            ]
           },
           "processed_by_user_id": {
             "type": "string",
@@ -595,7 +1545,11 @@
             "type": "boolean",
             "description": "화이트리스트에 의해 시스템이 자동 승인했는지 여부"
           },
-          "processed_at": { "type": "string", "format": "date-time", "nullable": true },
+          "processed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "resulting_user_id": {
             "type": "string",
             "format": "uuid",
@@ -605,29 +1559,86 @@
           "preferred_room_ids": {
             "type": "array",
             "description": "회원가입 신청 시 선택한 선호 회의실 ID 목록. 배열 순서가 우선순위(첫 번째가 1순위).",
-            "items": { "type": "string", "format": "uuid" }
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
-          "created_at": { "type": "string", "format": "date-time" }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "LockedUser": {
+        "type": "object",
+        "description": "로그인 브루트포스 방어로 잠긴 계정(20260820). 비밀번호/암호문은 포함하지 않는다.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email_alias": {
+            "type": "string"
+          },
+          "failed_login_attempts": {
+            "type": "integer",
+            "description": "잠긴 시점의 연속 실패 횟수(항상 MAX_LOGIN_ATTEMPTS=5)."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "잠긴 시각."
+          }
         }
       },
       "Room": {
         "type": "object",
         "description": "예약 가능한 사내 회의실. 1차 범위는 상암S시티, 3F·12F~16F로 고정.",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "site": { "type": "string", "example": "상암S시티" },
-          "area_code": { "type": "string", "description": "건물 코드 (CJ 시스템 값)" },
-          "sub_area_code": { "type": "string", "description": "층 코드 (CJ 시스템 값)" },
-          "room_code": { "type": "string", "description": "회의실 코드 (CJ 시스템 값, 예약 API의 실제 식별자)" },
-          "room_name": { "type": "string", "example": "14F-2" },
-          "floor_label": { "type": "string", "example": "14F" },
-          "capacity": { "type": "integer", "nullable": true, "description": "수용 인원" },
-          "is_bookable": { "type": "boolean" }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "site": {
+            "type": "string",
+            "example": "상암S시티"
+          },
+          "area_code": {
+            "type": "string",
+            "description": "건물 코드 (CJ 시스템 값)"
+          },
+          "sub_area_code": {
+            "type": "string",
+            "description": "층 코드 (CJ 시스템 값)"
+          },
+          "room_code": {
+            "type": "string",
+            "description": "회의실 코드 (CJ 시스템 값, 예약 API의 실제 식별자)"
+          },
+          "room_name": {
+            "type": "string",
+            "example": "14F-2"
+          },
+          "floor_label": {
+            "type": "string",
+            "example": "14F"
+          },
+          "capacity": {
+            "type": "integer",
+            "nullable": true,
+            "description": "수용 인원"
+          },
+          "is_bookable": {
+            "type": "boolean"
+          }
         }
       },
       "RoomWithAvailability": {
         "allOf": [
-          { "$ref": "#/components/schemas/Room" },
+          {
+            "$ref": "#/components/schemas/Room"
+          },
           {
             "type": "object",
             "properties": {
@@ -643,19 +1654,33 @@
       "PreferredRoom": {
         "type": "object",
         "properties": {
-          "room_id": { "type": "string", "format": "uuid" },
-          "priority": { "type": "integer", "description": "1이 최우선", "example": 1 },
-          "room": { "$ref": "#/components/schemas/Room" }
+          "room_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "priority": {
+            "type": "integer",
+            "description": "1이 최우선",
+            "example": 1
+          },
+          "room": {
+            "$ref": "#/components/schemas/Room"
+          }
         }
       },
       "PreferredRoomsUpdateRequest": {
         "type": "object",
-        "required": ["room_ids"],
+        "required": [
+          "room_ids"
+        ],
         "properties": {
           "room_ids": {
             "type": "array",
             "description": "선호 회의실 ID 목록. 배열 순서가 곧 우선순위(첫 번째가 1순위)다.",
-            "items": { "type": "string", "format": "uuid" }
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -663,37 +1688,91 @@
         "type": "object",
         "description": "사용자가 챗봇에 입력한 예약 조건의 구조화된 원본 (가용성 조회 및 예약 생성의 입력값)",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "user_id": { "type": "string", "format": "uuid" },
-          "title": { "type": "string", "description": "회의명" },
-          "contents": { "type": "string", "nullable": true, "description": "회의 내용" },
-          "desired_date": { "type": "string", "format": "date" },
-          "desired_start_time": { "type": "string", "format": "time" },
-          "desired_end_time": { "type": "string", "format": "time" },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "description": "회의명"
+          },
+          "contents": {
+            "type": "string",
+            "nullable": true,
+            "description": "회의 내용"
+          },
+          "desired_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "desired_start_time": {
+            "type": "string",
+            "format": "time"
+          },
+          "desired_end_time": {
+            "type": "string",
+            "format": "time"
+          },
           "status": {
             "type": "string",
-            "enum": ["received", "availability_checked", "confirmed", "conflict", "cancelled"]
+            "enum": [
+              "received",
+              "availability_checked",
+              "confirmed",
+              "conflict",
+              "cancelled"
+            ]
           },
-          "created_at": { "type": "string", "format": "date-time" }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "MyReservationGroup": {
         "type": "object",
         "description": "[FE-5 착수 시 신규 추가, 20260814] `GET /me/reservations/today` 전용 응답 형태. `backend/src/tools/myReservations.tool.ts`의 반환 타입을 그대로 노출한다(별도 write API가 없는 읽기 전용 엔드포인트라 snake_case 변환 없이 그대로). 긴 회의가 여러 회의실로 분할된 경우 하나의 그룹으로 묶여 `segments`가 2건 이상이다.",
         "properties": {
-          "reservationRequestId": { "type": "string", "format": "uuid", "nullable": true },
-          "title": { "type": "string" },
-          "isSplit": { "type": "boolean" },
+          "reservationRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "isSplit": {
+            "type": "boolean"
+          },
           "segments": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "reservationId": { "type": "string", "format": "uuid" },
-                "roomName": { "type": "string", "nullable": true },
-                "startAt": { "type": "string", "format": "date-time" },
-                "endAt": { "type": "string", "format": "date-time" },
-                "cjSeq": { "type": "string", "nullable": true }
+                "reservationId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "roomName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "startAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "endAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "cjSeq": {
+                  "type": "string",
+                  "nullable": true
+                }
               }
             }
           }
@@ -701,7 +1780,9 @@
       },
       "ChatMessageRequest": {
         "type": "object",
-        "required": ["message"],
+        "required": [
+          "message"
+        ],
         "properties": {
           "message": {
             "type": "string",
@@ -734,10 +1815,130 @@
             "description": "챗봇의 자연어 응답",
             "example": "3F-6 회의실이 비어있어서 14:00~15:00으로 예약했습니다."
           },
-          "proposal": { "$ref": "#/components/schemas/ChatProposal" },
+          "proposal": {
+            "$ref": "#/components/schemas/ChatProposal"
+          },
           "elapsed_ms": {
             "type": "integer",
             "description": "서버가 이 메시지를 처리하는 데 걸린 시간(ms). CJ 자동화 콜드스타트로 응답이 지연될 수 있어, 프론트가 로딩 UX를 조정하는 데 참고용으로 쓸 수 있다."
+          }
+        }
+      },
+      "RecurringReservationRule": {
+        "type": "object",
+        "description": "[신규] 사용자가 등록한 반복 예약 규칙. 매주 정해진 요일·시간대에 자동으로 예약을 시도한다.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "weekday": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "description": "요일 (0=일요일, 6=토요일)"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "time",
+            "example": "10:00"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "time",
+            "example": "11:00"
+          },
+          "title": {
+            "type": "string",
+            "description": "회의명"
+          },
+          "contents": {
+            "type": "string",
+            "nullable": true,
+            "description": "회의 내용"
+          },
+          "is_active": {
+            "type": "boolean",
+            "description": "규칙 활성화 여부 (동의 철회 시 자동으로 false)"
+          },
+          "rooms": {
+            "type": "array",
+            "description": "시도 회의실 목록 (우선순위 순, 1~3개)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "room_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "room_name": {
+                  "type": "string",
+                  "example": "14F-2"
+                },
+                "floor_label": {
+                  "type": "string",
+                  "example": "14F"
+                },
+                "priority": {
+                  "type": "integer",
+                  "description": "1이 최우선"
+                }
+              }
+            }
+          },
+          "latest_run": {
+            "type": "object",
+            "nullable": true,
+            "description": "가장 최근 자동 실행 결과",
+            "properties": {
+              "target_date": {
+                "type": "string",
+                "format": "date"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "succeeded",
+                  "failed",
+                  "skipped"
+                ],
+                "description": "실행 결과"
+              },
+              "booked_room_name": {
+                "type": "string",
+                "nullable": true,
+                "description": "성공 시 확정된 회의실명"
+              },
+              "attempted_priority": {
+                "type": "integer",
+                "nullable": true,
+                "description": "마지막 시도한 우선순위"
+              },
+              "failure_reason": {
+                "type": "string",
+                "nullable": true,
+                "description": "실패 사유 (예: 1순위:만석, 2순위:만석, 3순위:만석)"
+              },
+              "executed_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

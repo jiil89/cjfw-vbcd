@@ -38,15 +38,10 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
 
   return (
     <div className={wrapClasses}>
-      {(label || labelAction) && (
-        <div className="text-input-label-row">
-          {label && (
-            <label className="text-input-label" htmlFor={inputId}>
-              {label}
-            </label>
-          )}
-          {labelAction}
-        </div>
+      {label && (
+        <label className="text-input-label" htmlFor={inputId}>
+          {label}
+        </label>
       )}
       <div className="text-input-field">
         <input
@@ -65,6 +60,11 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
           </span>
         )}
       </div>
+      {/* labelAction(비밀번호 표시 토글 등)은 화면에서는 라벨 행 우측에 보이지만,
+          DOM에서는 반드시 input 뒤에 둔다 — 앞에 두면 Tab을 눌렀을 때 입력칸보다
+          토글 버튼이 먼저 잡혀서(실사용 신고) "ID → Tab → 비밀번호"가 안 된다.
+          시각적 위치는 TextInput.css의 grid 배치가 되돌려준다. */}
+      {labelAction}
       {(helpText || errorMessage) && (
         <p id={`${inputId}-desc`} className={hasError ? "text-input-error-text" : "text-input-help-text"}>
           {errorMessage || helpText}
