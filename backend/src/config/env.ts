@@ -59,15 +59,28 @@ export interface AppConfig {
   // CORS 허용 origin 목록. 와일드카드 금지 — 반드시 구체적인 origin 목록.
   allowedOrigins: string[];
 
-  // CJ 사내 SSO 로그인 포털(cj.cj.net). 실제 로그인 폼이 있는 곳 — 여기서 로그인해야
-  // cjwappr.cj.net(예약 API)에 접근 가능한 세션 쿠키(AP, NCF 등)를 얻을 수 있다.
-  // (Playwright로 실사용 검증 완료: cjwappr.cj.net에 바로 접근하면 사내망 범용 404로
-  // 리다이렉트되고, Azure AD가 아니라 cj.cj.net 자체 로그인 폼을 사용한다.)
+  // CJ 사내 SSO 로그인 포털. 실제 로그인 폼이 있는 곳 — 여기서 로그인해야
+  // 예약 API에 접근 가능한 세션 쿠키(AP, NCF 등)를 얻을 수 있다.
+  // (Playwright로 실사용 검증 완료: 예약 API 서버에 바로 접근하면 사내망 범용 404로
+  // 리다이렉트되고, Azure AD가 아니라 이 포털 자체 로그인 폼을 사용한다.)
+  //
+  // [20260821] 이 저장소를 public으로 전환하면서, CJ 내부 시스템 호스트명이 소스에
+  // 그대로 노출되는 걸 막기 위해 하드코딩 기본값을 없애고 필수 환경변수로 바꿨다.
   cjPortalBaseUrl: string;
 
-  // CJ 사내 회의실 예약 시스템(ASMX API) 베이스 URL. 비밀값이 아니므로 requireEnv 대상이
-  // 아니고, 기본값(cjwappr.cj.net)을 두되 환경변수로 덮어쓸 수 있게 한다.
+  // CJ 사내 회의실 예약 시스템(ASMX API) 베이스 URL. 위와 같은 이유로 필수 환경변수.
   cjBaseUrl: string;
+
+  // 이 프로젝트가 지원하는 유일한 사업장(상암S시티)의 CJ 시스템상 건물/기본층 코드.
+  // 세션 워밍업(cj-automation/session.ts)과 회의실 동기화(services/roomSyncService.ts)가
+  // 공유한다. [20260821] 같은 이유로 하드코딩을 없애고 필수 환경변수로 뺐다.
+  cjSiteAreaCode: string;
+  cjSiteSubAreaCode: string;
+
+  // roomSyncService.ts가 스캔하는 층 목록: floor_label -> CJ 시스템상 sub_area_code.
+  // "3F:1128,12F:1111,..." 형식의 콤마 구분 문자열을 파싱한다. [20260821] 실제 코드값이라
+  // 소스에 하드코딩하지 않고 필수 환경변수로 뺐다.
+  cjFloorAreaCodes: Record<string, string>;
 }
 
 function loadConfig(): AppConfig {
@@ -87,6 +100,17 @@ function loadConfig(): AppConfig {
     throw new Error("[config/env] ALLOWED_ORIGINS에 최소 1개 이상의 origin이 필요합니다.");
   }
 
+  const cjFloorAreaCodes: Record<string, string> = {};
+  for (const entry of requireEnv("CJ_FLOOR_AREA_CODES").split(",")) {
+    const [floorLabel, subAreaCode] = entry.split(":").map((part) => part.trim());
+    if (!floorLabel || !subAreaCode) {
+      throw new Error(
+        `[config/env] CJ_FLOOR_AREA_CODES 형식이 올바르지 않습니다(예: "3F:1128,12F:1111"): "${entry}"`
+      );
+    }
+    cjFloorAreaCodes[floorLabel] = subAreaCode;
+  }
+
   return {
     nodeEnv,
     isProd: nodeEnv === "production",
@@ -98,8 +122,11 @@ function loadConfig(): AppConfig {
     openaiApiKey: requireEnv("OPENAI_API_KEY"),
     openaiModel: requireEnv("OPENAI_MODEL"),
     allowedOrigins,
-    cjPortalBaseUrl: process.env.CJ_PORTAL_BASE_URL?.trim() || "https://cj.cj.net",
-    cjBaseUrl: process.env.CJ_BASE_URL?.trim() || "https://cjwappr.cj.net",
+    cjPortalBaseUrl: requireEnv("CJ_PORTAL_BASE_URL"),
+    cjBaseUrl: requireEnv("CJ_BASE_URL"),
+    cjSiteAreaCode: requireEnv("CJ_SITE_AREA_CODE"),
+    cjSiteSubAreaCode: requireEnv("CJ_SITE_SUB_AREA_CODE"),
+    cjFloorAreaCodes,
   };
 }
 

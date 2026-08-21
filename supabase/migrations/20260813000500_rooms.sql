@@ -8,9 +8,9 @@ create table if not exists public.rooms (
   -- 값이 하나뿐이므로 별도 enum/테이블 없이 텍스트 + check로 충분 (오버엔지니어링 방지).
   site text not null default '상암S시티' check (site = '상암S시티'),
 
-  area_code text not null,        -- 건물 코드 (CJ 시스템 값, 예: '804')
-  sub_area_code text not null,    -- 층 코드 (CJ 시스템 값, 예: '1128')
-  room_code text not null unique, -- 회의실 코드 (CJ 시스템 값, 예: '4539') - 예약 API의 실제 식별자
+  area_code text not null,        -- 건물 코드 (CJ 시스템 값, 예: 'XXX')
+  sub_area_code text not null,    -- 층 코드 (CJ 시스템 값, 예: 'XXXX')
+  room_code text not null unique, -- 회의실 코드 (CJ 시스템 값, 예: 'XXXX') - 예약 API의 실제 식별자
 
   room_name text not null,        -- 회의실 이름 (예: '3F-1', '12F-3')
   floor_label text,               -- 층 표기 (예: '3F', '12F') - 사람이 읽기 편한 참고용

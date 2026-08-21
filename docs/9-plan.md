@@ -99,7 +99,7 @@ flowchart LR
 - **작업 내용**: supabase.com에 **Prd 전용** 프로젝트 생성(`4-prd.md` 2026-08-18 결정 변경 — Dev는 로컬 Postgres로 분리), `supabase/migrations/` 전체를 순서대로 적용, Vercel 배포 시 Vercel 프로젝트 환경변수에 `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`/`DATABASE_URL`(커넥션 풀러 6543 포트) 채움(로컬 `.env`는 그대로 로컬 Postgres를 가리킴).
 - **선행 Task**: DB-1
 - **완료 조건**:
-  - [x] Supabase 프로젝트 생성 완료 (조직 `cjfw-vbcd`, 프로젝트 `PROJECT_REF_REDACTED`, `ap-southeast-1`, Supabase MCP로 적용)
+  - [x] Supabase 프로젝트 생성 완료 (조직 `cjfw-vbcd`, 프로젝트 ref는 비공개 — `ap-southeast-1`, Supabase MCP로 적용)
   - [x] `supabase/migrations/` 전체(DB-1 포함, `20260818230000_fix_set_updated_at_search_path.sql`까지)가 순서대로 적용되어 오류 없이 끝까지 실행됨. 적용 직후 `get_advisors(security)`로 점검해 `set_updated_at()`의 search_path 미고정 결함을 추가로 발견·수정(같은 수정을 로컬 Postgres에도 반영해 동기화)
   - [ ] Vercel 배포 시점에 위 4개 값을 Vercel 프로젝트 환경변수로 채움 (`service_role` 키/DB 비밀번호는 이미 확보, 아직 미입력 — Vercel 배포 Task에서 진행)
   - [x] Supabase MCP `list_tables`로 13개 테이블이 모두 생성되고 전부 RLS 활성화된 것을 확인 (도메인 확장으로 8-schema.sql 초안 이후 5개 테이블 추가됨: refresh_tokens/chat_sessions/recurring_reservation_rules/rule_rooms/runs)

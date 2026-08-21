@@ -11,26 +11,20 @@
 // db/repositories/roomRepository.ts의 upsertRoomIfChanged가 "값이 실제로 다를 때만
 // UPDATE"를 보장하므로, 이 서비스를 여러 번 실행해도 안전하다(멱등적 동작).
 
+import { config } from "../config/env";
 import { loginAndGetSession } from "../cj-automation/session";
 import { getDayPilotConfReserveList } from "../cj-automation/client";
 import { upsertRoomIfChanged } from "../db/repositories/roomRepository";
 import { findUserById } from "../db/repositories/userRepository";
 import { toKstDate } from "../lib/kst";
 
-const BUILDING_AREA_CODE = "804"; // CJ프레시웨이(상암S시티)
 const SITE_NAME = "상암S시티";
 
 // floor_label -> sub_area_code (실측 확인, 도메인 정의서 9번 대상 범위: 3F, 12F~16F).
 // listArea(type=0/1) 네트워크 트레이스로 확인한 값 그대로다(seed-rooms.ts에서 승격).
-// B1F(883)/2F(809)는 도메인 정의서 원칙에 따라 스캔 대상에서 제외한다.
-const TARGET_FLOORS: Record<string, string> = {
-  "3F": "1128",
-  "12F": "1111",
-  "13F": "805",
-  "14F": "807",
-  "15F": "808",
-  "16F": "806",
-};
+// B1F/2F는 도메인 정의서 원칙에 따라 스캔 대상에서 제외한다.
+// [20260821] 실제 코드값이라 config(CJ_SITE_AREA_CODE/CJ_FLOOR_AREA_CODES)로 뺐다.
+const TARGET_FLOORS: Record<string, string> = config.cjFloorAreaCodes;
 
 interface CjRoomResource {
   name: string;
@@ -113,7 +107,7 @@ export async function syncRoomMasterData(userId: string): Promise<RoomSyncResult
 
       const changed = await upsertRoomIfChanged({
         site: SITE_NAME,
-        areaCode: BUILDING_AREA_CODE,
+        areaCode: config.cjSiteAreaCode,
         subAreaCode,
         roomCode: room.id,
         roomName: room.name,
