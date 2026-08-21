@@ -29,6 +29,16 @@ DB 조회로도 실제 반영 확인: `users` 테이블에 `jiil / active / is_a
 | 회원가입 폼 입력 | ![회원가입 폼 입력](screenshots/e2e-04-register-filled.png) |
 | 중복 가입 에러(409) — 시나리오 5 | ![중복 가입 에러](screenshots/e2e-05-register-duplicate-error.png) |
 | 신규 가입 승인대기 성공(201) — 시나리오 6 | ![승인대기 성공](screenshots/e2e-06-register-pending-success.png) |
+| Admin 패널 — 대기중인 등록 요청 | ![Admin 대기 목록](screenshots/e2e-07-admin-pending-list.png) |
+| Admin 패널 — 승인 처리 직후 | ![Admin 승인 직후](screenshots/e2e-08-admin-after-approve.png) |
+| Admin 패널 — 처리 완료 이력 | ![Admin 처리 완료 이력](screenshots/e2e-09-admin-history.png) |
+
+> Admin 화면은 `POST /auth/login` 자체가 CJ 사내망 제약으로 항상 실패하기 때문에(위 시나리오 7),
+> 실제 로그인 화면을 거쳐서는 도달할 수 없다. 그래서 이 3장만은 브라우저 네트워크 요청 레벨에서
+> `/auth/login` 응답을 가로채(intercept) 실제 백엔드와 동일한 시크릿으로 서명한 유효한 JWT를
+> 대신 반환하도록 해서 접근했다 — Admin 승인 화면 자체(승인 대기 목록, 승인 처리, 이력)는
+> 백엔드 API를 그대로 호출해 실제 DB를 갱신하는 진짜 동작이고, 여기서 우회한 건 오직
+> "CJ 사내망에 도달 못 해 로그인 자체가 막히는" 이 데모 환경만의 앞단 문턱뿐이다.
 
 ## 2차 실행 (CJ 도메인/코드값을 하드코딩에서 필수 환경변수로 리팩터링한 뒤 회귀 확인)
 
