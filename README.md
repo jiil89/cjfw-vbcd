@@ -19,7 +19,7 @@ Admin 승인 패널, 챗봇 UI로 구성됩니다.
 | [`docs/8-erd.md`](docs/8-erd.md) | DB ERD(Mermaid), 테이블별 설명 |
 | [`docs/9-plan.md`](docs/9-plan.md) | 실행계획 — DB/백엔드/프론트 Task 분해, 진행 기록 |
 | [`docs/laptop-server-setup.md`](docs/laptop-server-setup.md) | 운영 배포 절차서(정본) |
-| [`docs/testing/e2e-20260821-vercel-study.md`](docs/testing/e2e-20260821-vercel-study.md) | E2E 테스트 결과 |
+| [`e2e/e2e-20260821-vercel-study.md`](e2e/e2e-20260821-vercel-study.md) | E2E 테스트 결과 |
 | [`docs/swagger.json`](docs/swagger.json) | 백엔드 API 계약(OpenAPI 3.0) |
 
 ## Demo Site
@@ -56,4 +56,4 @@ Admin 승인 패널, 챗봇 UI로 구성됩니다.
 5. 그 외 회원가입/로그인 폼의 유효성 검사(빈 값, 형식 오류 등) UI 동작 확인.
 
 실제 예약 생성/조회 같은 챗봇 핵심 기능은 사내 노트북 배포 환경에서만 검증
-가능합니다. 자세한 E2E 테스트 기록은 [`docs/testing/e2e-20260821-vercel-study.md`](docs/testing/e2e-20260821-vercel-study.md)를 참고하세요.
+가능합니다. 자세한 E2E 테스트 기록은 [`e2e/e2e-20260821-vercel-study.md`](e2e/e2e-20260821-vercel-study.md)를 참고하세요.
