@@ -22,7 +22,7 @@ flowchart LR
         BE1["BE-1<br/>스캐폴딩"]
         BE2["BE-2<br/>인증"]
         BE3["BE-3<br/>Admin API"]
-        BE4["BE-4<br/>CJ 자동화"]
+        BE4["BE-4<br/>자동화"]
         BE5["BE-5<br/>회의실 동기화"]
         BE6["BE-6<br/>예약 도구 계층"]
         BE7["BE-7<br/>LLM 오케스트레이션"]
@@ -125,12 +125,12 @@ flowchart LR
 
 ### DB-5. 회의실 마스터데이터 시딩
 
-- **작업 내용**: `rooms` 테이블에 상암S시티 3F·12F~16F 실제 회의실 데이터(room_code, area_code, sub_area_code, room_name, floor_label)를 입력. `capacity`는 CJ API의 `room_info.ATTENDER_LIMIT` 파싱 결과로 채우는 것이 원칙이나(도메인 정의서 9번), 최초 시딩은 수동 스크립트로 진행 가능.
+- **작업 내용**: `rooms` 테이블에 상암S시티 3F·12F~16F 실제 회의실 데이터(room_code, area_code, sub_area_code, room_name, floor_label)를 입력. `capacity`는 API의 `room_info.ATTENDER_LIMIT` 파싱 결과로 채우는 것이 원칙이나(도메인 정의서 9번), 최초 시딩은 수동 스크립트로 진행 가능.
 - **선행 Task**: DB-2, (capacity 자동 채움은 BE-4·BE-5 완료 후 재실행 권장)
 - **완료 조건**:
   - [x] 3F, 12F~16F 각 층의 실제 회의실이 `rooms`에 모두 입력됨 (`backend/scripts/seed-rooms.ts` 실행, 로컬 개발 DB 기준. 실측 결과 3F는 11개(3F-8 없음), 12F 4개, 13F 4개, 14F 4개(14F-1 없음), 15F 2개(15F-4~5만 존재), 16F 1개로 도메인 문서 예시 "3F-1~3F-12"와 실제 회의실 개수가 다름을 확인 — 실사용 조회 결과를 그대로 반영했으며 도메인 정의서 9번에도 반영함)
   - [x] B1F/2F는 데이터에 아예 포함하지 않음 (스캔 대상 층 목록에서 처음부터 제외)
-  - [x] 각 회의실의 `room_code`/`area_code`/`sub_area_code`가 실제 CJ 시스템 값과 일치함 (스캔 결과 그대로 upsert, SELECT로 NULL/이상값 없음 확인)
+  - [x] 각 회의실의 `room_code`/`area_code`/`sub_area_code`가 실제 예약 시스템 값과 일치함 (스캔 결과 그대로 upsert, SELECT로 NULL/이상값 없음 확인)
   - [x] `capacity`가 26개 회의실 전부 실제 값(응답 HTML의 `num_person` 파싱, 추정치 아님)으로 채워짐
 
 ### DB-6. 반복 예약 테이블 추가
@@ -170,7 +170,7 @@ flowchart LR
   - [x] 로그아웃 시 DB-3의 폐기 테이블에 해당 Refresh Token이 무효 처리됨
   - [x] 승인 대기/거부/자격증명 오류 각각의 로그인 실패 상태 메시지가 올바르게 구분되어 반환됨 (curl 시나리오 5단계로 로컬 검증 완료)
 
-  **[2026-08-14 FE-2 착수 전 보강]** 회원가입이 `preferred_room_ids`(선호 회의실 우선순위 배열)를 받지 않던 누락을 발견해 채움: 마이그레이션(`20260814000000_registration_preferred_rooms.sql`)으로 `account_registration_requests.preferred_room_ids uuid[]` 추가, `registrationService`/`adminService`가 자동승인·수동승인 양쪽 경로 모두에서 승인 시점에 `user_preferred_rooms`로 옮겨 심도록 구현(`userPreferredRoomRepository.setPreferredRooms`). 공개 `GET /rooms`(+`GET /rooms/:id`) 엔드포인트도 이번에 신규 추가(`routes/rooms.routes.ts`, `docs/swagger.json`에는 이미 명세돼 있었음) — `min_capacity`/`floor_label` 필터만 지원, swagger가 명세한 `date`+`start_time`+`end_time` 실시간 가용성 결합은 **범위 밖으로 명시적으로 보류**(익명 사용자가 어느 CJ 계정으로 조회할지 미결정이라 `date` 파라미터 전달 시 400으로 명확히 거부). curl로 회원가입(pending/auto_approved 양쪽)→`user_preferred_rooms` 우선순위 저장까지 실측 검증 완료.
+  **[2026-08-14 FE-2 착수 전 보강]** 회원가입이 `preferred_room_ids`(선호 회의실 우선순위 배열)를 받지 않던 누락을 발견해 채움: 마이그레이션(`20260814000000_registration_preferred_rooms.sql`)으로 `account_registration_requests.preferred_room_ids uuid[]` 추가, `registrationService`/`adminService`가 자동승인·수동승인 양쪽 경로 모두에서 승인 시점에 `user_preferred_rooms`로 옮겨 심도록 구현(`userPreferredRoomRepository.setPreferredRooms`). 공개 `GET /rooms`(+`GET /rooms/:id`) 엔드포인트도 이번에 신규 추가(`routes/rooms.routes.ts`, `docs/swagger.json`에는 이미 명세돼 있었음) — `min_capacity`/`floor_label` 필터만 지원, swagger가 명세한 `date`+`start_time`+`end_time` 실시간 가용성 결합은 **범위 밖으로 명시적으로 보류**(익명 사용자가 어느 사내 계정으로 조회할지 미결정이라 `date` 파라미터 전달 시 400으로 명확히 거부). curl로 회원가입(pending/auto_approved 양쪽)→`user_preferred_rooms` 우선순위 저장까지 실측 검증 완료.
 
 ### BE-3. Admin 승인 API
 
@@ -184,14 +184,14 @@ flowchart LR
 
   **[2026-08-14 FE-4 착수 전 보강]** `GET /admin/registration-requests`가 `status` 쿼리 파라미터를 지원하도록 확장(`docs/swagger.json`에는 이미 명세돼 있었으나 구현이 안 되어 있었음): 생략 시 pending, `status=processed`는 auto_approved/approved/rejected 3종을 처리 시각 최신순으로 묶어 반환(FE-4 "처리 완료 이력", 최근 50건 제한). 응답에 `processed_by_email_alias`(처리자 표시용, 자동승인 시 null → 프론트가 "system"으로 표시)와 `preferred_room_ids`도 추가. curl로 pending/processed/잘못된 status(400) 전부 실측 검증.
 
-### BE-4. CJ 자동화 계층
+### BE-4. 자동화 계층
 
 - **작업 내용**: `cj-automation/session.ts`(Playwright 로그인, 세션 유효성 확인+재로그인), `cj-automation/client.ts`(9번 API 명세의 각 엔드포인트 래퍼), `cj-automation/availabilityParser.ts`(`reserve_all_list` + `event_list` 겹침 판정 알고리즘). Vercel Functions 위에서 `@sparticuz/chromium` 사용.
 - **선행 Task**: BE-1
 - **완료 조건**:
-  - [x] 사내 계정 암호화 자격증명을 복호화해 Playwright로 실제 로그인에 성공함 (이 계층 밖으로 복호화된 비밀번호가 전달되지 않음). 실제 흐름(**2026-08-13 BE-7 라이브 검증 중 재확인해 수정**): `CJ 로그인 포털`(`/PT/login.aspx`, `#txtID`/`#txtPWD`)에서 로그인 → 포털 메인(`23_main.aspx`) 로딩 대기 → **회의실예약 버튼(`button#bntConf`, `onclick="select_menu('EPCT3427','LSB')"`) 클릭**(← `23_service.aspx?CONTENTS_ID=EPCT3427`로 직접 `page.goto`하면 `net::ERR_ABORTED`로 실패함을 재검증. 이 URL은 실서버 페이지가 아니라 클라이언트 사이드 콘텐츠 스왑용) → `CJ 예약 서버`으로 SSO 핸드셰이크(`/NConf/Anonymity/nconfFilter.aspx`)해 API용 쿠키(`AP`) 획득(클릭 후 1초 내) → 이 쿠키로 순수 HTTP ASMX 호출 가능. 도메인 정의서 §8/§9에 "Azure AD" 오기 정정 및 실제 로그인 흐름 반영 완료
+  - [x] 사내 계정 암호화 자격증명을 복호화해 Playwright로 실제 로그인에 성공함 (이 계층 밖으로 복호화된 비밀번호가 전달되지 않음). 실제 흐름(**2026-08-13 BE-7 라이브 검증 중 재확인해 수정**): `로그인 포털`(`/PT/login.aspx`, `#txtID`/`#txtPWD`)에서 로그인 → 포털 메인(`23_main.aspx`) 로딩 대기 → **회의실예약 버튼(`button#bntConf`, `onclick="select_menu('EPCT3427','LSB')"`) 클릭**(← `23_service.aspx?CONTENTS_ID=EPCT3427`로 직접 `page.goto`하면 `net::ERR_ABORTED`로 실패함을 재검증. 이 URL은 실서버 페이지가 아니라 클라이언트 사이드 콘텐츠 스왑용) → `예약 서버`으로 SSO 핸드셰이크(`/NConf/Anonymity/nconfFilter.aspx`)해 API용 쿠키(`AP`) 획득(클릭 후 1초 내) → 이 쿠키로 순수 HTTP ASMX 호출 가능. 도메인 정의서 §8/§9에 "Azure AD" 오기 정정 및 실제 로그인 흐름 반영 완료
   - [x] `getDayPilotConfReserveList`, `checkRoom`, `checkStraightRoom`, `checkDayCountLimit`, `SaveReserve`, `delReserve`, `getConfReservationInfo`, `bindMyReservation` 전부 래핑됨 (경로 접두사 `NCONF/Common/WebService/` 누락 버그 수정, EUC-KR→UTF-8 인코딩 오판 정정, 서버 응답 이어붙임 현상 방어 로직 추가)
-  - [x] 가용성 판단 알고리즘(그리드 AND event_list)이 도메인 정의서 9번에 정리된 실사용 케이스(8/13 스캔 결과)와 동일한 결과를 냄 — fixture 기반 유닛 테스트(vitest 25개) 통과로 검증. **단, 이 fixture는 실측 원본 바이트가 아니라 서술을 재구성한 것이었고, BE-7 라이브 검증에서 실제 CJ 원본 응답 형식(`reserve_all_list`가 파이프 구분 문자열, `event_list.start/end`가 전체 ISO 타임스탬프)과 다르다는 게 뒤늦게 드러나 `tools/availability.tool.ts`에서 파싱 버그를 수정함(BE-7 절 참고) — 알고리즘 자체(`availabilityParser.ts`)는 문제 없었고, CJ 원본→정규화 변환 단계의 버그였음**
+  - [x] 가용성 판단 알고리즘(그리드 AND event_list)이 도메인 정의서 9번에 정리된 실사용 케이스(8/13 스캔 결과)와 동일한 결과를 냄 — fixture 기반 유닛 테스트(vitest 25개) 통과로 검증. **단, 이 fixture는 실측 원본 바이트가 아니라 서술을 재구성한 것이었고, BE-7 라이브 검증에서 실제 원본 응답 형식(`reserve_all_list`가 파이프 구분 문자열, `event_list.start/end`가 전체 ISO 타임스탬프)과 다르다는 게 뒤늦게 드러나 `tools/availability.tool.ts`에서 파싱 버그를 수정함(BE-7 절 참고) — 알고리즘 자체(`availabilityParser.ts`)는 문제 없었고, 원본→정규화 변환 단계의 버그였음**
   - [x] Vercel Functions 환경(콜드스타트, 300초 제한 이내)에서 로그인+API 호출 1건이 실제로 성공함 → 로컬 환경에서 실제 로그인+`getDayPilotConfReserveList`/`bindMyReservation` 호출 성공으로 대체 검증 (실제 Vercel 배포 테스트는 별도 스코프)
 
 ### BE-5. 회의실 마스터데이터 동기화
@@ -209,11 +209,11 @@ flowchart LR
 - **완료 조건**:
   - [x] 도메인 정의서 2번의 9개 유스케이스(해피패스/조건검색/이력추천/긴회의분할/내예약조회/변경/취소/온보딩 제외)가 각각 함수로 구현됨 (`backend/src/tools/` — `availability.tool.ts`, `reservation.tool.ts`, `modifyReservation.tool.ts`, `cancelReservation.tool.ts`, `myReservations.tool.ts`)
   - [x] 2시간 초과 요청 시 세그먼트 분할(30분 단위, ceil(분/120)) 유닛 테스트 통과 — 분할 규칙은 "앞쪽 세그먼트부터 최대 120분씩 채우고 남는 시간을 마지막에 배정"으로 확정(도메인 정의서 2번 문구도 동일하게 수정: 3시간=180분→120+60분). `npx vitest run` 56개 전부 통과
-  - [x] 분할 예약 중 일부 실패 시 이미 생성된 예약이 `delReserve`로 자동 취소되는 보상 트랜잭션 테스트 통과 (`reservation.tool.test.ts`, CJ 저장 실패/DB 저장 실패 두 케이스 모두 검증)
+  - [x] 분할 예약 중 일부 실패 시 이미 생성된 예약이 `delReserve`로 자동 취소되는 보상 트랜잭션 테스트 통과 (`reservation.tool.test.ts`, 저장 실패/DB 저장 실패 두 케이스 모두 검증)
   - [x] 예약 변경/취소는 대상이 모호할 때(여러 건) 바로 진행하지 않고 명확한 오류/안내를 반환함 (`reservationTargeting.ts`의 `AmbiguousReservationTargetError`, 분할그룹 취소 범위 미지정 시 `SplitGroupCancelScopeRequiredError`)
   - [x] `reservations_no_overlap` EXCLUDE 제약 위반 시 서버가 이를 "이미 예약됨" 사용자 메시지로 정상 변환함 (`reservationRepository.ts`, SQLSTATE `23P01` → `RoomAlreadyBookedError`)
 
-  **후속 확인 필요 사항** (실사용 전 CJ 실제 API 응답으로 재검증 필요, 코드 주석에도 남김):
+  **후속 확인 필요 사항** (실사용 전 실제 API 응답으로 재검증 필요, 코드 주석에도 남김):
   - `checkRoom`/`checkStraightRoom`/`checkDayCountLimit`/`SaveReserve`의 실제 성공/실패 응답 스키마가 미확인이라 보수적으로 해석하는 헬퍼로 구현함 — **[20260814, FE-5 실사용 검증에서 재확인·정정]** 이 "보수적 해석"이 실제로는 Result 판정 극성이 반대였던 버그였음이 드러남(`checkRoom` 등은 `Result:"0"`=통과, `Result:"1"`=차단인데 반대로 구현되어 있었음 + `.d` 이중디코딩 누락으로 사실상 항상 통과 처리됨). 두 버그 모두 수정 완료, `SaveReserve` 자체는 여전히 원인 미해결 — 상세는 FE-5 섹션 참고.
   - 예약 변경은 "delReserve 후 SaveReserve 재생성" 전략으로 구현(도메인 정의서 8번에 명시된 미확인 사항). 분할 예약(긴 회의) 건의 변경은 이번 범위에서 미지원으로 명시적으로 막음(취소는 지원)
   - `SaveReserve`에 필요한 `phoneNum`은 현재 `users` 테이블에 저장 컬럼이 없어 호출자가 매번 넘기는 파라미터로 처리 — DB 컬럼 추가 필요 여부는 추후 검토
@@ -225,8 +225,8 @@ flowchart LR
 - **완료 조건**:
   - [x] 시스템 프롬프트에 운영시간/2시간 제한/7일 범위/상암S시티 고정/반복예약 미지원 등이 명시됨 (`orchestration/systemPrompt.ts`, `systemPrompt.test.ts`로 문구 존재 검증)
   - [x] "요청 처리 가능 여부 판단" 원칙이 프롬프트 최상위(0번 섹션)에 반영되어, 범위 밖 요청에 임의 실행을 시도하지 않고 안내/되묻기로 응답함 — 실제 OpenAI API로 "매주 월요일 반복 예약해줘" 시나리오를 라이브 검증: 도구를 전혀 호출하지 않고 미지원 안내 후 대안(단일 예약)을 되물음
-  - [x] LLM이 BE-6의 도구만 호출하고 CJ 시스템/DB에 직접 접근하지 않음 — `orchestrator.ts`가 `../tools/*`만 import(코드 검토로 확인), `db/*`·`cj-automation/*` import 없음
-  - [x] 예약 확정(SaveReserve) 직전 사용자 명시적 확인 없이는 실행되지 않음 — `propose_*`(부작용 없음, confirmationToken 발급) / `confirm_*`(직전 턴 토큰만 실행) 2단계로 코드 레벨 강제, 같은 턴 confirm은 구조적으로 거부. 실제 OpenAI API 라이브 테스트로 `propose_create_reservation`이 실제 토큰을 발급하고 "네, 진행합니다" 같은 명시적 재확인 없이는 멈추는 것까지 확인(confirm은 실제 CJ 예약이 생기므로 의도적으로 실행하지 않음)
+  - [x] LLM이 BE-6의 도구만 호출하고 예약 시스템/DB에 직접 접근하지 않음 — `orchestrator.ts`가 `../tools/*`만 import(코드 검토로 확인), `db/*`·`cj-automation/*` import 없음
+  - [x] 예약 확정(SaveReserve) 직전 사용자 명시적 확인 없이는 실행되지 않음 — `propose_*`(부작용 없음, confirmationToken 발급) / `confirm_*`(직전 턴 토큰만 실행) 2단계로 코드 레벨 강제, 같은 턴 confirm은 구조적으로 거부. 실제 OpenAI API 라이브 테스트로 `propose_create_reservation`이 실제 토큰을 발급하고 "네, 진행합니다" 같은 명시적 재확인 없이는 멈추는 것까지 확인(confirm은 실제 예약이 생기므로 의도적으로 실행하지 않음)
   - [x] 세션 상태(진행 중인 예약 등)가 대화록 텍스트가 아니라 서버 상태로 관리됨 (`orchestration/sessionStore.ts`의 `pendingConfirmation`/`turnIndex`, `sessionStore.test.ts`)
 
   **BE-7 검증 중 발견해 함께 고친 버그** (BE-4/BE-6 범위지만 BE-7 라이브 테스트로만 드러남):
@@ -234,14 +234,14 @@ flowchart LR
 
   **[2026-08-14, FE-5 실사용 피드백 반영]** 사용자가 실제 채팅을 써보고 4가지를 지적함:
   1. "응답이 너무 장황하다" — `systemPrompt.ts` §5 "응답 스타일"을 대폭 강화: 전체 답변 1~3문장 제한, check_availability/propose_* 결과를 텍스트로 다시 나열 금지(카드가 이미 보여주므로), confirmationToken 노출 금지, 재시도 시 이전 내용 반복 설명 금지 등 구체적 규칙 추가.
-  2. "속도가 여전히 느리다" — "매 요청마다 CJ 재로그인" 아키텍처 자체의 비용이라 프롬프트 튜닝으로 해결되지 않음. 세션 캐싱 도입은 위험도 있는 아키텍처 결정이라 처음엔 보류했으나, 사용자가 "로그인 시점에 CJ까지 로그인해두고, 그동안 사용자에게 알려주자"는 구체적 방향을 지시해서 그대로 구현함:
-     - `cj-automation/sessionCache.ts` 신규 — userId별 CJ 세션을 짧은 TTL(2분, 관찰된 "수 분" 수명보다 보수적으로 짧게)로 메모리에 캐싱. `session.ts`의 `getValidSession`이 이 캐시를 우선 확인하도록 수정.
-     - `POST /auth/login`이 JWT 발급 전에 `getValidSession`을 먼저 호출해 CJ 세션을 예열·캐싱함(최대 45초 타임아웃, 실패해도 로그인 자체는 계속 진행 — CJ 예열은 최적화일 뿐 필수 조건이 아님). `POST /auth/logout`은 캐시를 비움.
+  2. "속도가 여전히 느리다" — "매 요청마다 재로그인" 아키텍처 자체의 비용이라 프롬프트 튜닝으로 해결되지 않음. 세션 캐싱 도입은 위험도 있는 아키텍처 결정이라 처음엔 보류했으나, 사용자가 "로그인 시점에 예약 시스템까지 로그인해두고, 그동안 사용자에게 알려주자"는 구체적 방향을 지시해서 그대로 구현함:
+     - `cj-automation/sessionCache.ts` 신규 — userId별 세션을 짧은 TTL(2분, 관찰된 "수 분" 수명보다 보수적으로 짧게)로 메모리에 캐싱. `session.ts`의 `getValidSession`이 이 캐시를 우선 확인하도록 수정.
+     - `POST /auth/login`이 JWT 발급 전에 `getValidSession`을 먼저 호출해 세션을 예열·캐싱함(최대 45초 타임아웃, 실패해도 로그인 자체는 계속 진행 — 예열은 최적화일 뿐 필수 조건이 아님). `POST /auth/logout`은 캐시를 비움.
      - 프론트 `LoginPage.tsx`에 로그인 처리 중(`loginMutation.isPending`) "회의실 예약 시스템에 연결하는 중이에요" 안내 배너 추가 — 로그인 자체가 느려진 이유를 사용자에게 알려주기 위함.
-     - **알려진 한계** (코드 주석에도 남김): (1) 메모리 캐시라 나중에 Vercel Functions(서버리스)로 배포하면 프로세스가 요청마다 달라질 수 있어 캐시가 사실상 안 먹힐 수 있음(DB-2 이후 재검증 필요, 그때 Redis 등 외부 캐시로 교체 검토). (2) TTL 안에서도 CJ가 실제로 세션을 먼저 끊을 수 있는데, 이 경우 자동 무효화/재시도는 아직 구현 안 됨 — 실패하면 사용자가 다시 시도해서 TTL 만료를 기다리거나 서버 재시작이 필요할 수 있음(범위 밖, 다음 세션 검토 대상). (3) 로그인 시점에 CJ 로그인을 미리 하므로, 로그인은 하지만 채팅은 안 쓰는 사용자(예: Admin)도 매번 이 지연을 그대로 겪음 — 트레이드오프로 감수하기로 함.
+     - **알려진 한계** (코드 주석에도 남김): (1) 메모리 캐시라 나중에 Vercel Functions(서버리스)로 배포하면 프로세스가 요청마다 달라질 수 있어 캐시가 사실상 안 먹힐 수 있음(DB-2 이후 재검증 필요, 그때 Redis 등 외부 캐시로 교체 검토). (2) TTL 안에서도 이 시스템이 실제로 세션을 먼저 끊을 수 있는데, 이 경우 자동 무효화/재시도는 아직 구현 안 됨 — 실패하면 사용자가 다시 시도해서 TTL 만료를 기다리거나 서버 재시작이 필요할 수 있음(범위 밖, 다음 세션 검토 대상). (3) 로그인 시점에 로그인을 미리 하므로, 로그인은 하지만 채팅은 안 쓰는 사용자(예: Admin)도 매번 이 지연을 그대로 겪음 — 트레이드오프로 감수하기로 함.
      - `chat.routes.ts`의 타임아웃 헬퍼를 `backend/src/lib/withTimeout.ts`로 공용화(로그인 예열도 같은 패턴이 필요해서).
   3. "다른 회의실 제안이 이전과 동일하다" — 실제로는 카드 없이 텍스트로만 답하며 이전 턴 정보를 재활용하고 있었음(check_availability를 다시 호출 안 함). `systemPrompt.ts`에 §3-7 신설: "다른 곳 보여줘" 류 요청에는 반드시 check_availability를 재호출해 새 카드로 응답하도록 명시.
-  4. "선호 회의실을 가입 후에도 채팅에서 추가/제거할 수 있어야 한다" — 신규 기능 추가: `db/repositories/userPreferredRoomRepository.ts`에 `addPreferredRoom`/`removePreferredRoomByRoomId`(삭제 후 우선순위 1..N 재정렬, 음수 경유 2단계 UPDATE로 unique 제약 충돌 방지), `tools/preferredRooms.tool.ts` 신규(회의실명으로 조회 후 추가/제거), `orchestrator.ts`/`toolSchemas.ts`에 `add_preferred_room`/`remove_preferred_room` 도구 추가(CJ 쓰기가 아니라 되돌리기 쉬운 로컬 설정이라 propose/confirm 2단계 생략, 즉시 실행). 프론트는 이 두 도구 실행 후 사이드바 "선호 회의실"을 자동 재조회하도록 `ChatPage.tsx`에 연결. `AdminPanelPage.tsx`/`ChatPage.tsx`에는 서로 오가는 네비게이션 버튼도 추가(세션이 메모리에만 있어 풀 페이지 이동 시 로그아웃되는 문제 — react-router `Link`로 클라이언트 사이드 이동하게 함).
+  4. "선호 회의실을 가입 후에도 채팅에서 추가/제거할 수 있어야 한다" — 신규 기능 추가: `db/repositories/userPreferredRoomRepository.ts`에 `addPreferredRoom`/`removePreferredRoomByRoomId`(삭제 후 우선순위 1..N 재정렬, 음수 경유 2단계 UPDATE로 unique 제약 충돌 방지), `tools/preferredRooms.tool.ts` 신규(회의실명으로 조회 후 추가/제거), `orchestrator.ts`/`toolSchemas.ts`에 `add_preferred_room`/`remove_preferred_room` 도구 추가(쓰기가 아니라 되돌리기 쉬운 로컬 설정이라 propose/confirm 2단계 생략, 즉시 실행). 프론트는 이 두 도구 실행 후 사이드바 "선호 회의실"을 자동 재조회하도록 `ChatPage.tsx`에 연결. `AdminPanelPage.tsx`/`ChatPage.tsx`에는 서로 오가는 네비게이션 버튼도 추가(세션이 메모리에만 있어 풀 페이지 이동 시 로그아웃되는 문제 — react-router `Link`로 클라이언트 사이드 이동하게 함).
 
   **[2026-08-14, 실제 대화록 리뷰로 발견 — 세션 히스토리 트리밍 버그, 심각도 높음]** 사용자가 공유한 실사용 대화록에서 평범한 잡담("배고파"/"졸려")에 "메시지 처리 중 오류가 발생했습니다"가 뜬 걸 보고 `.dev-server.log`를 뒤져 실제 원인을 찾음: `sessionStore.ts`의 `appendMessage`가 히스토리 상한(20개)을 넘으면 오래된 메시지부터 개수 기준으로만 잘라냈는데, 자름 지점이 "assistant(tool_calls) + 그 tool 응답들" 묶음 한가운데 걸리면 **tool 응답만 배열 맨 앞에 고아로 남아** OpenAI가 `messages with role 'tool' must be a response to a preceeding message with 'tool_calls'`로 그 요청을 거부했다(대화가 길어질 때마다 반복 재현됨, 상한을 넘기는 새 메시지가 쌓일 때마다 계속 실패하다가 나중에 그 고아 메시지 자체가 밀려나야 정상화됨). `appendMessage`를 "자름 지점이 tool 메시지를 가리키면 그 다음 non-tool 메시지까지 통째로 건너뛴다"로 수정하고, `sessionStore.test.ts`에 정확히 이 시나리오(3개씩 묶인 assistant+tool×2 그룹을 반복 추가)를 재현하는 회귀 테스트 추가 — 수정 전 코드로는 이 테스트가 실패함을 확인.
 
@@ -264,25 +264,25 @@ flowchart LR
   - **중복 문장 표시 원인**: `handleUserMessage`는 도구 호출 없는 최종 응답을 `assistantMessage.content` 그대로 한 번만 `finalReply`로 쓰므로(오케스트레이션 루프 자체가 텍스트를 중복 조립하지 않음), 모델이 자기 응답 안에서 같은 문장을 줄바꿈으로 두 번 낸 것 — LLM 쪽 반복 아티팩트. `systemPrompt.ts` §5에 "같은 질문/문장을 줄바꿈으로 두 번 반복하지 마라" 문구 추가 + `orchestrator.ts`에 `collapseDuplicateLines()` 방어 로직 신설(최종 응답에서 연속으로 붙은 동일한 줄을 하나로 합침, 프롬프트만으로는 100% 막을 수 없는 LLM 반복 실패 모드에 대한 안전망).
   - 검증: 백엔드 `tsc --noEmit` + `vitest run`(94/94) 통과. 프롬프트 튜닝의 효과는 실제 대화로 재현해봐야 확인되는데, Playwright가 끊겨 있어 이번 세션엔 실측 못 함 — 다음 실사용 때 재확인 필요.
 
-  (예약 확정 마지막 단계에서 "CJ 시스템에서 거부됐어요"가 뜨는 건 위에서 이미 추적 중인 SaveReserve Result:0 미해결 이슈와 동일 — 새 버그 아님. 이번 대화록에서도 동일 증상(13F-4, 2026-08-17 09:00~10:00)이 재현됨. 다음 세션에서 이전에 정리한 우선순위(Playwright 네트워크 캡처로 실제 성공 요청과 diff)로 계속 조사할 것.)
+  (예약 확정 마지막 단계에서 "예약 시스템에서 거부됐어요"가 뜨는 건 위에서 이미 추적 중인 SaveReserve Result:0 미해결 이슈와 동일 — 새 버그 아님. 이번 대화록에서도 동일 증상(13F-4, 2026-08-17 09:00~10:00)이 재현됨. 다음 세션에서 이전에 정리한 우선순위(Playwright 네트워크 캡처로 실제 성공 요청과 diff)로 계속 조사할 것.)
 
-  **[2026-08-14, "실제로 예약/취소가 되도록 고쳐라" — SaveReserve Result:0 재조사, 실질적 진전 + 새 미해결 발견]** 사용자가 명확히 요구해서 SaveReserve 실패를 다시 파고듦. `reserve_insmod.js`를 재확보해 `getReservationInfo()`/`getRoomOptionInfo()`를 다시 읽어보니, **실제 CJ 웹 UI는 신규 예약 폼을 열 때마다 `getEmptyRoomInfo`를 먼저 호출해서 그 회의실의 `REQUIRED_APPROVAL`(gubun)/`PRE_MAIL_ALARM_YN`(is_send_alarm)/승인자 목록(Table3 → admin_alias/admin_lang)을 동적으로 가져와 SaveReserve에 그대로 실어 보낸다는 게 확인됐다 — 우리는 이 호출 자체를 아예 안 하고 gubun=0/isSendAlarm="False"/adminAlias=""/adminLang=""을 항상 고정값으로 보내고 있었다.**
+  **[2026-08-14, "실제로 예약/취소가 되도록 고쳐라" — SaveReserve Result:0 재조사, 실질적 진전 + 새 미해결 발견]** 사용자가 명확히 요구해서 SaveReserve 실패를 다시 파고듦. `reserve_insmod.js`를 재확보해 `getReservationInfo()`/`getRoomOptionInfo()`를 다시 읽어보니, **실제 웹 UI는 신규 예약 폼을 열 때마다 `getEmptyRoomInfo`를 먼저 호출해서 그 회의실의 `REQUIRED_APPROVAL`(gubun)/`PRE_MAIL_ALARM_YN`(is_send_alarm)/승인자 목록(Table3 → admin_alias/admin_lang)을 동적으로 가져와 SaveReserve에 그대로 실어 보낸다는 게 확인됐다 — 우리는 이 호출 자체를 아예 안 하고 gubun=0/isSendAlarm="False"/adminAlias=""/adminLang=""을 항상 고정값으로 보내고 있었다.**
   - **고침**: `client.ts`에 `GetEmptyRoomInfoResponse` 타입 추가(`.d`가 `"nodata"` 문자열로 오는 경우까지 포함). `reservation.tool.ts`에 `fetchRoomOptionInfo()`(+ `extractRoomOptionInfo()`) 신설 — `saveOneSegmentToCj`가 SaveReserve 호출 직전에 이 회의실+시간대 기준으로 `getEmptyRoomInfo`를 실제로 호출해서 gubun/isSendAlarm/adminAlias/adminLang을 동적으로 채운다(admin_alias/admin_lang은 실제 UI와 동일하게 각 항목 뒤에 `;`를 붙여 이어붙임). 조회 자체가 실패해도(네트워크 오류 등) 예약 시도를 막지 않고 fallback(gubun=0)으로 계속 진행한다. `modifyReservation.tool.ts`의 두 SaveReserve 호출부(신규 저장 + 실패 시 원래 회의실 복구)도 동일한 헬퍼(`fetchRoomOptionInfo` 재사용, `saveReserveChecked()`로 통합)로 맞추고, 원래 빠져있던 SaveReserve `Result` 필드 명시적 확인도 여기에 처음 추가함(기존엔 `extractSeq`가 우연히 뭔가 뽑아내면 성공으로 오판할 여지가 있었음). `reservation.tool.test.ts`에 회귀 테스트 3개 추가(승인불필요/승인필요+승인자/조회실패 시 fallback).
-  - **실사용 재검증 결과 — 아직 미해결, 그러나 새로운 단서 확보**: jiil 실 계정으로 `getEmptyRoomInfo`를 실제 호출해보니, **샘플로 조회한 회의실(3F-6, 3F-1) 전부 `REQUIRED_APPROVAL: "1"`(승인 필요)로 나오는데 승인자 목록(Table3)은 비어있었고, 심지어 신청자 본인 정보(Table2, 휴대폰번호)까지 비어있었다** — `AVAILABLE_TIME`도 전부 "0" 뿐인 이상한 값. 이 상태로 SaveReserve를 호출하면(gubun=1, admin_alias="") 여전히 `{"Result":0,"MailResult":0,"Seq":null}`로 거부됨을 재확인했다. 즉 우리 요청 필드 자체는 이제 실제 UI와 동일한 값을 실어 보내고 있는데도 서버가 거부하고 있어서, **문제가 우리 페이로드가 아니라 (a) 이 계정/회의실 조합에 대한 CJ 서버 쪽 데이터(승인자 미배정 등) 문제이거나, (b) getEmptyRoomInfo 자체가 이 세션/계정에 대해 정상적으로 데이터를 못 찾고 있는(그래서 본인 정보까지 비는) 상황일 가능성이 높다.**
+  - **실사용 재검증 결과 — 아직 미해결, 그러나 새로운 단서 확보**: jiil 실 계정으로 `getEmptyRoomInfo`를 실제 호출해보니, **샘플로 조회한 회의실(3F-6, 3F-1) 전부 `REQUIRED_APPROVAL: "1"`(승인 필요)로 나오는데 승인자 목록(Table3)은 비어있었고, 심지어 신청자 본인 정보(Table2, 휴대폰번호)까지 비어있었다** — `AVAILABLE_TIME`도 전부 "0" 뿐인 이상한 값. 이 상태로 SaveReserve를 호출하면(gubun=1, admin_alias="") 여전히 `{"Result":0,"MailResult":0,"Seq":null}`로 거부됨을 재확인했다. 즉 우리 요청 필드 자체는 이제 실제 UI와 동일한 값을 실어 보내고 있는데도 서버가 거부하고 있어서, **문제가 우리 페이로드가 아니라 (a) 이 계정/회의실 조합에 대한 서버 쪽 데이터(승인자 미배정 등) 문제이거나, (b) getEmptyRoomInfo 자체가 이 세션/계정에 대해 정상적으로 데이터를 못 찾고 있는(그래서 본인 정보까지 비는) 상황일 가능성이 높다.**
   - Playwright로 실제 브라우저에서 `reserve_main.aspx`의 진짜 더블클릭 흐름을 그대로 재현(`modalFrame()` 직접 호출)해서 실제 성공 요청을 네트워크 캡처로 확보하려 시도했으나, 모달 iframe(`#popupFrame`)이 DOM에 아직 안 만들어진 상태라 실패함(초기 로드 후 몇 초 대기로는 부족한 것으로 보임 — 정확한 초기화 완료 시점을 못 찾음). 이 접근은 여기서 중단.
-  - **다음 세션 우선순위(가장 빠르고 확실한 다음 한 걸음)**: jiil 본인이 실제 CJ 웹 브라우저(CJ 예약 서버의 `/NConf/conferenceRoom/reserve_main.aspx`)에서 3F-1이나 3F-6 같은 평범한 회의실을 **직접 클릭해서 예약을 시도**해보고 성공하는지 확인. (1) 실제 UI에서도 안 되면 → CJ 서버/계정 쪽 데이터 문제(승인자 미배정 등)로 확정, CJ IT 담당자에게 문의해야 하는 범위. (2) 실제 UI에서는 되면 → 우리 getEmptyRoomInfo 호출 자체가 이 계정에 대해 실패하고 있다는 뜻이므로, 세션 쿠키(브라우저 로그인 vs 우리 세션 확보 방식의 차이) 쪽을 다시 파야 함. 이 결과에 따라 다음 조사 방향이 완전히 갈리므로, 이 확인이 안 되면 더 파도 헛수고일 수 있다.
+  - **다음 세션 우선순위(가장 빠르고 확실한 다음 한 걸음)**: jiil 본인이 실제 웹 브라우저(예약 서버의 `/NConf/conferenceRoom/reserve_main.aspx`)에서 3F-1이나 3F-6 같은 평범한 회의실을 **직접 클릭해서 예약을 시도**해보고 성공하는지 확인. (1) 실제 UI에서도 안 되면 → 서버/계정 쪽 데이터 문제(승인자 미배정 등)로 확정, 사내 IT 담당자에게 문의해야 하는 범위. (2) 실제 UI에서는 되면 → 우리 getEmptyRoomInfo 호출 자체가 이 계정에 대해 실패하고 있다는 뜻이므로, 세션 쿠키(브라우저 로그인 vs 우리 세션 확보 방식의 차이) 쪽을 다시 파야 함. 이 결과에 따라 다음 조사 방향이 완전히 갈리므로, 이 확인이 안 되면 더 파도 헛수고일 수 있다.
   - 검증: 백엔드 `tsc --noEmit` + `vitest run`(97/97) 통과. 진단용으로 만든 임시 스크립트(`backend/scripts/tmp-*.ts`)와 `reserve_insmod.js`/`confReserve_main.js`/`reserveCommon.js` 원본은 확인 후 전부 삭제함(리포에 남기지 않음).
 
-  **[2026-08-14, 같은 날 — SaveReserve Result:0 최종 해결]** 사용자가 바로 위 "다음 세션 우선순위"를 그 자리에서 실행함 — 실제 CJ 웹 브라우저로 3F-4를 2026-08-15 10:00~10:30에 직접 예약해서 **성공**시켰다(스크린샷으로 "저장되었습니다" + 예약 조회 화면까지 확인). 이 결과로 "실제 UI에서는 된다"가 확정됐고, 곧바로 우리 세션 확보 방식을 다시 팠다:
+  **[2026-08-14, 같은 날 — SaveReserve Result:0 최종 해결]** 사용자가 바로 위 "다음 세션 우선순위"를 그 자리에서 실행함 — 실제 웹 브라우저로 3F-4를 2026-08-15 10:00~10:30에 직접 예약해서 **성공**시켰다(스크린샷으로 "저장되었습니다" + 예약 조회 화면까지 확인). 이 결과로 "실제 UI에서는 된다"가 확정됐고, 곧바로 우리 세션 확보 방식을 다시 팠다:
   - 방금 성공한 것과 **같은 회의실(3F-4)**, 다른 시간대로 우리 `createReservation` 경로를 그대로 실행해봤는데도 **여전히 Result:0** — 즉 회의실 자체의 문제가 전혀 아니었다.
   - `getEmptyRoomInfo`의 원본 응답을 다시 찍어보니 `Table2`(신청자 본인 연락처)와 `Table3`(승인자 목록)이 **항상 빈 배열**로 왔다. 실제 UI가 예약 폼에 jiil의 휴대폰번호(010-2065-0528)를 자동으로 채워 넣는 걸 스크린샷으로 이미 봤는데 우리 쪽에서는 그 정보 자체를 못 가져오고 있었다는 뜻 — **필드 값이 아니라 "이 세션이 누구인지"를 서버가 못 찾고 있다는 신호**로 재해석했다.
-  - 가설: CJ 예약 서버의 예약 관련 ASMX들은 쿠키만으로 신청자를 못 찾는 **레거시 ASP.NET WebForms 서버측 Session 상태**에 의존하고, 이 Session은 로그인 직후 `#bntConf` 클릭만으로는 안 채워지며 **실제 예약 폼 페이지(`reserve_insmod.aspx`)를 최소 한 번 방문**해야(그 페이지의 Page_Load에서 채워지는 것으로 추정) 채워진다.
+  - 가설: 예약 서버의 예약 관련 ASMX들은 쿠키만으로 신청자를 못 찾는 **레거시 ASP.NET WebForms 서버측 Session 상태**에 의존하고, 이 Session은 로그인 직후 `#bntConf` 클릭만으로는 안 채워지며 **실제 예약 폼 페이지(`reserve_insmod.aspx`)를 최소 한 번 방문**해야(그 페이지의 Page_Load에서 채워지는 것으로 추정) 채워진다.
   - Playwright로 검증: 로그인 → `#bntConf` 클릭 직후 바로 `getEmptyRoomInfo`를 호출하면 Table2/Table3이 비어있고 SaveReserve는 Result:0. 그 상태에서 `reserve_insmod.aspx`를 **한 번**(회의실 코드를 비워도 무방 — 특정 회의실과 무관하게 작동함을 확인, 이 페이지는 파라미터가 이상해도 보통 `ErrorPage.aspx`로 리다이렉트되는데 그래도 상관없이 워밍업 효과는 남는다) 방문한 뒤 같은 세션으로 다시 `getEmptyRoomInfo`를 호출하면 Table2/Table3이 정상적으로 채워지고, 이어서 여러 다른 회의실(3F-4, 3F-9)에 대해 `checkRoom → checkStraightRoom → checkDayCountLimit → SaveReserve`가 전부 정상 통과 + **`Result:1`(성공)** 로 예약이 실제로 생성됨을 반복 재현했다(생성 직후 `delReserve`로 즉시 취소해 흔적을 안 남김).
   - **부수적으로 확인된 것**: `gubun`/`admin_alias` 등 필드 값 자체는 SaveReserve 성공/실패에 실질적 영향이 없었다(워밍업 안 된 세션에서는 어떤 값을 넣어도 실패했고, 워밍업된 세션에서는 `gubun=1`+`adminAlias=""` 같은 "틀린" 조합으로도 성공했다) — 즉 이전 세션에서 고친 "getEmptyRoomInfo로 gubun/admin 필드를 동적으로 채우는" 수정은 **실제 성공/실패의 원인이 아니었다**(실사용 승인 라우팅 정확도를 위해서는 여전히 유효한 개선이라 그대로 유지). 진짜 원인은 처음부터 세션 워밍업 누락이었다.
   - **고침**: `cj-automation/session.ts`의 `loginWithCredentials`에 `warmUpReservationSession()` 신설 — `#bntConf` 클릭 후 AP 쿠키 확보 직후, `reserve_main.aspx` 프레임을 찾아(첫 폴링 시도에 아직 없을 수 있어 최대 5초 폴링) `reserve_insmod.aspx`를 회의실 미지정(`room_code=`, `start_time=`, `end_time=` 빈 값)으로 한 번 방문시킨다. `area_code`/`sub_area_code`는 이 프로젝트가 유일하게 지원하는 상암S시티/3F 조합(`804`/`1128`, 도메인 정의서에 이미 등장하는 상수)을 그대로 씀 — 실제 예약 대상 회의실과 무관하게 세션 상태만 채우는 용도라 특정 회의실코드가 필요 없다. 이 워밍업이 실패해도(타임아웃 등) 로그인 자체는 막지 않는다(그러면 이후 SaveReserve가 Result:0으로 알려주는 기존 동작으로 자연스럽게 대체됨).
-  - **최종 검증**: 세션 캐시를 비우고 실제 프로덕션 코드 경로(`createReservation` → `getValidSession` → 새 워밍업 포함 로그인)로 3F-12를 2026-08-15 16:00~16:30에 실제로 예약 → **성공**(`Result:1`, 실제 CJ Seq 발급 확인) → 즉시 `delReserve`로 정리. 백엔드 `tsc --noEmit` + `vitest run`(97/97) 통과. 진단용 임시 스크립트는 전부 삭제함.
-  - **남은 후속 작업(이번 세션 범위 밖)**: (1) `modifyReservation.tool.ts`의 실제 변경 흐름은 아직 라이브로 재검증 안 함(같은 `getValidSession` 경로를 쓰므로 이론상 함께 고쳐졌을 것으로 예상되지만 실측 필요). (2) 워밍업 단계가 로그인 시간을 추가로 늘리므로(프레임 폴링 최대 5초 + 페이지 이동 대기 1.5초) 로그인 응답 시간 재측정 필요. (3) 사용자가 실제 CJ 웹 UI로 만든 3F-4 예약(2026-08-15 10:00~10:30, "데이터")과, 사용자가 스크린샷으로 보여준 3F-10 예약(2026-08-15 11:00~11:30, "데이터")은 우리 자동화가 만든 게 아니라 사용자가 직접 CJ 웹 UI로 만든 테스트 예약이므로 필요하면 사용자가 직접 정리해야 함(우리 DB에는 애초에 없는 예약이라 우리 쪽에서 취소할 수 없음).
-  - `tools/availability.tool.ts`: CJ의 `reserve_all_list`가 JSON 배열이 아니라 `"룸코드:슬롯|룸코드:슬롯|..."` 파이프 구분 문자열이었는데 `Array.isArray` 체크로 항상 빈 배열 처리되어 **모든 회의실이 상시 "불가"로 판정되는 치명적 버그**였음. `event_list`의 `start`/`end`도 `"HH:mm"`이 아니라 전체 ISO 타임스탬프였음. 둘 다 파싱 함수 추가로 수정, `availability.tool.test.ts` 신규 추가(6개 테스트)로 회귀 방지
+  - **최종 검증**: 세션 캐시를 비우고 실제 프로덕션 코드 경로(`createReservation` → `getValidSession` → 새 워밍업 포함 로그인)로 3F-12를 2026-08-15 16:00~16:30에 실제로 예약 → **성공**(`Result:1`, 실제 Seq 발급 확인) → 즉시 `delReserve`로 정리. 백엔드 `tsc --noEmit` + `vitest run`(97/97) 통과. 진단용 임시 스크립트는 전부 삭제함.
+  - **남은 후속 작업(이번 세션 범위 밖)**: (1) `modifyReservation.tool.ts`의 실제 변경 흐름은 아직 라이브로 재검증 안 함(같은 `getValidSession` 경로를 쓰므로 이론상 함께 고쳐졌을 것으로 예상되지만 실측 필요). (2) 워밍업 단계가 로그인 시간을 추가로 늘리므로(프레임 폴링 최대 5초 + 페이지 이동 대기 1.5초) 로그인 응답 시간 재측정 필요. (3) 사용자가 실제 웹 UI로 만든 3F-4 예약(2026-08-15 10:00~10:30, "데이터")과, 사용자가 스크린샷으로 보여준 3F-10 예약(2026-08-15 11:00~11:30, "데이터")은 우리 자동화가 만든 게 아니라 사용자가 직접 웹 UI로 만든 테스트 예약이므로 필요하면 사용자가 직접 정리해야 함(우리 DB에는 애초에 없는 예약이라 우리 쪽에서 취소할 수 없음).
+  - `tools/availability.tool.ts`: 이 시스템의 `reserve_all_list`가 JSON 배열이 아니라 `"룸코드:슬롯|룸코드:슬롯|..."` 파이프 구분 문자열이었는데 `Array.isArray` 체크로 항상 빈 배열 처리되어 **모든 회의실이 상시 "불가"로 판정되는 치명적 버그**였음. `event_list`의 `start`/`end`도 `"HH:mm"`이 아니라 전체 ISO 타임스탬프였음. 둘 다 파싱 함수 추가로 수정, `availability.tool.test.ts` 신규 추가(6개 테스트)로 회귀 방지
 
 ### BE-8. 챗봇 API 엔드포인트
 
@@ -334,7 +334,7 @@ flowchart LR
 - **작업 내용**: Windows 작업 스케줄러에서 매일 00:01에 실행할 Node.js CLI 스크립트 (`backend/scripts/run-recurring-reservations.ts`). 모든 사용자의 규칙 중 오늘의 타겟일에 해당하는 것을 찾아 순차 실행, 결과를 `recurring_reservation_runs`에 기록. 실행 결과를 app 사이드바에서만 표시(메일/푸시 미지원, 범위 외).
 - **선행 Task**: BE-4, BE-10
 - **완료 조건**:
-  - [ ] 스크립트 구현: `recurringReservationService.executeScheduledRuns()` — 대상일이 CJ 예약 윈도우 범위(오늘~7일) 내인 규칙을 식별하고 순차 실행(병렬 금지)
+  - [ ] 스크립트 구현: `recurringReservationService.executeScheduledRuns()` — 대상일이 예약 윈도우 범위(오늘~7일) 내인 규칙을 식별하고 순차 실행(병렬 금지)
   - [ ] 실행 로직: rule의 room 우선순위 순서로 `checkRoom → checkStraightRoom → checkDayCountLimit → SaveReserve` 시도. 1순위 성공하면 중단, 실패하면 2순위 시도, 2순위도 실패하면 3순위 시도. 모두 실패하면 failure_reason 기록
   - [ ] 멱등성: `(rule_id, target_date)` unique 제약이 이미 있으므로 PC 재부팅 후 같은 규칙이 다시 실행되어도 마지막 결과만 남음
   - [ ] 스케줄러 콘솔 로그(Windows 작업 스케줄러가 캡처할 수 있는 stdout) — 실행한 규칙 수, 성공/실패 요약 (앱 내 로그는 BE-10의 `latest_run` 조회로 표시)
@@ -344,7 +344,7 @@ flowchart LR
 **[후속 과제, 2026-08-19 확인 — 아직 미착수, PRD 배포 이후로 미룸]**
 - 2026-08-19 00:01 자동 실행이 아예 안 됨(`Get-ScheduledTaskInfo`의 `LastTaskResult`가 `0x800710E0` = "제약 조건 때문에 미실행"). PC가 그 시각에 꺼져 있었던 것으로 추정.
 - 근본 원인: 스케줄 작업의 `StartWhenAvailable`(놓친 실행을 PC가 다시 켜지면 따라잡기) 옵션이 꺼져 있음. 이걸 켜지 않으면 PC가 자정에 꺼져 있을 때마다 그날 반복 예약이 통째로 스킵된다.
-- 할 일: (1) `Set-ScheduledTask`/`New-ScheduledTaskSettingsSet`으로 `StartWhenAvailable=$true` 적용, (2) KST/UTC 버그 수정(`20260819` 커밋들)이 실제 CJ 예약까지 성공하는지 수동 실행으로 라이브 검증 — 마침 수요일 아침엔 인자 없이 그냥 돌려도 대상일이 정확히 다음 수요일(+7일)이라 조작 없는 진짜 조건으로 테스트 가능.
+- 할 일: (1) `Set-ScheduledTask`/`New-ScheduledTaskSettingsSet`으로 `StartWhenAvailable=$true` 적용, (2) KST/UTC 버그 수정(`20260819` 커밋들)이 실제 예약까지 성공하는지 수동 실행으로 라이브 검증 — 마침 수요일 아침엔 인자 없이 그냥 돌려도 대상일이 정확히 다음 수요일(+7일)이라 조작 없는 진짜 조건으로 테스트 가능.
 
 ---
 
@@ -382,9 +382,9 @@ flowchart LR
     2. **2차 원인(더 심각, 크래시를 고친 뒤에야 드러남) — 타임존 버그**: 1차 원인을 고친 뒤 실제 DB로 검증하다가, 09:00 KST로 예약했는데 `startAt`이 `"...T00:00:00.000Z"`(UTC 00:00)로 저장되어 있는 걸 발견했다. `reservation.tool.ts`의 `toTimestamp(date, hhmm)`가 오프셋 없는 문자열(`"2026-08-17T09:00:00"`)을 그대로 DB에 넘기고 있었는데, **오프셋 없는 문자열을 Postgres가 어떤 시각으로 해석할지는 연결 세션의 TimeZone 설정에 따라 달라진다** — 로컬 개발 DB가 우연히 Asia/Seoul로 맞춰져 있어서 지금까지 "09:00 KST 요청 → 09:00 KST로 저장"이 우연히 맞아떨어졌을 뿐, 세션 타임존이 다른 환경(예: 기본값이 UTC인 Supabase)에 배포하면 **같은 코드가 조용히 9시간 어긋난 시각으로 예약을 저장하는 심각한 프로덕션 버그**가 될 뻔했다. 게다가 읽는 쪽(`hintMatches`의 `.slice(11,16)`, 프론트 `hhmm()`의 정규식 추출)도 저장된 UTC 인스턴트를 KST로 변환하지 않고 그냥 잘라내고 있어서, 크래시를 고친 뒤에도 사용자가 말한 "09:00"과 DB에서 읽은 "00:00"이 절대 일치하지 않아 대상 특정이 계속 실패했을 것이다.
     - **고침**: `backend/src/lib/kst.ts` 신설(`toKstTimestamp`/`kstDayRange`로 저장 시 `+09:00` 오프셋을 항상 명시, `toKstHHmm`/`toKstDate`로 읽을 때 항상 Asia/Seoul 기준 변환) — 이 프로젝트가 상암S시티(한국) 하나만 지원하므로 타임존을 고정 상수로 둠. `reservation.tool.ts`/`modifyReservation.tool.ts`(저장 시점)와 `reservationTargeting.ts`/`myReservations.tool.ts`(범위 조회·읽기 시점) 전부 이 유틸로 교체. 프론트 `ChatPage.tsx`의 `hhmm()`도 정규식 추출 대신 `Intl.DateTimeFormat(..., { timeZone: "Asia/Seoul" })`로 명시적 변환하도록 고침(내 예약/취소 대상 카드 등에서 시간이 9시간 밀려 보이는 문제 예방).
     - 검증: `backend/src/lib/__tests__/kst.test.ts` 신규(자정 근처 UTC/KST 날짜 경계 케이스 포함). 실제 DB에 남아있던 사용자의 진짜 예약("데이터 아키텍처", 3F-6, 2026-08-17 09:00~10:00)으로 `resolveSingleReservationTarget(userId, {date:"2026-08-17", startTime:"09:00"})`을 실행해 정확히 특정되는 것까지 실사용 재검증. 백엔드 `tsc`+`vitest`(103/103), 프론트 `tsc`+`build`+`lint` 전부 통과.
-  - **아직 확인 안 된 것**: `modifyReservation.tool.ts`의 실제 CJ 저장(delReserve 후 saveReserve) 단계 자체는 이번엔 라이브로 재검증 못 함(대상 특정 크래시만 재현/수정 확인) — 다음 세션에서 실제 "예약 변경" 끝까지 실사용 검증 필요.
+  - **아직 확인 안 된 것**: `modifyReservation.tool.ts`의 실제 저장(delReserve 후 saveReserve) 단계 자체는 이번엔 라이브로 재검증 못 함(대상 특정 크래시만 재현/수정 확인) — 다음 세션에서 실제 "예약 변경" 끝까지 실사용 검증 필요.
 
-  **[2026-08-14, 변경/취소는 성공했으나 "대화를 기억 못 하는 것 같다"]** 위 크래시/타임존 수정 후 사용자가 재검증 — 변경/취소 둘 다 실제로 성공했음을 확인(직접 확인). 다만 새 문제 발견: "다음주 화요일 9시"로 막 확정한 예약을 "9시 회의를 10-11시로 변경해줘"로 다시 부르자, 모델이 대상을 찾을 때 날짜를 "오늘"로 암묵 가정해서(`find_reservation_candidates`에 date를 오늘로 채움) "오늘 09:00에 시작하는 예약을 찾지 못했어요"라고 잘못 답했다 — 세션 메모리 자체는 정상(sessionStore가 전체 히스토리를 유지하고 있고, 모델도 "조금 전에 예약한 거"라는 지시어는 이해했음)이었고, 실제 원인은 **모델이 날짜를 명시 안 하면 "오늘"로 기본값 처리하는 습관**이었다. `systemPrompt.ts` §3-6에 규칙 추가: "방금 예약한 거"류 지시어가 나오면 이 대화에서 직전에 실제로 확정(confirm_*)한 예약이 있는지 먼저 보고, 그 예약의 날짜(오늘이 아니어도)를 그대로 힌트로 쓰라고 명시. 사용자가 직접 "다음주 화요일"이라고 정정한 뒤로는 정상 동작(모델이 정확한 date/startTime으로 find_reservation_candidates를 호출해 대상을 찾고, 변경/취소 둘 다 CJ 저장까지 성공 — confirm_modify_reservation/confirm_cancel_reservation 실사용 검증 완료, 지난 세션에 남아있던 "modifyReservation 실제 CJ 저장 단계 미검증" 항목이 이걸로 해소됨).
+  **[2026-08-14, 변경/취소는 성공했으나 "대화를 기억 못 하는 것 같다"]** 위 크래시/타임존 수정 후 사용자가 재검증 — 변경/취소 둘 다 실제로 성공했음을 확인(직접 확인). 다만 새 문제 발견: "다음주 화요일 9시"로 막 확정한 예약을 "9시 회의를 10-11시로 변경해줘"로 다시 부르자, 모델이 대상을 찾을 때 날짜를 "오늘"로 암묵 가정해서(`find_reservation_candidates`에 date를 오늘로 채움) "오늘 09:00에 시작하는 예약을 찾지 못했어요"라고 잘못 답했다 — 세션 메모리 자체는 정상(sessionStore가 전체 히스토리를 유지하고 있고, 모델도 "조금 전에 예약한 거"라는 지시어는 이해했음)이었고, 실제 원인은 **모델이 날짜를 명시 안 하면 "오늘"로 기본값 처리하는 습관**이었다. `systemPrompt.ts` §3-6에 규칙 추가: "방금 예약한 거"류 지시어가 나오면 이 대화에서 직전에 실제로 확정(confirm_*)한 예약이 있는지 먼저 보고, 그 예약의 날짜(오늘이 아니어도)를 그대로 힌트로 쓰라고 명시. 사용자가 직접 "다음주 화요일"이라고 정정한 뒤로는 정상 동작(모델이 정확한 date/startTime으로 find_reservation_candidates를 호출해 대상을 찾고, 변경/취소 둘 다 저장까지 성공 — confirm_modify_reservation/confirm_cancel_reservation 실사용 검증 완료, 지난 세션에 남아있던 "modifyReservation 실제 저장 단계 미검증" 항목이 이걸로 해소됨).
   - **별도로 미해결 — 재현 못 함**: 같은 대화에서 "카드가 안나왔다"는 보고가 한 번 있었음(회의실 2곳 있다는 텍스트 답변은 왔는데 클릭 가능한 카드가 안 보였다고 함). 코드 검토상 `check_availability` 결과가 `preferred=0, others=2`일 때도 `FloorGroupedRoomsCard`가 정상적으로 그려져야 하고, 관련 로그에도 에러가 없어 원인을 특정 못함 — 재현되면 스크린샷과 함께 다시 확인 필요(다음 세션 우선순위로 남겨둠).
   - 검증: 백엔드 `tsc --noEmit` + `vitest run`(103/103) 통과.
 
@@ -421,37 +421,37 @@ flowchart LR
      - 부가: 사용자가 실제 폰으로 테스트하려 했으나 접속 실패. 진단 결과 Vite가 `[::1]`에만 바인딩돼 있어 `--host`로 재기동하고, Wi-Fi가 "공용"이라 방화벽이 막던 것도 UAC 승격으로 열었다(`jiil_2.4G`를 Private으로 + 5173 인바운드 허용, Private 프로필 + LocalSubnet 한정). 그럼에도 폰 접속은 계속 실패했는데 라우팅/AP격리/Vite Host검사는 모두 정상이었고 **CrowdStrike Falcon(사내 EDR)** 이 남은 유력 원인 — 회사 보안 정책이라 우회하지 않았고, 사용자는 결국 데스크톱 브라우저 기기 에뮬레이션으로 확인함.
   - 검증: 백엔드 `tsc --noEmit` + `vitest run`(109/109, 신규 6건 포함) 통과, 프론트 `tsc -b` + `vite build` + `oxlint` + `vitest`(4/4) 통과. **라이브 재테스트 필요**
 
-  **[2026-08-16, 비밀번호 변경 기능 신설 + CJ WORLD 명칭 통일]** 사용자 요청: "사용자가 CJ의 비번을 바꾸면 우리앱에서 다시 바꾸는 행위를 해야만한다. 그리고 앱 이용 비번은 당연히 수정이 가능해야한다. CJ ID PW를 CJ WORLD ID, CJ WORLD PW로 명칭을 변경해라. 그리고 WORLD PW 변경시 앱에도 등록해야 한다고 말해라."
-  - **조사 결과 비밀번호 변경 수단이 아예 없었다** — `/auth`는 login/refresh/logout뿐, `/me`는 조회 2개뿐. 그런데 이건 단순 편의 기능 누락이 아니라 **시간이 지나면 사용자가 하나씩 잠기는 구조적 결함**이었다: CJ WORLD PW는 주기적으로 만료되는데, 사용자가 CJ에서 바꾸는 순간 우리 `users.encrypted_password`가 낡은 값이 되어 `getValidSession` → `CjLoginError`로 조회·예약이 전부 죽고, `email_alias`가 unique라 재가입도 막힌다.
-  - **가장 중요한 발견 — 인증된 화면에만 만들면 무용지물이다.** `auth.routes.ts`의 로그인은 `requireCjSessionOnLogin` 실패 시 **로그인 자체를 401로 거부**한다(2fef580에서 의도적으로 넣은 동작). 즉 CJ 비밀번호가 만료된 사용자는 앱에 들어올 수 없으므로, "내 정보" 안에 재등록 화면을 놓아도 **정확히 그 기능이 필요한 상황에서 도달할 수 없다.** 그래서 경로를 두 개로 나눴다:
+  **[2026-08-16, 비밀번호 변경 기능 신설 + 사내 계정 시스템 명칭 통일]** 사용자 요청: "사용자가 이 시스템의 비번을 바꾸면 우리앱에서 다시 바꾸는 행위를 해야만한다. 그리고 앱 이용 비번은 당연히 수정이 가능해야한다. ID PW를 사내 계정 시스템 ID, 사내 계정 PW로 명칭을 변경해라. 그리고 WORLD PW 변경시 앱에도 등록해야 한다고 말해라."
+  - **조사 결과 비밀번호 변경 수단이 아예 없었다** — `/auth`는 login/refresh/logout뿐, `/me`는 조회 2개뿐. 그런데 이건 단순 편의 기능 누락이 아니라 **시간이 지나면 사용자가 하나씩 잠기는 구조적 결함**이었다: 사내 계정 PW는 주기적으로 만료되는데, 사용자가 여기서 바꾸는 순간 우리 `users.encrypted_password`가 낡은 값이 되어 `getValidSession` → `CjLoginError`로 조회·예약이 전부 죽고, `email_alias`가 unique라 재가입도 막힌다.
+  - **가장 중요한 발견 — 인증된 화면에만 만들면 무용지물이다.** `auth.routes.ts`의 로그인은 `requireCjSessionOnLogin` 실패 시 **로그인 자체를 401로 거부**한다(2fef580에서 의도적으로 넣은 동작). 즉 비밀번호가 만료된 사용자는 앱에 들어올 수 없으므로, "내 정보" 안에 재등록 화면을 놓아도 **정확히 그 기능이 필요한 상황에서 도달할 수 없다.** 그래서 경로를 두 개로 나눴다:
     - `PATCH /me/cj-world-password` (JWT) — 만료 전에 미리 바꾸는 정상 경로.
     - `POST /auth/cj-world-password` (**인증 없음**) — 잠긴 사용자의 유일한 복구 경로. JWT 대신 **앱 로그인 비밀번호로 본인 확인**(`authenticateUser`가 승인/폐기 상태까지 검사)하고, 로그인 화면에서 `CJ_LOGIN_FAILED`일 때만 노출된다.
-  - **저장 전 CJ 실제 로그인 검증**(`passwordService.changeCjWorldPassword`): 검증 없이 저장하면 오타 하나로 이후 모든 동작이 죽는데 사용자는 원인도 모르고 되돌릴 수도 없다(그게 애초에 이 기능이 필요해진 이유). `loginWithCredentials` 성공 시에만 암호화 저장하고 `clearCachedCjSession`으로 옛 세션을 버린다. 브라우저 자동화라 응답이 수 초 걸리므로 UI에 "CJ에서 확인 중…"을 표시한다.
+  - **저장 전 실제 로그인 검증**(`passwordService.changeCjWorldPassword`): 검증 없이 저장하면 오타 하나로 이후 모든 동작이 죽는데 사용자는 원인도 모르고 되돌릴 수도 없다(그게 애초에 이 기능이 필요해진 이유). `loginWithCredentials` 성공 시에만 암호화 저장하고 `clearCachedCjSession`으로 옛 세션을 버린다. 브라우저 자동화라 응답이 수 초 걸리므로 UI에 "여기서 확인 중…"을 표시한다.
   - `PATCH /me/app-password`: 현재 비밀번호 확인 후 교체하고 **refresh 토큰 전부 폐기**(`revokeAllRefreshTokensByUserId` 신설)로 기존 세션을 끊는다. 새 비밀번호 8자 이상.
   - UI: `PasswordSettingsRail`을 `ChatRailContent`에 추가 — 데스크톱 사이드바와 모바일 하단 시트가 이 컴포넌트를 공유하므로 한 번만 만들면 양쪽에 다 들어간다. 두 비밀번호는 성격이 완전히 달라 한 폼에 섞지 않고 각각 펼쳐서 입력받는다.
-  - 명칭 통일: "사내 계정 ID/비밀번호" → **CJ WORLD ID / CJ WORLD PW**(LoginPage, RegisterPage, AdminPanelPage, `authService`/`registrationService`/`auth.routes` 에러 메시지). 회원가입 CJ WORLD PW 힌트와 로그인 실패 메시지에 "**바꾸시면 앱에도 다시 등록해야 예약이 계속 됩니다**"를 명시. `systemPrompt`의 "사내 회의실"/"사내 비서"는 계정과 무관하므로 건드리지 않았다.
-  - **후속 정리 대상(미착수)**: (1) 가입 시점에는 앱 비밀번호 최소 길이 규칙이 없어 변경(8자)과 불일치한다. (2) 이 경로들은 실패해도 rate limit이 없어 CJ 계정 잠금 정책을 자극할 수 있다. (3) 메일러가 없어 "비밀번호를 잊었을 때" 재설정은 불가능하다(Admin 대행만 가능).
-  - 검증: 백엔드 `tsc --noEmit` + `vitest run`(109/109), 프론트 `tsc -b` + `oxlint` + `vitest`(4/4) + `vite build` 통과. 엔드포인트 스모크(무인증 401, 필수값 누락 400) 확인. 로그인/회원가입 화면에서 명칭이 실제로 바뀐 것과 구 문구 잔재 0건을 렌더로 확인. `docs/swagger.json`에 3개 엔드포인트 추가(JSON 유효성 확인). **실제 CJ 비밀번호로 재등록이 되는지는 라이브 미검증** — 실제 계정 비밀번호가 필요해 사용자 테스트 필요.
+  - 명칭 통일: "사내 계정 ID/비밀번호" → **사내 계정 시스템 ID / 사내 계정 PW**(LoginPage, RegisterPage, AdminPanelPage, `authService`/`registrationService`/`auth.routes` 에러 메시지). 회원가입 사내 계정 PW 힌트와 로그인 실패 메시지에 "**바꾸시면 앱에도 다시 등록해야 예약이 계속 됩니다**"를 명시. `systemPrompt`의 "사내 회의실"/"사내 비서"는 계정과 무관하므로 건드리지 않았다.
+  - **후속 정리 대상(미착수)**: (1) 가입 시점에는 앱 비밀번호 최소 길이 규칙이 없어 변경(8자)과 불일치한다. (2) 이 경로들은 실패해도 rate limit이 없어 사내 계정 잠금 정책을 자극할 수 있다. (3) 메일러가 없어 "비밀번호를 잊었을 때" 재설정은 불가능하다(Admin 대행만 가능).
+  - 검증: 백엔드 `tsc --noEmit` + `vitest run`(109/109), 프론트 `tsc -b` + `oxlint` + `vitest`(4/4) + `vite build` 통과. 엔드포인트 스모크(무인증 401, 필수값 누락 400) 확인. 로그인/회원가입 화면에서 명칭이 실제로 바뀐 것과 구 문구 잔재 0건을 렌더로 확인. `docs/swagger.json`에 3개 엔드포인트 추가(JSON 유효성 확인). **실제 비밀번호로 재등록이 되는지는 라이브 미검증** — 실제 계정 비밀번호가 필요해 사용자 테스트 필요.
 
-  **[2026-08-16, 위 기능 라이브 테스트 결과 — 둘 다 잘 됨, 성공 안내만 버그]** 사용자가 실제 CJ 계정으로 두 비밀번호 변경을 모두 성공시킴("비밀번호 변경은 둘다 잘된다"). 다만 CJ WORLD PW 재등록 성공 후 안내 문구가 안 보인다고 신고.
-  - 원인: `CjWorldPasswordForm`/`AppPasswordForm`이 성공 시 `doneText`를 세팅하면서 동시에 `window.setTimeout(onDone, 1800)`으로 **부모의 폼 자체를 접었다** — 메시지가 폼과 함께 사라졌다. CJ 재등록은 실제 CJ 로그인으로 검증하느라 수 초 걸려서, 그 사이 화면에서 눈을 뗐다가 돌아오면 이미 지나간 뒤인 경우가 흔했다.
-  - 수정: 자동으로 닫지 않고 **성공 상태를 그대로 유지**하도록 변경 — 폼 자리에 초록 배경 안내가 남고, 사용자가 "닫기"를 눌러야 접힌다. 문구도 "무엇이 끝났는지" 구체화(CJ 로그인까지 확인됨 / 다른 기기 로그인이 끊김).
+  **[2026-08-16, 위 기능 라이브 테스트 결과 — 둘 다 잘 됨, 성공 안내만 버그]** 사용자가 실제 사내 계정으로 두 비밀번호 변경을 모두 성공시킴("비밀번호 변경은 둘다 잘된다"). 다만 사내 계정 PW 재등록 성공 후 안내 문구가 안 보인다고 신고.
+  - 원인: `CjWorldPasswordForm`/`AppPasswordForm`이 성공 시 `doneText`를 세팅하면서 동시에 `window.setTimeout(onDone, 1800)`으로 **부모의 폼 자체를 접었다** — 메시지가 폼과 함께 사라졌다. 재등록은 실제 로그인으로 검증하느라 수 초 걸려서, 그 사이 화면에서 눈을 뗐다가 돌아오면 이미 지나간 뒤인 경우가 흔했다.
+  - 수정: 자동으로 닫지 않고 **성공 상태를 그대로 유지**하도록 변경 — 폼 자리에 초록 배경 안내가 남고, 사용자가 "닫기"를 눌러야 접힌다. 문구도 "무엇이 끝났는지" 구체화(로그인까지 확인됨 / 다른 기기 로그인이 끊김).
   - 검증: 실제 CSS를 링크한 임시 검증 페이지로 성공 패널이 렌더되는 것 확인(5-project-principle.md §4 "렌더해서 계산값 확인" 원칙 적용) 후 삭제. `tsc -b` + `oxlint` + `vite build` 통과.
 
   **[2026-08-16, sessionStore를 DB로 이전 — 서버리스 대화 유실 리스크 해소]** 이 세션 앞부분에서 사용자에게 "sessionStore가 모듈 전역 Map이라 Vercel 서버리스에서는 함수 인스턴스가 바뀌면 대화 컨텍스트가 유실된다"고 리스크로 짚었던 것을 실제로 해소함. 사용자가 두 가지를 먼저 확인:
-  - "DB 왕복이 느려지지 않냐" → 지금 한 턴에 이미 CJ 자동화 재로그인(몇~수십 초)·OpenAI 호출(초 단위)이 걸리는데, Supabase 풀러 경유 단순 쿼리 왕복은 20~50ms 수준이라 **체감 안 되는 수준**이라고 답함. 진짜 리스크는 속도가 아니라 동시성이라고 짚음.
+  - "DB 왕복이 느려지지 않냐" → 지금 한 턴에 이미 자동화 재로그인(몇~수십 초)·OpenAI 호출(초 단위)이 걸리는데, Supabase 풀러 경유 단순 쿼리 왕복은 20~50ms 수준이라 **체감 안 되는 수준**이라고 답함. 진짜 리스크는 속도가 아니라 동시성이라고 짚음.
   - "어차피 응답 대기 중엔 입력창이 비활성화된다" → 실제로 `sendMessage`가 `sendMutation.isPending`일 때 진입 자체를 막고, 입력창/전송버튼/빠른명령칩 전부 `disabled`임을 코드로 확인. 같은 탭에서는 동시 요청이 물리적으로 안 나가므로, 남는 건 같은 사용자가 탭/기기를 여러 개 동시에 쓰는 낮은 확률의 엣지케이스뿐 — **락 없이 진행하기로 사용자가 결정**("사용자가 많지 않고, 동시에 쓸 정도의 기능은 아니라 걱정 안해도된다").
   - 구현:
     - `supabase/migrations/20260816000000_chat_sessions.sql` 신설 — `chat_sessions(user_id pk, state jsonb, last_activity_at, created_at, updated_at)`. `OrchestrationSession` 객체를 필드로 쪼개지 않고 `state jsonb` 하나에 통째로 저장(세션 모양이 바뀌어도 이 테이블/리포지토리는 안 바뀜). RLS는 `refresh_tokens`와 동일하게 켜두되 정책은 만들지 않아 anon/authenticated는 접근 불가, service role만 접근. `8-schema.sql` 스냅샷에도 반영.
     - `db/repositories/chatSessionRepository.ts` 신설 — `loadChatSessionState`/`saveChatSessionState` 두 함수만. UPSERT(`on conflict (user_id) do update`)라 사용자당 항상 1행.
     - `orchestration/sessionStore.ts` — `getOrCreateSession`/`resetSession`을 async로 전환, `saveSession` 신설. **턴 안에서의 나머지 mutate(`appendMessage`, `setPendingConfirmation` 등)는 여전히 메모리 객체를 그대로 조작**하고, 실제 저장은 턴이 끝날 때 `saveSession` 호출 한 번뿐 — 매 mutate마다 DB를 치지 않는다. `validatePendingConfirmation`/`wasSlotOfferedBefore`/`isResolvedTarget` 같은 판정 로직은 순수 함수 그대로라 DB 없이 유닛 테스트 가능. DB에서 읽은 값은 `isPlausibleSessionState()`로 최소 구조 검증 후 신뢰(스키마 검증 라이브러리까지는 과함 — 우리 서버가 쓴 것만 다시 읽는 내부 상태라 사용자 입력과 신뢰 수준이 다름).
     - `orchestrator.ts` — `getOrCreateSession` 호출에 `await` 추가, `handleUserMessage` 끝에 `await saveSession(session)` 추가.
-    - **의도된 예외로 문서화**: `orchestration → tools → db` 의존 방향을 `sessionStore.ts`가 우회하는 것처럼 보이지만, 오케스트레이션 자신의 상태를 어디에 영속화할지는 예약 비즈니스 로직이 아니라 순수 인프라 관심사라 tools/에 억지로 끼워넣지 않기로 함(로그인 시 CJ 세션 예열하는 `auth.routes.ts`의 기존 예외와 같은 성격). `5-project-principle.md` §5에 원칙으로 남김.
+    - **의도된 예외로 문서화**: `orchestration → tools → db` 의존 방향을 `sessionStore.ts`가 우회하는 것처럼 보이지만, 오케스트레이션 자신의 상태를 어디에 영속화할지는 예약 비즈니스 로직이 아니라 순수 인프라 관심사라 tools/에 억지로 끼워넣지 않기로 함(로그인 시 세션 예열하는 `auth.routes.ts`의 기존 예외와 같은 성격). `5-project-principle.md` §5에 원칙으로 남김.
     - 테스트: `__resetAllSessionsForTest()`(모듈 전역 Map 초기화)는 더 이상 의미가 없어 제거. `sessionStore.test.ts`/`orchestrator.test.ts` 둘 다 `chatSessionRepository`를 메모리 기반 페이크로 `vi.mock`(다른 리포지토리 테스트가 `pool.query`를 mock하는 것과 같은 패턴) — 판정 로직 테스트는 세션 객체를 직접 조작해 그대로 두고, 로드/저장 왕복(저장 후 다시 불러오면 같은 내용, 타임아웃 시 리셋, 손상된 DB 값은 빈 세션으로 안전 대체)을 새로 검증하는 테스트 3건 추가.
   - 검증: 백엔드 `tsc --noEmit` + `vitest run`(**111/111**, 신규 3건 포함) 통과. **로컬 Postgres에 마이그레이션을 실제로 적용**하고(psql 없어 `pg` 클라이언트로 직접 실행) 진단 스크립트로 실제 DB 왕복 확인 — jsonb 자동 파싱, UPSERT로 사용자당 행 1개 유지, 저장→로드→재저장 시 messages 누적 정상. 확인 후 진단 스크립트 삭제. dev 서버(`tsx watch`)가 이 변경을 물고 자동 재기동된 뒤 `/health` 200 확인. **실제 대화로 서버리스 환경(Vercel)에서 유실이 안 생기는지는 배포 후에만 확정적으로 검증 가능** — 로컬은 원래도 문제가 재현 안 되는 환경이라 이번 검증의 한계로 남는다.
   - PRD/구조원칙 문서 갱신: `4-prd.md` "남은 큰 리스크" 항목을 "[해결됨]"으로, `5-project-principle.md` §5에 세션 영속화 원칙(경계/의도된 예외/동시성 락 미적용 근거) 추가, `8-erd.md`에 `chat_sessions` 설명 추가.
 
-  **[2026-08-16, 비상 연락처(phone_num)는 항상 빈 값으로 저장]** 사용자 요청: "회의실 예약할때 비상 연락처는 모두 비우고 저장하도록 하자." 이전에는 LLM이 "사용자가 먼저 알려주지 않는 한 빈 문자열로"라는 프롬프트/스키마 지시만으로 처리하고 있었다 — 모델이 지시를 안 따르면 실제 연락처가 CJ에 저장될 수 있는 구조. 실제 CJ API를 호출하는 단 한 지점(`cj-automation/client.ts`의 `saveReserve`)에서 `phone_num: ""`을 하드코딩하는 것으로 바꾸고, 그 값을 어차피 흘려보내지 않게 되어 `phoneNum` 필드를 전체 파이프라인(`SaveReserveParams`, `CreateReservationInput`, 분할 예약 입력, `propose_*` 도구 스키마, `orchestrator.ts` 파라미터 추출, 시스템 프롬프트 지시문)에서 통째로 제거했다 — 항상 빈 값인 필드를 여러 계층에 그대로 스레딩하는 대신 없앰. 실제 HTTP 요청 바디에 `phone_num`이 항상 `""`로 나가는지 검증하는 테스트 신설(`cj-automation/__tests__/client.test.ts`) — 타입 레벨 제거만으로는 실제 전송 값까지 보장되지 않으므로. 검증: 백엔드 `tsc` + `vitest run`(112/112, 신규 1건) 통과.
+  **[2026-08-16, 비상 연락처(phone_num)는 항상 빈 값으로 저장]** 사용자 요청: "회의실 예약할때 비상 연락처는 모두 비우고 저장하도록 하자." 이전에는 LLM이 "사용자가 먼저 알려주지 않는 한 빈 문자열로"라는 프롬프트/스키마 지시만으로 처리하고 있었다 — 모델이 지시를 안 따르면 실제 연락처가 여기에 저장될 수 있는 구조. 실제 API를 호출하는 단 한 지점(`cj-automation/client.ts`의 `saveReserve`)에서 `phone_num: ""`을 하드코딩하는 것으로 바꾸고, 그 값을 어차피 흘려보내지 않게 되어 `phoneNum` 필드를 전체 파이프라인(`SaveReserveParams`, `CreateReservationInput`, 분할 예약 입력, `propose_*` 도구 스키마, `orchestrator.ts` 파라미터 추출, 시스템 프롬프트 지시문)에서 통째로 제거했다 — 항상 빈 값인 필드를 여러 계층에 그대로 스레딩하는 대신 없앰. 실제 HTTP 요청 바디에 `phone_num`이 항상 `""`로 나가는지 검증하는 테스트 신설(`cj-automation/__tests__/client.test.ts`) — 타입 레벨 제거만으로는 실제 전송 값까지 보장되지 않으므로. 검증: 백엔드 `tsc` + `vitest run`(112/112, 신규 1건) 통과.
   - **부수적으로 발견한 소음**: 이 작업 중 사용자가 실시간으로 챗봇을 테스트하다 "요청 처리 중 오류가 발생했습니다"를 겪고 신고했는데, 조사 결과 실제 버그가 아니라 `tsx watch`가 이 작업의 연속된 파일 저장마다 백엔드를 재시작하던 중(로그에 10초 간격 재시작 다수 기록) 그 틈에 요청이 걸려 Vite 프록시가 502를 돌려준 것이었다 — 프론트가 JSON이 아닌 응답을 파싱 못 해 가장 일반적인 대체 문구를 띄웠다. 코드 수정 없음, 사용자에게 원인 설명 후 재시도 안내.
 
   **[2026-08-16, 프롬프트 캐싱 적용 + 턴당 토큰 사용량 로깅]** 사용자 질문("현재 llm api input/output 토큰이 대략 얼마씩 사용되나?")에 답하다 두 가지가 드러남: (1) OpenAI 응답의 `usage` 필드를 받고도 버리고 있어서 실제 사용량을 로깅한 적이 한 번도 없었다. (2) 실제 시스템 프롬프트를 만들어 재보니(현재 DB 기준 회의실 26개) 9,632자 — 도구 스키마(9,639자 JSON)까지 합쳐 매 도구 호출마다 그대로 재전송되고 있었는데, 뒤이은 사용자 요청("프롬프트 캐싱 방법을 적용하면 좋을텐데")으로 캐싱 여지를 조사함.
@@ -463,27 +463,27 @@ flowchart LR
   - **[같은 날 후속 — 캐시 적중 실측 확인]** `cached_tokens`를 로그에 추가하고 실사용 대화 로그를 확인하니 실제로 적중하고 있었다(예: `prompt=16376(캐시적중=14774)`, `prompt=34848(캐시적중=34058)` — 대략 **90% 내외 적중**). 첫 호출만 `캐시적중=0`이고 이후 호출부터 적중. 구조 변경이 실제로 먹혔음이 확인됨.
 
   **[2026-08-16, "15층 없다더니 다시 물어보니 있다" 신고 조사 — 데이터는 맞았고 진짜 버그는 둘]** 사용자 신고: "8/18일 15층에 가능한 회의실 없다해놓고, 다시 물어보면 가능한게 있다."
-  - **먼저 실제 CJ 데이터로 검증**(진단 스크립트로 직접 조회, 확인 후 삭제): 8/19 14:00~15:00 15F = **0곳**, 8/18 같은 시간 15F = **15F-4 1곳**. 즉 에이전트가 지어낸 게 아니라 **날짜가 서로 달랐다**(대화에서 "다음주 수요일"=8/19로 시작했다가 중간에 사용자가 "화요일 오후"=8/18로 바꿔 물음). 데이터·날짜 계산 모두 정상이었다.
+  - **먼저 실제 데이터로 검증**(진단 스크립트로 직접 조회, 확인 후 삭제): 8/19 14:00~15:00 15F = **0곳**, 8/18 같은 시간 15F = **15F-4 1곳**. 즉 에이전트가 지어낸 게 아니라 **날짜가 서로 달랐다**(대화에서 "다음주 수요일"=8/19로 시작했다가 중간에 사용자가 "화요일 오후"=8/18로 바꿔 물음). 데이터·날짜 계산 모두 정상이었다.
   - **진짜 문제 ① — 날짜가 바뀐 걸 사용자가 알 수 없었다.** 중간 답변들이 날짜를 안 밝히고 "15층에도 가능한 회의실이 없네요"라고만 해서, 사용자 입장에선 하나의 연속된 탐색으로 보였고 결과만 뒤집혀 모순으로 느껴졌다. → 프롬프트 §3-1c 신설: **조회 결과를 말할 때 반드시 날짜를 함께 명시**, 직전 답변과 날짜가 달라졌으면 특히 분명히 드러낼 것.
   - **진짜 문제 ② — 층 필터로 0곳일 때 되묻기만 하고 끝났다.** 8/19 15F가 0곳이었을 때 "다른 층으로 찾아드릴까요?"라고만 물었는데, **같은 시간 다른 층에는 8곳이나 비어 있었다**(12F-1/12F-2/12F-4/13F-2/13F-3/14F-2/14F-3/14F-4 — 실측 확인). 사용자를 한 턴 더 기다리게 한 것. → `check_availability` 핸들러가 **층 필터 결과가 비면 같은 조건으로 층 없이 한 번 더 조회해 `sameTimeOtherFloors`로 함께 반환**하도록 서버에서 처리(LLM 판단에 맡기지 않음). 프롬프트 §3-2b로 "되묻지 말고 그 목록을 바로 제시"를 명시하고, 프론트 `CheckAvailabilityData` 타입과 카드 렌더링에도 이 필드를 반영 — **안 그러면 대안이 텍스트로만 언급되고 클릭할 카드가 없다.** `setOfferedSlots`에도 포함시켜 이 대안을 골랐을 때도 즉시 예약(3-5b)이 동작하게 함.
-  - **덤으로 발견한 회귀 — 회의명을 묻지 않고 "회의"로 저장.** 같은 대화에서 사용자가 "회의실 제목은?"이라고 묻자 에이전트가 "**'회의'로 저장됐어요**"라고 답했다. 프롬프트 §3-4b가 "title은 사용자에게 물어서 받은 값만 쓰고 '회의'/'미팅' 같은 placeholder를 채워 넣지 말 것"이라고 명시했는데도 위반 — 어제 넣은 **자동 실행 경로(3-5b)에서 목록 선택 한마디로 바로 예약되면서 회의명을 물을 기회가 없었다.** 프롬프트 지시만으로는 안 막히는 게 확인됐으므로 **서버에서 결정론적으로 교정**: `businessRules.normalizeReservationTitle()` 신설 — 비었거나 "회의"/"미팅"/"meeting" 등 placeholder면 기본 제목으로 교체하고, `propose_create_reservation`/`propose_split_reservation` 양쪽에 적용. **기본 제목은 사용자가 직접 지정한 "데이터 수집/분석 회의"**(CJ 예약 현황은 다른 직원에게도 보이므로 의미 있는 값 하나로 고정). "주간 회의"/"팀 미팅"처럼 더 구체적인 제목은 그대로 둔다(정확 일치만 교체).
+  - **덤으로 발견한 회귀 — 회의명을 묻지 않고 "회의"로 저장.** 같은 대화에서 사용자가 "회의실 제목은?"이라고 묻자 에이전트가 "**'회의'로 저장됐어요**"라고 답했다. 프롬프트 §3-4b가 "title은 사용자에게 물어서 받은 값만 쓰고 '회의'/'미팅' 같은 placeholder를 채워 넣지 말 것"이라고 명시했는데도 위반 — 어제 넣은 **자동 실행 경로(3-5b)에서 목록 선택 한마디로 바로 예약되면서 회의명을 물을 기회가 없었다.** 프롬프트 지시만으로는 안 막히는 게 확인됐으므로 **서버에서 결정론적으로 교정**: `businessRules.normalizeReservationTitle()` 신설 — 비었거나 "회의"/"미팅"/"meeting" 등 placeholder면 기본 제목으로 교체하고, `propose_create_reservation`/`propose_split_reservation` 양쪽에 적용. **기본 제목은 사용자가 직접 지정한 "데이터 수집/분석 회의"**(예약 현황은 다른 직원에게도 보이므로 의미 있는 값 하나로 고정). "주간 회의"/"팀 미팅"처럼 더 구체적인 제목은 그대로 둔다(정확 일치만 교체).
   - 함께 프롬프트 §3-4b를 사용자 지시대로 재작성: **날짜·시간 / 참석 인원 / 회의명을 맨 처음에 한꺼번에 물어본다**(하나씩 나눠 묻는 게 실사용 최대 불만이었음). 물어봤는데도 회의명을 끝내 안 주면 캐묻지 말고 기본 제목으로 진행.
-  - 검증: 백엔드 `tsc` + `vitest run`(**117/117**, `normalizeReservationTitle` 테스트 4건 신규) 통과, 프론트 `tsc -b` + `oxlint` + `vitest`(4/4) + `vite build` 통과. 실제 CJ 데이터로 층 폴백이 8곳을 실제로 반환하는지, 제목 정규화가 "회의"→기본 제목/"AI 과제리뷰"→원본 유지로 동작하는지 실측 확인 후 진단 스크립트 삭제.
+  - 검증: 백엔드 `tsc` + `vitest run`(**117/117**, `normalizeReservationTitle` 테스트 4건 신규) 통과, 프론트 `tsc -b` + `oxlint` + `vitest`(4/4) + `vite build` 통과. 실제 데이터로 층 폴백이 8곳을 실제로 반환하는지, 제목 정규화가 "회의"→기본 제목/"AI 과제리뷰"→원본 유지로 동작하는지 실측 확인 후 진단 스크립트 삭제.
 
-  **[2026-08-16, 예약 변경 실패 원인 규명 — CJ `checkRoom`이 거짓으로 "가능"을 답한다]** 실사용 대화에서 "조금 전에 잡은 회의실 시간 09:00~10:00으로 변경해" → "시간 변경에 실패했어요"가 두 번 재현됨. 로그에는 `[tools/modifyReservation] SaveReserve Result≠1: {"Result":0,...,"Seq":6636212}`.
-  - **먼저 오펀 확인(읽기 전용)**: `bindMyReservation`으로 8/19 CJ 예약 현황을 조회하니 `nodata` — 실패 응답의 `Seq`는 실제로 생성된 예약이 아니라 "다음에 발급될 번호"를 그대로 돌려준 헛값이었다. 유령 예약은 남지 않았다.
+  **[2026-08-16, 예약 변경 실패 원인 규명 — `checkRoom`이 거짓으로 "가능"을 답한다]** 실사용 대화에서 "조금 전에 잡은 회의실 시간 09:00~10:00으로 변경해" → "시간 변경에 실패했어요"가 두 번 재현됨. 로그에는 `[tools/modifyReservation] SaveReserve Result≠1: {"Result":0,...,"Seq":6636212}`.
+  - **먼저 오펀 확인(읽기 전용)**: `bindMyReservation`으로 8/19 예약 현황을 조회하니 `nodata` — 실패 응답의 `Seq`는 실제로 생성된 예약이 아니라 "다음에 발급될 번호"를 그대로 돌려준 헛값이었다. 유령 예약은 남지 않았다.
   - **가설 1(틀림)**: "워밍업 상태가 첫 SaveReserve에 소모돼 두 번째부터 실패". 새 세션에서 SaveReserve를 3연속 실행해보니 1번째만 실패, 2·3번째는 성공 — 순서 문제가 아니었다.
   - **진짜 원인**: 실패한 건 하필 **14F-3 09:00~10:00**(사용자가 바꾸려던 바로 그 슬롯)이었다. 같은 슬롯을 세 경로로 대조:
     - 우리 자체 가용성 판정(`findAvailableRooms`) → **불가**(그 시간 가능 7곳 목록에 14F-3 없음) ✅ 정확
-    - CJ `checkRoom` → **`Result:"1"`(가능)** ❌ 거짓
+    - `checkRoom` → **`Result:"1"`(가능)** ❌ 거짓
     - 실제 `SaveReserve` → `Result:0` 실패
     - 교차검증: 같은 09:00~10:00에 **다른 회의실**(14F-4, 12F-1)은 성공, **같은 14F-3의 다른 시간**(10:00~11:00)도 성공 → 시간대/세션 문제가 아니라 **그 슬롯이 실제로 점유돼 있는데 checkRoom만 거짓 응답**한 것이 확정됨.
-  - **왜 위험했나**: `modifyReservation`은 "원본 `delReserve` → 새로 `saveReserve`" 전략이라, checkRoom의 거짓 "가능"을 믿고 **원본을 먼저 지운 뒤** 재생성에 실패했다. 보상 로직이 원본을 복구해줘서 데이터 손실은 없었지만(그래서 사용자에게도 "원래 예약은 유지 중"이라고 안내됨), 매번 불필요한 삭제→복구 왕복이 실제 CJ에 일어나고 있었다.
+  - **왜 위험했나**: `modifyReservation`은 "원본 `delReserve` → 새로 `saveReserve`" 전략이라, checkRoom의 거짓 "가능"을 믿고 **원본을 먼저 지운 뒤** 재생성에 실패했다. 보상 로직이 원본을 복구해줘서 데이터 손실은 없었지만(그래서 사용자에게도 "원래 예약은 유지 중"이라고 안내됨), 매번 불필요한 삭제→복구 왕복이 실제 여기에 일어나고 있었다.
   - **수정**: `assertTargetSlotIsFree()` 신설 — `delReserve` **전에** 우리 자체 가용성 판정으로 대상 슬롯이 실제 비어 있는지 확인하고, 아니면 원본을 건드리지 않은 채 구체적 사유(`"14F-3은 2026-08-19 09:00~10:00에 이미 다른 예약이 있어요"`)로 거절한다. 단 **같은 회의실에서 시간만 늘리는 등 원래 예약 자신과 겹치는 변경**은 이 검사에서 제외한다(자기 자신을 충돌로 오판하지 않도록).
   - 프롬프트: 변경 실패 시 **도구가 준 구체적 사유를 그대로 전하고 이어서 `check_availability`로 대안을 바로 제시**하도록 §3-6에 추가 — 실사용에서 "왜 실패했어?"에 "정확한 원인은 확인되지 않았어요"라고 답한 게 문제였는데, 사유는 이미 도구 결과에 들어있었다.
   - **라이브 E2E 검증**: 14F-4 15:00~16:00 실제 생성 → 이미 찬 14F-3 09:00~10:00으로 변경 시도 → `ReservationConflictError`로 **차단됨 + 구체적 사유 출력**, **원본은 `confirmed` 상태 그대로 유지**(삭제 왕복 자체가 일어나지 않음) → 정리 취소까지 확인. 진단 스크립트는 전부 삭제.
   - 함께 확인한 것: 같은 대화의 "선호 회의실 삭제" 응답이 의심스러워 DB를 직접 조회했으나 실제 상태는 **3F-6, 3F-10**으로 정확했다 — 이미 지워진 걸 다시 "삭제했어요"라고 표현한 문구 문제일 뿐 데이터 오류는 아니었다.
-  - 도메인 정의서 2번 "예약 변경" 4단계에 **"CJ `checkRoom`을 신뢰하면 안 된다"** 는 확인 사실을 근거와 함께 명시.
+  - 도메인 정의서 2번 "예약 변경" 4단계에 **"`checkRoom`을 신뢰하면 안 된다"** 는 확인 사실을 근거와 함께 명시.
 
   **[2026-08-14, 채팅 화면 셸 리디자인 — design_recom에 새 파일 추가됨]** 카드 리디자인 작업 도중 사용자가 `frontend/design_recom/chat-screen.dc.html`(+ `README.md` 갱신, 9·10번 항목)을 새로 추가하고 "누락된 디자인을 수정하라"고 요청 — 이전까지는 메시지 **카드**만 리디자인했고 채팅 화면 **셸**(헤더/메시지 그룹핑/컴포저/우측 패널/모바일) 자체는 손대지 않았던 게 진짜 "누락"이었다. 이번에 셸을 함께 정리함:
   - **메시지 그룹핑(가장 큰 구조 변경)**: 같은 발화자의 연속 메시지를 하나의 그룹으로 묶어(`groupMessages()`) 아바타/시간을 그룹당 한 번만 표시하도록 `ChatMessageRow`를 `ChatMessageGroup`으로 재구성. 사용자 메시지는 디자인 원칙대로 아바타를 아예 안 씀(우측 정렬+검은 배경으로 이미 구분됨).
@@ -499,15 +499,15 @@ flowchart LR
   - 색상은 원안의 hex 값 대신 프로젝트 기존 토큰으로 치환(`README-auth.md` Fidelity 절 지침대로) — 페이지 배경 `--canvas`, 폼 카드 `--surface-1`+`--hairline`, 순번 배지 원 `--surface-2`/`--ink-muted`, 선호 회의실 칩 순서 배지만 `--fin-orange`(브랜드 오렌지, 원안의 `#E8552A`와 대응).
   - 검증: `tsc --noEmit`, `npm run build`, `npm run lint`(oxlint) 모두 통과. Playwright 브라우저 도구가 이 세션 내내 끊긴 상태라 실제 화면은 확인 못 함 — 사용자에게 브라우저 확인 요청.
 
-  **[2026-08-14, 실제 CJ 계정이 아닌 ID로도 가입/로그인이 되는 문제]** 사용자가 실제 CJ에 존재하지 않는 `test001` 계정으로 가입 신청 → (자동/수동) 승인 → 로그인까지 전부 성공하는 걸 발견. 원인을 확인해보니 **버그가 아니라 원래 설계대로 동작한 것**이었음:
-  - `registrationService.ts`의 `registerAccount`는 `corporate_password`를 CJ에 실제로 로그인 시도해서 검증하지 않고 암호화해서 저장만 함(가입 API가 매 요청마다 CJ에 실제 로그인을 시도하면 승인 전에도 CJ 계정을 반복 두드리게 되어 위험 — 의도적으로 뺀 부분).
-  - 로그인(`POST /auth/login`)은 `app_password`(이 앱 전용, CJ와 별개 비밀번호)만 검증하므로 CJ 계정이 가짜여도 앱 로그인 자체는 항상 성공함. CJ 세션 예열(`warmCjSessionOnLogin`)은 실패해도 로그인을 막지 않도록 이미 의도적으로 설계되어 있었음(20260814 세션 캐싱 도입 시 결정 — 예열은 최적화일 뿐 필수 조건 아님).
-  - 즉 "가짜 CJ 계정으로도 앱에 들어와지는 것" 자체는 의도된 동작이고, 실제 CJ 로그인 검증을 가입/승인 시점에 넣는 건 이번엔 하지 않기로 함(과설계 방지 — 사용자 결정). 대신 **경고 문구만** 추가: `RegisterPage.tsx` 섹션1("사내 계정") 상단에 "실제로 존재하는 CJ 사내 계정인지는 별도로 확인하지 않아요. 잘못된 ID·비밀번호를 입력하면 승인되어도 회의실 예약 기능이 동작하지 않습니다." 경고 배너 추가(`--semantic-warn`/`--semantic-warn-soft` 토큰, `Badge tone="warn"`과 같은 톤 재사용).
+  **[2026-08-14, 실제 사내 계정이 아닌 ID로도 가입/로그인이 되는 문제]** 사용자가 실제 여기에 존재하지 않는 `test001` 계정으로 가입 신청 → (자동/수동) 승인 → 로그인까지 전부 성공하는 걸 발견. 원인을 확인해보니 **버그가 아니라 원래 설계대로 동작한 것**이었음:
+  - `registrationService.ts`의 `registerAccount`는 `corporate_password`를 여기에 실제로 로그인 시도해서 검증하지 않고 암호화해서 저장만 함(가입 API가 매 요청마다 여기에 실제 로그인을 시도하면 승인 전에도 사내 계정을 반복 두드리게 되어 위험 — 의도적으로 뺀 부분).
+  - 로그인(`POST /auth/login`)은 `app_password`(이 앱 전용, 사내 계정과 별개 비밀번호)만 검증하므로 사내 계정이 가짜여도 앱 로그인 자체는 항상 성공함. 세션 예열(`warmCjSessionOnLogin`)은 실패해도 로그인을 막지 않도록 이미 의도적으로 설계되어 있었음(20260814 세션 캐싱 도입 시 결정 — 예열은 최적화일 뿐 필수 조건 아님).
+  - 즉 "가짜 사내 계정으로도 앱에 들어와지는 것" 자체는 의도된 동작이고, 실제 로그인 검증을 가입/승인 시점에 넣는 건 이번엔 하지 않기로 함(과설계 방지 — 사용자 결정). 대신 **경고 문구만** 추가: `RegisterPage.tsx` 섹션1("사내 계정") 상단에 "실제로 존재하는 사내 계정인지는 별도로 확인하지 않아요. 잘못된 ID·비밀번호를 입력하면 승인되어도 회의실 예약 기능이 동작하지 않습니다." 경고 배너 추가(`--semantic-warn`/`--semantic-warn-soft` 토큰, `Badge tone="warn"`과 같은 톤 재사용).
   - 검증: `tsc --noEmit`/`npm run build`/`npm run lint` 통과.
 
-  **[2026-08-14, 곧바로 재수정 — 경고 문구만으론 부족, 로그인 자체를 막기로 결정]** 위 경고 문구를 추가한 직후, 사용자가 `test001`(가짜 CJ 계정)로 실제 로그인이 되고 챗봇 화면까지 들어가지는 걸 재확인하고 "로그인 과정에서 사실은 실패해야 하는거다"라고 명확히 요구함 — 경고만으론 부족하고 **가짜 CJ 계정은 앱 로그인 자체가 안 되게** 바꾸기로 결정.
-  - `auth.routes.ts`의 CJ 세션 예열 로직을 뒤집음: 기존엔 `warmCjSessionOnLogin`이 CJ 로그인 실패를 전부 삼키고 앱 로그인은 그대로 성공시켰는데(20260814 세션 캐싱 도입 시의 원래 결정), 이제 `requireCjSessionOnLogin`으로 이름을 바꾸고 **CJ 로그인이 실패하면 앱 로그인 자체를 `401 CJ_LOGIN_FAILED`로 거부**한다. 이유: 이 앱은 CJ 세션 없이는 예약 조회/생성 등 모든 기능이 안 되므로, "가짜 계정으로 앱에는 들어와지지만 아무것도 못 하는" 상태보다 "가짜 계정은 로그인부터 막힌다"가 사용자에게 훨씬 명확함. Admin 계정(jiil)도 예외 없이 동일하게 적용(실제 CJ 직원 계정이라 문제 없음, 특수 케이스를 늘리지 않는 게 목적).
-  - CJ 로그인 확인에 걸리는 시간(타임아웃 상한 45초)은 그대로 유지 — CJ가 느릴 뿐 실제로 성공하는 계정까지 잘못 막지 않기 위함.
+  **[2026-08-14, 곧바로 재수정 — 경고 문구만으론 부족, 로그인 자체를 막기로 결정]** 위 경고 문구를 추가한 직후, 사용자가 `test001`(가짜 사내 계정)로 실제 로그인이 되고 챗봇 화면까지 들어가지는 걸 재확인하고 "로그인 과정에서 사실은 실패해야 하는거다"라고 명확히 요구함 — 경고만으론 부족하고 **가짜 사내 계정은 앱 로그인 자체가 안 되게** 바꾸기로 결정.
+  - `auth.routes.ts`의 세션 예열 로직을 뒤집음: 기존엔 `warmCjSessionOnLogin`이 로그인 실패를 전부 삼키고 앱 로그인은 그대로 성공시켰는데(20260814 세션 캐싱 도입 시의 원래 결정), 이제 `requireCjSessionOnLogin`으로 이름을 바꾸고 **로그인이 실패하면 앱 로그인 자체를 `401 CJ_LOGIN_FAILED`로 거부**한다. 이유: 이 앱은 세션 없이는 예약 조회/생성 등 모든 기능이 안 되므로, "가짜 계정으로 앱에는 들어와지지만 아무것도 못 하는" 상태보다 "가짜 계정은 로그인부터 막힌다"가 사용자에게 훨씬 명확함. Admin 계정(jiil)도 예외 없이 동일하게 적용(실제 직원 계정이라 문제 없음, 특수 케이스를 늘리지 않는 게 목적).
+  - 로그인 확인에 걸리는 시간(타임아웃 상한 45초)은 그대로 유지 — 이 시스템이 느릴 뿐 실제로 성공하는 계정까지 잘못 막지 않기 위함.
   - `frontend/src/pages/login/LoginPage.tsx`의 `getStatusMessage`에 `CJ_LOGIN_FAILED` 케이스 명시적으로 추가(백엔드 메시지 그대로 노출 — 기존 default 분기와 동작은 같지만 이 파일의 "코드별로 명확히 구분" 관례를 따름).
   - `docs/swagger.json`의 `/auth/login` 설명·401 응답 설명을 이 새 동작에 맞게 정정.
   - 검증: 백엔드 `tsc --noEmit` + `vitest run`(94/94), 프론트 `tsc --noEmit` + `npm run lint` 모두 통과. `test001`로 실제 재로그인 시도해서 401이 뜨는지는 Playwright가 끊긴 상태라 실측 못 함 — 사용자가 브라우저에서 직접 재확인 필요(기존 `test001` row는 사용자 지시대로 그대로 둠).
@@ -535,34 +535,34 @@ flowchart LR
   1. `frontend/vite.config.ts`의 dev 프록시가 `/admin`,`/chat` 등 프론트 페이지 라우트와 이름이 겹치는 백엔드 API 경로를 무조건 백엔드로 넘겨서, `/admin`에 직접 접속(새로고침 등)하면 SPA 대신 백엔드의 raw JSON 401 응답이 그대로 노출되던 버그(실측 확인). Vite 공식 문서의 `bypass` 패턴으로 수정: `Accept` 헤더에 `html`이 포함된 요청(브라우저 최상위 내비게이션)은 프록시를 건너뛰고 `index.html`을 서빙해 SPA 라우터가 처리하게 함.
   2. 공용 `Button` 컴포넌트에 `white-space: nowrap`이 없어, 좁은 flex 컨테이너(Admin 헤더의 "로그아웃" 버튼, 390px)에서 버튼 라벨이 글자 단위로 세로 줄바꿈되던 버그(실측 확인, 스크린샷으로 재현·수정 확인). `components/Button.css`에 `white-space: nowrap; flex-shrink: 0;` 추가 — 프로젝트 전역 버튼에 적용되는 근본 수정.
 
-  **[2026-08-14, 사내망 재연결 후 회귀 테스트]** 백엔드 `npx tsc --noEmit`+`vitest`(93개), 프론트 `npm run build`+`vitest`(4개) 전부 재통과 확인. CJ 실시간 연동(BE-4/BE-6/BE-7)도 `findAvailableRooms` 라이브 호출로 재검증(14개 회의실 정상 조회) — 이번 FE-4 작업이 기존 CJ 연동에 영향 없음을 확인.
+  **[2026-08-14, 사내망 재연결 후 회귀 테스트]** 백엔드 `npx tsc --noEmit`+`vitest`(93개), 프론트 `npm run build`+`vitest`(4개) 전부 재통과 확인. 실시간 연동(BE-4/BE-6/BE-7)도 `findAvailableRooms` 라이브 호출로 재검증(14개 회의실 정상 조회) — 이번 FE-4 작업이 기존 연동에 영향 없음을 확인.
 
 ### FE-5. 웹 챗봇 UI
 
 - **작업 내용**: `7-wireframes.md` 4번 / `docs/design/chatbot-shell.html` 기준. 메시지 스레드, 단일/다중 회의실 제안 카드, 빠른명령 칩, 입력창, 오른쪽 사이드바(오늘예약/선호회의실/규칙안내). BE-8 API와 실제 연동.
 - **선행 Task**: FE-1, BE-8
 - **완료 조건**:
-  - [x] 사용자 메시지 전송 → 백엔드 응답 → 메시지 스레드에 렌더링되는 전체 흐름이 실제로 동작함 — 실제 브라우저로 로그인(jiil) → `/chat` 진입 → "내일 오후 2시부터 1시간 3층 회의실 잡아줘" 전송 → 실제 OpenAI 호출 + 실제 CJ `getDayPilotConfReserveList` 조회 결과가 회의실 그리드로 렌더링됨을 실측 확인
-  - [x] 회의실 제안 카드의 [확정]/[다른 곳 보기] 버튼이 실제 예약 확정/재조회 API를 호출함 — **[BE-8 계약 소폭 확장, 20260814]** 기존 `POST /chat/messages` 응답(`reply`, `elapsed_ms`)만으로는 카드에 바인딩할 구조화된 데이터가 없어(설계 당시엔 텍스트 전용으로 충분하다고 판단했었음), `reply` 텍스트를 정규식으로 파싱하는 방식과 백엔드가 구조화 데이터를 함께 내려주는 방식 중 사용자에게 AskUserQuestion으로 확인 후 후자로 결정. `orchestrator.ts`의 `handleUserMessage`가 이번 턴의 **마지막 도구 호출 결과**를 `proposal: { tool, data }`로 함께 반환하도록 확장(`propose_create_reservation`/`propose_split_reservation`은 `room`/`date`/`startTime`/`endTime`(분할은 `segments`)도 별도 필드로 추가). 프론트는 `proposal.tool` 값으로 카드 종류를 판단(`check_availability`→회의실 선택 그리드, `propose_*`→확정 대기 카드, `confirm_*`→"● 예약 확정" 라벨). 실제 브라우저로 그리드 클릭 → 단일 카드 제안 → [확정] 클릭까지 전체 흐름이 실제 `confirm_create_reservation`을 호출함을 실측 확인(성공/실패 모두 — 아래 CJ SaveReserve 500 발견 참고). `docs/swagger.json`의 `ChatMessageRequest`/`ChatMessageResponse`도 실제 구현(요청은 `message`만 사용)에 맞게 함께 정정
+  - [x] 사용자 메시지 전송 → 백엔드 응답 → 메시지 스레드에 렌더링되는 전체 흐름이 실제로 동작함 — 실제 브라우저로 로그인(jiil) → `/chat` 진입 → "내일 오후 2시부터 1시간 3층 회의실 잡아줘" 전송 → 실제 OpenAI 호출 + 실제 `getDayPilotConfReserveList` 조회 결과가 회의실 그리드로 렌더링됨을 실측 확인
+  - [x] 회의실 제안 카드의 [확정]/[다른 곳 보기] 버튼이 실제 예약 확정/재조회 API를 호출함 — **[BE-8 계약 소폭 확장, 20260814]** 기존 `POST /chat/messages` 응답(`reply`, `elapsed_ms`)만으로는 카드에 바인딩할 구조화된 데이터가 없어(설계 당시엔 텍스트 전용으로 충분하다고 판단했었음), `reply` 텍스트를 정규식으로 파싱하는 방식과 백엔드가 구조화 데이터를 함께 내려주는 방식 중 사용자에게 AskUserQuestion으로 확인 후 후자로 결정. `orchestrator.ts`의 `handleUserMessage`가 이번 턴의 **마지막 도구 호출 결과**를 `proposal: { tool, data }`로 함께 반환하도록 확장(`propose_create_reservation`/`propose_split_reservation`은 `room`/`date`/`startTime`/`endTime`(분할은 `segments`)도 별도 필드로 추가). 프론트는 `proposal.tool` 값으로 카드 종류를 판단(`check_availability`→회의실 선택 그리드, `propose_*`→확정 대기 카드, `confirm_*`→"● 예약 확정" 라벨). 실제 브라우저로 그리드 클릭 → 단일 카드 제안 → [확정] 클릭까지 전체 흐름이 실제 `confirm_create_reservation`을 호출함을 실측 확인(성공/실패 모두 — 아래 SaveReserve 500 발견 참고). `docs/swagger.json`의 `ChatMessageRequest`/`ChatMessageResponse`도 실제 구현(요청은 `message`만 사용)에 맞게 함께 정정
   - [x] 콜드스타트로 응답이 지연되는 구간에 "확인 중입니다" 처리중 표시가 나타남 — 전송 직후 스피너+"확인 중입니다…" 에이전트 버블이 뜨고 빠른명령칩/입력창/전송버튼이 모두 비활성화됨을 실측 확인(응답까지 실제로 10~90초 정도 걸리는 구간에서 계속 표시됨)
-  - [x] 빠른명령 칩(내 예약 조회/자주 쓰는 회의실/예약 취소)이 각각 대응하는 요청을 전송함 — 클릭 시 고정 문구("오늘 내 예약을 보여줘" 등)를 `POST /chat/messages`로 전송하는 코드 확인. "오늘 내 예약 조회"에 대응하는 `get_my_reservations` 실제 호출은 별도로 "내일(2026-08-15) 내 예약이 있는지 확인해줘" 메시지로 실측(실제 CJ `bindMyReservation` 경유 확인)
+  - [x] 빠른명령 칩(내 예약 조회/자주 쓰는 회의실/예약 취소)이 각각 대응하는 요청을 전송함 — 클릭 시 고정 문구("오늘 내 예약을 보여줘" 등)를 `POST /chat/messages`로 전송하는 코드 확인. "오늘 내 예약 조회"에 대응하는 `get_my_reservations` 실제 호출은 별도로 "내일(2026-08-15) 내 예약이 있는지 확인해줘" 메시지로 실측(실제 `bindMyReservation` 경유 확인)
   - [x] 860px 이하에서 사이드바가 숨겨지고 채팅 컬럼이 전체폭으로 전환됨 — `@media (max-width: 860px)`로 `.chat-rail { display: none }` + `.chat-body`가 1열로 전환되는 코드는 FE-2~FE-4와 동일한, 이미 여러 차례 실측 검증된 패턴을 그대로 재사용. 이번엔 Playwright 세션이 중간에 끊겨 390px 스크린샷으로 재확인은 못 했고, 빌드된 CSS에 미디어쿼리가 그대로 살아있음만 확인(FE-6에서 최종 반응형 QA 때 다시 스크린샷으로 재검증 예정)
 
-  **[사이드바 데이터용 소폭 백엔드 추가, 20260814]** 사이드바 "오늘 예약"/"선호 회의실"을 목업 문구로 고정하면 Hallmark 원칙(실제 데이터 없이 가짜 콘텐츠 노출 금지)에 어긋나므로, 읽기 전용 엔드포인트 2개를 새로 추가: `GET /me/preferred-rooms`(우선순위 순 `Room[]`), `GET /me/reservations/today`(`tools/myReservations.tool.ts`의 `getMyReservations`를 오늘 하루로 고정 재사용). 예약 생성/변경/취소로 이어지는 write 경로는 절대 추가하지 않음 — BE-7의 propose→confirm 2단계 확인 게이트를 우회하는 별도 API가 생기는 걸 막기 위함. jiil 계정으로 실제 CJ 연동까지 실측(빈 배열 정상 응답, 약 12초 소요).
+  **[사이드바 데이터용 소폭 백엔드 추가, 20260814]** 사이드바 "오늘 예약"/"선호 회의실"을 목업 문구로 고정하면 Hallmark 원칙(실제 데이터 없이 가짜 콘텐츠 노출 금지)에 어긋나므로, 읽기 전용 엔드포인트 2개를 새로 추가: `GET /me/preferred-rooms`(우선순위 순 `Room[]`), `GET /me/reservations/today`(`tools/myReservations.tool.ts`의 `getMyReservations`를 오늘 하루로 고정 재사용). 예약 생성/변경/취소로 이어지는 write 경로는 절대 추가하지 않음 — BE-7의 propose→confirm 2단계 확인 게이트를 우회하는 별도 API가 생기는 걸 막기 위함. jiil 계정으로 실제 연동까지 실측(빈 배열 정상 응답, 약 12초 소요).
 
-  **[CJ 연동 실사용 검증 — 사용자 피드백("여전히 실제 예약은 안 된다")으로 재조사, 20260814, 부분 해결·핵심 미해결]**
+  **[연동 실사용 검증 — 사용자 피드백("여전히 실제 예약은 안 된다")으로 재조사, 20260814, 부분 해결·핵심 미해결]**
 
   1차 조사에서는 `SaveReserve`가 HTTP 500(제네릭 `"요청을 처리하는 동안 오류가 발생했습니다"`)으로 실패하는 것만 확인했고, `listArea`(DB-5)가 겪은 것과 같은 "JSON 대신 form-urlencoded를 기대함" 문제로 추정해 form-urlencoded로 바꿨더니 구체적인 "매개 변수가 없습니다: X" 오류로 바뀌면서 몰랐던 필수 파라미터 6개(`attendee_count`/`gubun`/`req_list`/`opt_list`/`is_send_alarm`/`admin_alias`/`admin_lang`)를 발견했다 — 여기까지는 유효한 진전이었지만, **"form-urlencoded가 정답"이라는 결론 자체는 틀렸다.**
 
-  사용자가 실제 채팅으로 재차 확정을 시도하다 여전히 실패하는 걸 겪어서, 이번엔 **CJ 실제 웹 UI(CJ 예약 서버의 `/NConf/conferenceRoom/reserve_main.aspx`)를 Playwright로 직접 열어 진짜 예약 다이얼로그를 재현**했다(로그인 → 빈 슬롯 더블클릭 → 팝업 iframe(`reserve_insmod.aspx`) 진입). 이 페이지가 로드하는 `/NCONF/ConferenceRoom/script/reserve_insmod.js`를 그대로 받아서(`$('#btnConfirm').click(...)` 핸들러 원본) SaveReserve 호출부를 정확히 확인했다:
+  사용자가 실제 채팅으로 재차 확정을 시도하다 여전히 실패하는 걸 겪어서, 이번엔 **실제 웹 UI(예약 서버의 `/NConf/conferenceRoom/reserve_main.aspx`)를 Playwright로 직접 열어 진짜 예약 다이얼로그를 재현**했다(로그인 → 빈 슬롯 더블클릭 → 팝업 iframe(`reserve_insmod.aspx`) 진입). 이 페이지가 로드하는 `/NCONF/ConferenceRoom/script/reserve_insmod.js`를 그대로 받아서(`$('#btnConfirm').click(...)` 핸들러 원본) SaveReserve 호출부를 정확히 확인했다:
 
-  - **실제 CJ 프론트는 JSON으로 호출한다** (`contentType: "application/json; charset=utf-8"`) — form-urlencoded는 완전히 잘못된 가설이었다. 원래 500이 난 진짜 이유는 인코딩이 아니라 **애초에 필수 필드 6개를 아예 안 보내고 있었기 때문**(ASP.NET이 JSON 모델 바인딩 실패를 제네릭 500으로만 알려줌 — form-urlencoded로 바꾸자 필드별 구체 오류가 나온 건 인코딩이 아니라 "클래식 Request.Form 파싱 방식이 필드 단위로 오류를 알려주는 방식"으로 바뀐 부수효과였다).
+  - **실제 프론트는 JSON으로 호출한다** (`contentType: "application/json; charset=utf-8"`) — form-urlencoded는 완전히 잘못된 가설이었다. 원래 500이 난 진짜 이유는 인코딩이 아니라 **애초에 필수 필드 6개를 아예 안 보내고 있었기 때문**(ASP.NET이 JSON 모델 바인딩 실패를 제네릭 500으로만 알려줌 — form-urlencoded로 바꾸자 필드별 구체 오류가 나온 건 인코딩이 아니라 "클래식 Request.Form 파싱 방식이 필드 단위로 오류를 알려주는 방식"으로 바뀐 부수효과였다).
   - **필드 6개의 정확한 타입/기본값**도 이 소스에서 확인됨(전부 이전 추측과 다름): `attendee_count`는 참석자 수가 아니라 **항상 빈 문자열**(UI 자체가 안 씀), `gubun`은 "선호 회의실 카테고리"가 아니라 **회의실의 승인 필요 여부**(`REQUIRED_APPROVAL`, 0=불필요/1=필요 — 일반 회의실은 0 고정), `is_send_mail`/`is_send_alarm`은 boolean이 아니라 **문자열**("0"/"1", "True"/"False"), `req_list`/`opt_list`는 참석자/참조자 alias 목록(없으면 빈 문자열), `admin_alias`/`admin_lang`은 신청자 본인이 아니라 **승인자 목록**(gubun=0이면 빈 문자열). `client.ts`의 `SaveReserveParams`를 이 타입/값에 맞게 전부 다시 씀.
   - **`.d` 응답이 "JSON 문자열을 담은 JSON 문자열"(이중 인코딩)** 이라 실제 웹 UI도 `$.parseJSON(data.d)`로 한 번 더 파싱한다 — 우리 `callCjApi`는 `.d`를 그대로 반환만 했어서 이 값이 항상 원시 문자열로 새어나가고 있었다(`getDayPilotConfReserveList`처럼 반환 타입이 원래 객체인 엔드포인트는 이 문제가 없어서 지금까지 안 드러남). `.d`가 문자열이면 한 번 더 `JSON.parse`하도록 수정.
   - **더 중요한 발견 — `checkRoom`/`checkStraightRoom`/`checkDayCountLimit`의 Result 판정이 반대로 구현되어 있었다.** 같은 JS 소스의 `chkRoom()`/`chkStraight()`/`chkDayCountLimit()` 함수는 `if (data.Result != "0") { 차단; }`으로 판정한다 — 즉 **`Result:"0"`이 "문제없음(통과)"** 이고 그 외 값이 "문제있음(차단)"이다(SaveReserve 자신의 `Result:"1"=성공` 규약과는 정반대라 헷갈리기 쉬움). `tools/reservation.tool.ts`의 `isCjCheckAffirmative`는 원래 `Result:"1"`을 통과로 잘못 해석하고 있었는데, 그 이전에는 `.d` 이중디코딩 버그 때문에 이 함수가 `Result` 필드 자체를 못 읽고 **사실상 항상 true(통과)를 반환**하고 있었다 — 즉 **이 세 검증은 지금까지 한 번도 실제로 뭔가를 걸러낸 적이 없었다.** 두 버그를 함께 고치고 나서 실사용 테스트로 checkStraightRoom이 실제로 특정 슬롯을 정확히 막는 것을 확인했다(3F-1, 2026-08-19 종일 — 실측으로 확인한 진짜 제약이었고 우리 테스트로 생긴 유령 예약이 아님을 `bindMyReservation`/그리드 재조회로 교차 확인함).
-  - **아직 미해결**: 위 모든 걸 고치고 실제 빈 슬롯(3F-2, 2026-08-19 07:00~07:30)으로 다시 시도해도 `SaveReserve`는 여전히 `{"Result":0,"MailResult":0,"Seq":null}`(실패)을 반환한다. 필드명·타입·일반적인 기본값은 실제 클라이언트 소스와 대조까지 마쳤는데도 안 되는 걸 보면, 남은 원인은 정적 분석으로는 못 찾는 **런타임에서만 채워지는 값**일 가능성이 높다(예: 회의실별 메타데이터를 가져오는 초기화 AJAX 호출 하나를 우리가 아예 안 하고 있어서, 서버가 세션에 없는 상태값을 참조해 조용히 거부하는 경우 등). 사용자 실사용 테스트를 안전하게 유지하기 위해(실제 회사 CJ 계정에 대한 반복 쓰기 시도 최소화) 이번 세션은 여기서 멈춘다.
-  - **다음 시도 우선순위**: (a) 이번에 확보한 실제 CJ 웹 UI(Playwright로 재현 가능, `reserve_main.aspx` → 빈 슬롯 더블클릭 → iframe `reserve_insmod.aspx`)에서 브라우저 네트워크 탭 대신 Playwright의 `page.on('request')`로 **실제 성공하는 저장 요청**을 캡처해서 우리 페이로드와 필드 단위로 diff — 회의실 메타데이터 초기화 호출(`getReservationInfo()`가 부르는 엔드포인트)도 같이 캡처해 우리가 빠뜨린 초기화 단계가 있는지 확인. (b) 사내 IT/인프라팀에 API 스펙 문의.
-  - **부수적으로 확인/정리한 것**: (1) 이번 조사 전체에서 실제 CJ 시스템에 유령 예약이 하나도 생기지 않았음을 여러 차례 교차 확인(`bindMyReservation` 전체 재조회 0건, 그리드 재조회로 슬롯이 계속 비어있음 확인). (2) `backend/scripts/tmp-*.ts` 임시 진단 스크립트는 모두 삭제함. (3) 실제 CJ UI의 HTML/JS 원본은 `scratchpad/reserve_insmod.js` 등에 남겨뒀다(리포에는 포함 안 됨, 다음 세션 참고용).
+  - **아직 미해결**: 위 모든 걸 고치고 실제 빈 슬롯(3F-2, 2026-08-19 07:00~07:30)으로 다시 시도해도 `SaveReserve`는 여전히 `{"Result":0,"MailResult":0,"Seq":null}`(실패)을 반환한다. 필드명·타입·일반적인 기본값은 실제 클라이언트 소스와 대조까지 마쳤는데도 안 되는 걸 보면, 남은 원인은 정적 분석으로는 못 찾는 **런타임에서만 채워지는 값**일 가능성이 높다(예: 회의실별 메타데이터를 가져오는 초기화 AJAX 호출 하나를 우리가 아예 안 하고 있어서, 서버가 세션에 없는 상태값을 참조해 조용히 거부하는 경우 등). 사용자 실사용 테스트를 안전하게 유지하기 위해(실제 회사 사내 계정에 대한 반복 쓰기 시도 최소화) 이번 세션은 여기서 멈춘다.
+  - **다음 시도 우선순위**: (a) 이번에 확보한 실제 웹 UI(Playwright로 재현 가능, `reserve_main.aspx` → 빈 슬롯 더블클릭 → iframe `reserve_insmod.aspx`)에서 브라우저 네트워크 탭 대신 Playwright의 `page.on('request')`로 **실제 성공하는 저장 요청**을 캡처해서 우리 페이로드와 필드 단위로 diff — 회의실 메타데이터 초기화 호출(`getReservationInfo()`가 부르는 엔드포인트)도 같이 캡처해 우리가 빠뜨린 초기화 단계가 있는지 확인. (b) 사내 IT/인프라팀에 API 스펙 문의.
+  - **부수적으로 확인/정리한 것**: (1) 이번 조사 전체에서 실제 예약 시스템에 유령 예약이 하나도 생기지 않았음을 여러 차례 교차 확인(`bindMyReservation` 전체 재조회 0건, 그리드 재조회로 슬롯이 계속 비어있음 확인). (2) `backend/scripts/tmp-*.ts` 임시 진단 스크립트는 모두 삭제함. (3) 실제 UI의 HTML/JS 원본은 `scratchpad/reserve_insmod.js` 등에 남겨뒀다(리포에는 포함 안 됨, 다음 세션 참고용).
 
 ### FE-6. 반응형 전체 QA 및 접근성 점검
 

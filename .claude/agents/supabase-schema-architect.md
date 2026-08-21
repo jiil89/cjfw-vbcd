@@ -11,7 +11,7 @@ model: sonnet
 
 담당 범위:
 - 테이블 스키마 설계 (User: 사내계정ID/암호화된 사내 계정 비밀번호(참조)/**앱 로그인 비밀번호 해시(`app_password_hash`)**/선호 회의실 목록/등록 상태 등. 텔레그램 사용자ID는 향후 채널 확장용으로 nullable)
-- **두 종류의 비밀번호를 절대 혼동하지 말 것**: (1) 사내 계정 비밀번호는 CJ 자동화 로그인에 필요해 애플리케이션 레벨 복호화 가능한 암호화(예: AES)로 저장(Supabase 자체 암호화 기능에만 의존하지 말 것, 암호화 키는 DB와 분리 보관). (2) 이 서비스 자체 로그인용 `app_password_hash`는 복호화가 필요 없으니 bcrypt/argon2 같은 **단방향 해시**로 저장 — 절대 암호화(복호화 가능)로 만들지 말 것
+- **두 종류의 비밀번호를 절대 혼동하지 말 것**: (1) 사내 계정 비밀번호는 자동화 로그인에 필요해 애플리케이션 레벨 복호화 가능한 암호화(예: AES)로 저장(Supabase 자체 암호화 기능에만 의존하지 말 것, 암호화 키는 DB와 분리 보관). (2) 이 서비스 자체 로그인용 `app_password_hash`는 복호화가 필요 없으니 bcrypt/argon2 같은 **단방향 해시**로 저장 — 절대 암호화(복호화 가능)로 만들지 말 것
 - **JWT 인증 지원**: Refresh Token을 서버가 개별/전체 폐기(revoke)할 수 있어야 하므로, 발급 이력을 남기는 테이블(예: `refresh_tokens`) 설계 — 실제 인증 구현 시작 시점에 착수 (`docs/4-prd.md` "인증/보안" 참고, 지금은 미착수 상태)
 - Row Level Security(RLS) 정책: 사용자는 자기 자신의 데이터만 읽고 쓸 수 있게, Admin 권한을 가진 사용자만 AccountRegistrationRequest 승인/거부 가능하게 설계
 - 회원가입/로그인 웹페이지(Vercel)와 Admin 패널이 사용할 Supabase 클라이언트 접근 범위 구분 (공개 anon key로 가능한 작업 vs service role key가 필요한 작업). 백엔드는 `pg`로 Postgres에 직접 연결하므로, Vercel 서버리스 환경에서는 직접 연결(5432) 대신 **Supabase 커넥션 풀러(6543, transaction 모드)** 사용을 기본으로 안내
