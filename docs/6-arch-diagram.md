@@ -1,23 +1,32 @@
 # 기술 아키텍처 다이어그램
 
+CJ 사내 예약 시스템이 사내망 전용이라 사내망 밖에서 접근 불가하므로, 클라우드 배포(Vercel) 대신 **사내 전용 노트북 1대**가 프론트+백엔드를 한 프로세스로 같이 띄우고, DB만 Supabase(외부)를 쓴다. 외부(모바일 등)에서 접속할 때는 Cloudflare Tunnel로 그 노트북에 터널을 뚫는다. 상세 배경: `4-prd.md`, 배포 절차: `laptop-server-setup.md`.
+
 ```mermaid
 flowchart TD
-    User["사용자<br/>(임직원, 브라우저)"]
+    User["사용자<br/>(임직원, 브라우저·모바일)"]
     Admin["관리자<br/>(승인 담당자)"]
-    Frontend["프론트엔드<br/>React 19 + Zustand + TanStack Query<br/>(Vercel)"]
-    Backend["백엔드<br/>Node.js + Express<br/>(Vercel Functions)"]
-    DB[("Supabase DB<br/>(Postgres)")]
-    LLM["OpenAI API<br/>(LLM)"]
-    CJ["CJ 사내 예약 시스템<br/>(Playwright + @sparticuz/chromium)"]
-    Telegram["텔레그램 봇"]
+    Tunnel["Cloudflare Tunnel<br/>(사내망 밖 접속용)"]
 
-    User -->|"가입/로그인, 예약 요청"| Frontend
-    Admin -->|"승인/거부"| Frontend
-    Frontend -->|"API 요청"| Backend
+    subgraph Laptop["사내 전용 노트북 (같은 프로세스)"]
+        Frontend["프론트엔드<br/>React 19 + Zustand + TanStack Query<br/>(정적 파일, Express가 서빙)"]
+        Backend["백엔드<br/>Node.js + Express"]
+        Scheduler["Windows 작업 스케줄러<br/>(반복예약 job, 매일 00:01)"]
+    end
+
+    DB[("Supabase DB<br/>(Postgres, Session/Transaction Pooler)")]
+    LLM["OpenAI API<br/>(LLM)"]
+    CJ["CJ 사내 예약 시스템<br/>(사내망 전용<br/>Playwright + @sparticuz/chromium)"]
+
+    User -->|"사내망: 직접 / 사외망: 터널 경유"| Tunnel
+    Tunnel --> Frontend
+    User -.->|"사내망 내부에서는 직접 접속 가능"| Frontend
+    Admin -->|"승인/거부, 잠긴 계정 해제"| Frontend
+    Frontend -->|"API 요청 (같은 오리진)"| Backend
     Backend -->|"조회/저장"| DB
     Backend -->|"자연어 이해, 도구 호출"| LLM
     Backend -->|"로그인·예약 API 호출"| CJ
-    Telegram -.->|"향후"| Backend
+    Scheduler -->|"대상일 -7일 00:01 실행"| Backend
 ```
 
 ## 백엔드 레이어 구조
@@ -60,7 +69,7 @@ flowchart TD
         Queries["TanStack Query<br/>(서버 상태/통신)"]
         Http["httpClient<br/>(fetch 래퍼)"]
     end
-    BackendAPI["백엔드 API<br/>(Vercel Functions)"]
+    BackendAPI["백엔드 API<br/>(같은 노트북, 같은 오리진)"]
 
     Pages --> Components
     Pages --> Stores

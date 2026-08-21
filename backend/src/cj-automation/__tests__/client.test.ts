@@ -10,7 +10,7 @@ import { saveReserve } from "../client";
 import type { CjSession } from "../session";
 
 function fakeSession(): CjSession {
-  return { cookieHeader: "ASP.NET_SessionId=abc", baseUrl: "https://cjwappr.cj.net" };
+  return { cookieHeader: "ASP.NET_SessionId=abc", baseUrl: "https://reserve.example.internal" };
 }
 
 describe("saveReserve -- 비상 연락처(phone_num)는 항상 빈 문자열로 전송된다", () => {

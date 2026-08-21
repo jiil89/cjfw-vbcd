@@ -27,7 +27,7 @@
 - **백엔드 내부 의존 방향을 한 방향으로 고정한다: LLM 오케스트레이션 계층 → 도구(서비스) 계층 → CJ 자동화 계층.**
   - LLM 오케스트레이션 계층: 사용자 발화를 받아 도구 호출로 변환한다. 이 계층은 "도구 계층"의 함수만 호출할 수 있고, Playwright나 `pg`를 직접 알지 못한다.
   - 도구(서비스) 계층: `checkRoom → checkStraightRoom → checkDayCountLimit → SaveReserve` 같은 예약 도메인 규칙, 선호 회의실 우선순위, 분할 예약/보상 트랜잭션 로직이 여기 있다. 이 계층이 CJ 자동화 계층과 DB 리포지토리를 호출한다.
-  - CJ 자동화 계층: Playwright + `@sparticuz/chromium`으로 실제 `cjwappr.cj.net` ASMX 엔드포인트를 호출하는 가장 하위 계층. 이 계층은 예약 비즈니스 규칙(2시간 제한 등)을 모르고, 순수하게 "로그인하고 이 API를 호출한다"만 안다.
+  - CJ 자동화 계층: Playwright + `@sparticuz/chromium`으로 실제 `CJ 예약 서버` ASMX 엔드포인트를 호출하는 가장 하위 계층. 이 계층은 예약 비즈니스 규칙(2시간 제한 등)을 모르고, 순수하게 "로그인하고 이 API를 호출한다"만 안다.
   - 역방향 의존을 만들지 않는다 — 예를 들어 CJ 자동화 계층이 LLM을 호출하거나, 도구 계층이 프롬프트 문자열을 조립하는 일은 없어야 한다.
   - **[예외, 2026-08-14]** `routes/auth.routes.ts`는 로그인 시점에 CJ 세션을 미리 확보(예열)하려고 `cj-automation/session.ts`의 `getValidSession`을 도구 계층을 거치지 않고 직접 호출한다 — 이건 예약 도메인 로직이 아니라 "로그인 부수효과로 세션을 캐싱해두는" 횡단 관심사라 도구 계층에 억지로 끼워넣지 않기로 한 의도된 예외다(코드 주석에도 이유를 남김).
 - **프론트엔드는 CJ 자동화나 Supabase에 절대 직접 접근하지 않는다.** 4개 화면(회원가입, 로그인, Admin 패널, 웹 챗봇 UI) 모두 백엔드 API(Express, Vercel Functions)를 거쳐서만 데이터를 주고받는다. 예외는 `rooms` 테이블 등 RLS가 `anon`에게 공개 SELECT를 열어준 극히 일부(`supabase/migrations/20260813000900_rls.sql`의 `rooms_public_read_bookable`, `account_registration_requests_public_insert`)뿐이며, 이 두 경우도 지금 아키텍처가 이미 그렇게 정해놓은 것이지 임의로 넓히지 않는다.

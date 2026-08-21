@@ -12,7 +12,7 @@
 //
 // [2026-08-13 실사용 재검증] 모든 ASMX 엔드포인트는 baseUrl 바로 아래가 아니라
 // `NCONF/Common/WebService/` 경로 아래에 있다(예: 실제 URL은
-// `https://cjwappr.cj.net/NCONF/Common/WebService/WSConferenceReserve.asmx/getDayPilotConfReserveList`).
+// `baseUrl/NCONF/Common/WebService/WSConferenceReserve.asmx/getDayPilotConfReserveList`).
 // 이 접두사 없이 호출하면 500(런타임 오류 HTML)이 반환된다 — 이전 버전은 이 접두사가
 // 빠져 있었다. IIS 라우팅은 대소문자를 구분하지 않음을 확인했으므로(실측: 일부 엔드포인트는
 // 실제 페이지가 `Webservice`로 쓰지만 `WebService`로 호출해도 정상 동작), 이 파일에서는
