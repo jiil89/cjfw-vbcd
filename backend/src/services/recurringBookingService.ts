@@ -155,7 +155,10 @@ async function runOneRule(rule: RecurringRuleWithRooms, targetDate: string): Pro
         rule.userId,
         {
           title,
-          contents: rule.contents ?? "",
+          // [20260822] 프론트가 반복 규칙 등록 시 별도 "내용" 입력을 받지 않아 rule.contents는
+          // 항상 비어있거나(실사용 UI 경로) 임의의 값(수동 DB 조작 등)일 수 있다 — CJ 실제
+          // 화면에 회의명과 다른/의미 없는 내용이 노출되는 걸 막기 위해 항상 제목과 동일하게 보낸다.
+          contents: title,
           date: targetDate,
           startTime: rule.startTime,
           endTime: rule.endTime,

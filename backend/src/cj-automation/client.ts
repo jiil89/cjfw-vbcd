@@ -392,10 +392,12 @@ export async function saveReserve(
     title: params.title,
     contents: params.contents,
     attendee_count: params.attendeeCount,
-    // [20260816] 비상 연락처는 항상 비워서 저장한다 — 사용자가 챗봇에 뭐라고 답했든
-    // 무관하게 이 API 호출 지점 한 곳에서 고정한다(상위 계층 어디서도 값을 흘려보내지
-    // 않고 아예 필드를 받지 않게 만들었다. 이 파일 상단 SaveReserveParams 참고).
-    phone_num: "",
+    // [20260816] 비상 연락처는 사용자가 챗봇에 뭐라고 답했든 무관하게 이 API 호출 지점
+    // 한 곳에서 고정한다(상위 계층 어디서도 값을 흘려보내지 않고 아예 필드를 받지 않게
+    // 만들었다. 이 파일 상단 SaveReserveParams 참고).
+    // [20260822 수정] 빈 문자열로 두면 CJ 실제 화면에 "-****-undefined"로 깨져서 표시됨을
+    // 실사용으로 확인 — 고정 기본값으로 채운다.
+    phone_num: "010-2065-0528",
     gubun: params.gubun,
     req_list: params.reqList,
     opt_list: params.optList,
