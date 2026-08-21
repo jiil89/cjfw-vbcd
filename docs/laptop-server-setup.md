@@ -118,7 +118,20 @@ NODE_ENV=production
 PORT=3000
 # same-origin 구성이라 CORS가 실제로 쓰이진 않지만, 값이 없으면 부팅이 실패한다
 ALLOWED_ORIGINS=http://<서버IP>:3000
+
+# --- 사내 시스템 연동 (담당자에게 문의해서 채울 것 — 값 자체가 사내 정보라 이 문서엔 예시를 적지 않는다) ---
+CJ_PORTAL_BASE_URL=
+CJ_BASE_URL=
+CJ_SITE_AREA_CODE=
+CJ_SITE_SUB_AREA_CODE=
+CJ_FLOOR_AREA_CODES=
 ```
+
+> **[20260821 추가]** 위 5개(`CJ_PORTAL_BASE_URL`~`CJ_FLOOR_AREA_CODES`)는 원래 코드에
+> 하드코딩돼 있었는데, 저장소를 public으로 전환하면서 필수 환경변수로 옮겼다. 값이 없으면
+> `config/env.ts`가 부팅 시점에 바로 에러를 낸다. 실제 값은 이 개발 PC의
+> `backend/.env`(또는 `backend/.env.production.local`)에 있으니 그대로 복사할 것 —
+> `.env.example`에는 형식만 있고 실제 값은 없다(사내 시스템 정보라 문서에 적지 않는다).
 
 > **`CREDENTIAL_ENCRYPTION_KEY`는 절대 잃어버리면 안 된다.** 사용자들의 사내 계정
 > 비밀번호가 이 키로 암호화되어 DB에 저장된다. 키가 바뀌면 기존 사용자 전원이
