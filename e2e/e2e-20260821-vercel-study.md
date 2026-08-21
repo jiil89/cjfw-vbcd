@@ -19,6 +19,17 @@
 
 DB 조회로도 실제 반영 확인: `users` 테이블에 `jiil / active / is_admin=true` 행 생성됨.
 
+## 스크린샷 (실제 브라우저, Playwright로 조작)
+
+| 화면 | 스크린샷 |
+|---|---|
+| 로그인 화면 | ![로그인 화면](screenshots/e2e-01-login-page.png) |
+| 로그인 폼 입력 | ![로그인 폼 입력](screenshots/e2e-02-login-filled.png) |
+| 로그인 실패(`CJ_LOGIN_FAILED`) — 시나리오 7 | ![로그인 실패](screenshots/e2e-03-login-failed.png) |
+| 회원가입 폼 입력 | ![회원가입 폼 입력](screenshots/e2e-04-register-filled.png) |
+| 중복 가입 에러(409) — 시나리오 5 | ![중복 가입 에러](screenshots/e2e-05-register-duplicate-error.png) |
+| 신규 가입 승인대기 성공(201) — 시나리오 6 | ![승인대기 성공](screenshots/e2e-06-register-pending-success.png) |
+
 ## 2차 실행 (CJ 도메인/코드값을 하드코딩에서 필수 환경변수로 리팩터링한 뒤 회귀 확인)
 
 | # | 시나리오 | 결과 | 비고 |
