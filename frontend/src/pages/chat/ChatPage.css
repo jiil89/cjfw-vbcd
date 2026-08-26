@@ -47,12 +47,16 @@
 .chat-brand-site {
   color: var(--ink-subtle);
   font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chat-header-actions {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  flex: none;
 }
 
 .chat-header-desktop-actions {
@@ -74,6 +78,8 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--ink);
+  white-space: nowrap;
+  flex: none;
   cursor: pointer;
 }
 
@@ -88,6 +94,22 @@
 
   .chat-panel-trigger {
     display: inline-flex;
+  }
+
+  /* [20260826] 지원 사업장이 2곳(상암S시티·YTN 본사)으로 늘면서 이 라벨이 길어져
+     좁은 화면에서 두 줄로 줄바꿈되어 56px 고정 헤더가 깨지는 문제가 실측 확인됨
+     — 모바일에서는 브랜드 장식 정보라 과감히 숨긴다(Admin/로그아웃과 같은 원칙). */
+  .chat-brand-site {
+    display: none;
+  }
+}
+
+/* 320px 안팎(iPhone SE 등 가장 좁은 축)에서는 사업장 라벨을 숨겨도 "jiil" 같은
+   사용자 이름 + "내 정보" 버튼이 여전히 가로로 넘쳐 잘렸다(실측 확인) — 이 폭에서는
+   사용자 이름도 마저 숨기고 상태점+아바타만 남긴다. */
+@media (max-width: 360px) {
+  .chat-user-name {
+    display: none;
   }
 }
 
@@ -174,6 +196,11 @@
   display: grid;
   grid-template-rows: 1fr auto;
   min-height: 0;
+  /* 그리드 아이템의 기본 min-width는 auto라 내용(말풍선/입력창)의 자연폭보다 좁게
+     줄어들지 않는다 — 좁은 화면(실측 320px)에서 이 트랙이 뷰포트보다 넓어져 페이지
+     전체가 가로 스크롤되는 원인이었다. 0으로 명시해 부모(.chat-body)의 1fr 트랙
+     너비를 그대로 따르게 한다. */
+  min-width: 0;
   background: var(--surface-1);
   border-right: 1px solid var(--hairline);
 }
@@ -185,6 +212,9 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-md);
+  /* .chat-col의 grid row 아이템이라 기본 min-width:auto가 내용 최소폭만큼 이 트랙을
+     넓혀 버린다(실측 320px에서 확인) — 0으로 명시해 부모 트랙 너비를 그대로 따른다. */
+  min-width: 0;
 }
 
 /* chat-screen.dc.html "대화 컬럼": 넓은 화면에서 줄 길이가 과도하게 늘어지지 않게 가운데
@@ -757,6 +787,8 @@
   border-top: 1px solid var(--hairline);
   background: var(--canvas);
   padding: var(--space-sm) var(--space-lg) var(--space-md);
+  /* .chat-thread와 동일한 이유(그리드 아이템 기본 min-width:auto) — 0으로 명시. */
+  min-width: 0;
 }
 
 .chat-quick-chips {
