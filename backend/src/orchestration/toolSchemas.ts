@@ -63,7 +63,7 @@ export const toolSchemas: OpenAiToolDefinition[] = [
           startTime: TIME_PROP,
           endTime: TIME_PROP,
           minCapacity: { type: "integer", description: "조건 검색: 최소 수용 인원 (선택)" },
-          floorLabel: { type: "string", description: '조건 검색: 특정 층으로 한정 (예: "12F"). 지원 층: 3F,12F~16F' },
+          floorLabel: { type: "string", description: '조건 검색: 특정 층으로 한정 (예: "12F"). 지원 층: 상암S시티 3F,12F~16F / YTN 본사 17F' },
         },
         required: ["date", "startTime", "endTime"],
         additionalProperties: false,

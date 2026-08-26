@@ -6,10 +6,14 @@
 // 사용자의 암호화된 CJ WORLD 자격증명을 그 안에서 복호화해서 쓰고, 평문 비밀번호는
 // 이 서비스로 넘어오지 않는다(5-project-principle.md §2).
 //
-// 상암S시티(area_code=804) 3F/12F~16F 각 층을 getDayPilotConfReserveList로 스캔해
-// 실제 회의실 목록(room_code/room_name/capacity)을 얻고 rooms 테이블에 upsert한다.
-// db/repositories/roomRepository.ts의 upsertRoomIfChanged가 "값이 실제로 다를 때만
-// UPDATE"를 보장하므로, 이 서비스를 여러 번 실행해도 안전하다(멱등적 동작).
+// 지원 사업장(config.cjSites, 상암S시티/YTN 본사)을 순회하며 각 사업장의 층들을
+// getDayPilotConfReserveList로 스캔해 실제 회의실 목록(room_code/room_name/capacity)을
+// 얻고 rooms 테이블에 upsert한다. db/repositories/roomRepository.ts의
+// upsertRoomIfChanged가 "값이 실제로 다를 때만 UPDATE"를 보장하므로, 이 서비스를
+// 여러 번 실행해도 안전하다(멱등적 동작).
+// floor_label -> sub_area_code 매핑은 listArea(type=0/1) 네트워크 트레이스로 확인한
+// 값이다(seed-rooms.ts에서 승격). B1F/2F 등 실사용 회의실이 아닌 층은 도메인 정의서
+// 원칙에 따라 스캔 대상에서 제외한다. [20260821] 실제 코드값이라 config로 뺐다.
 
 import { config } from "../config/env";
 import { loginAndGetSession } from "../cj-automation/session";
@@ -17,14 +21,6 @@ import { getDayPilotConfReserveList } from "../cj-automation/client";
 import { upsertRoomIfChanged } from "../db/repositories/roomRepository";
 import { findUserById } from "../db/repositories/userRepository";
 import { toKstDate } from "../lib/kst";
-
-const SITE_NAME = "상암S시티";
-
-// floor_label -> sub_area_code (실측 확인, 도메인 정의서 9번 대상 범위: 3F, 12F~16F).
-// listArea(type=0/1) 네트워크 트레이스로 확인한 값 그대로다(seed-rooms.ts에서 승격).
-// B1F/2F는 도메인 정의서 원칙에 따라 스캔 대상에서 제외한다.
-// [20260821] 실제 코드값이라 config(CJ_SITE_AREA_CODE/CJ_FLOOR_AREA_CODES)로 뺐다.
-const TARGET_FLOORS: Record<string, string> = config.cjFloorAreaCodes;
 
 interface CjRoomResource {
   name: string;
@@ -54,6 +50,7 @@ function parseCapacity(html: string | undefined): number | null {
 }
 
 export interface RoomSyncFloorResult {
+  site: string;
   floorLabel: string;
   subAreaCode: string;
   roomCount: number;
@@ -68,9 +65,9 @@ export interface RoomSyncResult {
 }
 
 /**
- * userId로 로그인해 전체 대상 층(3F, 12F~16F)을 스캔하고 rooms 테이블을 멱등적으로
- * upsert한다. BE-6 이후 실제 예약 흐름과 별개로, Admin 트리거나 CLI에서 재사용할 수
- * 있도록 정식 함수로 둔다(스케줄러/API 엔드포인트는 이번 스코프 아님).
+ * userId로 로그인해 지원 사업장(config.cjSites) 전체의 대상 층을 스캔하고 rooms
+ * 테이블을 멱등적으로 upsert한다. BE-6 이후 실제 예약 흐름과 별개로, Admin 트리거나
+ * CLI에서 재사용할 수 있도록 정식 함수로 둔다(스케줄러/API 엔드포인트는 이번 스코프 아님).
  */
 export async function syncRoomMasterData(userId: string): Promise<RoomSyncResult> {
   const user = await findUserById(userId);
@@ -85,47 +82,50 @@ export async function syncRoomMasterData(userId: string): Promise<RoomSyncResult
 
   const floors: RoomSyncFloorResult[] = [];
 
-  for (const [floorLabel, subAreaCode] of Object.entries(TARGET_FLOORS)) {
-    const res = await getDayPilotConfReserveList(session, {
-      areaList: subAreaCode,
-      reserveDate: today,
-      emailAlias: user.emailAlias,
-    });
-
-    const resources = (res as CjRoomListResponse).resources;
-    const floorResource = resources?.[0];
-    const rooms = floorResource?.children ?? [];
-
-    let changedRoomCount = 0;
-    const missingCapacityRoomCodes: string[] = [];
-
-    for (const room of rooms) {
-      const capacity = parseCapacity(room.html);
-      if (capacity === null) {
-        missingCapacityRoomCodes.push(room.id);
-      }
-
-      const changed = await upsertRoomIfChanged({
-        site: SITE_NAME,
-        areaCode: config.cjSiteAreaCode,
-        subAreaCode,
-        roomCode: room.id,
-        roomName: room.name,
-        floorLabel,
-        capacity,
+  for (const site of config.cjSites) {
+    for (const [floorLabel, subAreaCode] of Object.entries(site.floorAreaCodes)) {
+      const res = await getDayPilotConfReserveList(session, {
+        areaList: subAreaCode,
+        reserveDate: today,
+        emailAlias: user.emailAlias,
       });
-      if (changed) {
-        changedRoomCount += 1;
-      }
-    }
 
-    floors.push({
-      floorLabel,
-      subAreaCode,
-      roomCount: rooms.length,
-      changedRoomCount,
-      missingCapacityRoomCodes,
-    });
+      const resources = (res as CjRoomListResponse).resources;
+      const floorResource = resources?.[0];
+      const rooms = floorResource?.children ?? [];
+
+      let changedRoomCount = 0;
+      const missingCapacityRoomCodes: string[] = [];
+
+      for (const room of rooms) {
+        const capacity = parseCapacity(room.html);
+        if (capacity === null) {
+          missingCapacityRoomCodes.push(room.id);
+        }
+
+        const changed = await upsertRoomIfChanged({
+          site: site.name,
+          areaCode: site.areaCode,
+          subAreaCode,
+          roomCode: room.id,
+          roomName: room.name,
+          floorLabel,
+          capacity,
+        });
+        if (changed) {
+          changedRoomCount += 1;
+        }
+      }
+
+      floors.push({
+        site: site.name,
+        floorLabel,
+        subAreaCode,
+        roomCount: rooms.length,
+        changedRoomCount,
+        missingCapacityRoomCodes,
+      });
+    }
   }
 
   return {

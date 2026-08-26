@@ -1,7 +1,7 @@
 // systemPrompt.ts 유닛 테스트.
-// BE-7 완료조건: 운영시간/2시간 제한/7일 범위/상암S시티 고정/반복예약은 사이드바에서
-// 등록(채팅 미지원) 등이 시스템 프롬프트에 명시되고, "요청 처리 가능 여부 판단" 원칙이
-// 프롬프트 최상위에 반영되는지 확인한다.
+// BE-7 완료조건: 운영시간/2시간 제한/7일 범위/지원 사업장(상암S시티, YTN 본사)/반복예약은
+// 사이드바에서 등록(채팅 미지원) 등이 시스템 프롬프트에 명시되고, "요청 처리 가능 여부
+// 판단" 원칙이 프롬프트 최상위에 반영되는지 확인한다.
 
 import { describe, expect, it } from "vitest";
 import { buildSystemPrompt } from "../systemPrompt";
@@ -31,6 +31,14 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("반복 예약(매주/매일 등)은 채팅으로 등록할 수 없습니다");
     expect(prompt).toContain("장비 조건");
     expect(prompt).toContain("3F, 12F~16F");
+  });
+
+  // [20260826 추가] YTN 본사(2번째 사업장) 지원 — systemPrompt가 두 사업장 모두를
+  // 지원 범위로 명시하는지 확인한다(사업장 하드코딩 회귀 방지).
+  it("두 번째 사업장(YTN 본사)과 그 층(17F)도 지원 범위로 명시된다", () => {
+    const prompt = buildSystemPrompt({ today: "2026-08-13", rooms: SAMPLE_ROOMS });
+    expect(prompt).toContain("YTN 본사");
+    expect(prompt).toContain("17F");
   });
 
   it("오늘 날짜가 그대로 주입된다 (LLM의 날짜 계산을 신뢰하지 않음)", () => {

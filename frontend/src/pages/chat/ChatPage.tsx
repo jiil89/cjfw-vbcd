@@ -37,9 +37,9 @@ import type {
 import type { RecurringRule, RecurringRuleLatestRun } from "../../types/recurring";
 import type { Room } from "../../types/room";
 
-/** 이 앱에서 지원하는 6개 층의 정렬 순서 — 시스템 프롬프트(systemPrompt.ts)의
- * floorOrder와 동일한 기준을 프론트에도 맞춘다. */
-const FLOOR_ORDER = ["3F", "12F", "13F", "14F", "15F", "16F"];
+/** 이 앱에서 지원하는 층의 정렬 순서(상암S시티 3F·12~16F, YTN 본사 17F) — 시스템
+ * 프롬프트(systemPrompt.ts)의 floorOrder와 동일한 기준을 프론트에도 맞춘다. */
+const FLOOR_ORDER = ["3F", "12F", "13F", "14F", "15F", "16F", "17F"];
 
 interface ChatUiMessage {
   id: string;
@@ -139,7 +139,7 @@ function formatTimestamp(date: Date): string {
 
 // [2026-08-14] 이 값은 백엔드 timestamptz 컬럼에서 온 진짜 UTC 인스턴트라(정규식으로 그냥
 // 잘라내면 UTC 시각이 나온다 — 예: 09:00 KST 예약이 "00:00"으로 잘못 표시됨), 이 앱이
-// 고정 지원하는 상암S시티(한국) 기준으로 명시적으로 변환해서 보여준다.
+// 지원하는 사업장(상암S시티/YTN 본사, 모두 한국) 기준으로 명시적으로 변환해서 보여준다.
 const KST_HHMM_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Seoul",
   hour: "2-digit",
@@ -314,7 +314,7 @@ export function ChatPage() {
             <BrandMarkIcon size={22} />
           </span>
           <span className="chat-brand-name">회의실 예약</span>
-          <span className="chat-brand-site mono">상암S시티</span>
+          <span className="chat-brand-site mono">상암S시티·YTN 본사</span>
         </div>
         <div className="chat-header-actions">
           <div className="chat-user-chip">

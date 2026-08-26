@@ -32,7 +32,7 @@ async function main(): Promise<void> {
   console.log("\n[seed-rooms] 완료 요약");
   for (const floor of result.floors) {
     console.log(
-      `  ${floor.floorLabel} (sub_area_code=${floor.subAreaCode}) — ${floor.roomCount}개 스캔, ${floor.changedRoomCount}개 변경`
+      `  [${floor.site}] ${floor.floorLabel} (sub_area_code=${floor.subAreaCode}) — ${floor.roomCount}개 스캔, ${floor.changedRoomCount}개 변경`
     );
     if (floor.missingCapacityRoomCodes.length > 0) {
       console.log(

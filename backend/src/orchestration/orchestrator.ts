@@ -67,7 +67,6 @@ import {
   assertValidReservationWindow,
   BusinessRuleViolationError,
   durationMinutes,
-  FIXED_SITE,
   MAX_SINGLE_ROOM_MINUTES,
   normalizeReservationTitle,
 } from "../tools/businessRules";
@@ -100,11 +99,20 @@ interface RoomInputFromModel {
   capacity?: number | null;
 }
 
+/** DB Room.site는 예약 API 호출(SaveReserve 등)에는 쓰이지 않는 표시용 메타데이터지만,
+ * 그렇다고 아무 값이나 넣으면 안 되므로 config.cjSites(건물 코드 -> 사업장명)로 정확히
+ * 되찾는다. 모델이 돌려주는 room 입력엔 site가 없다(toRoomSummary가 토큰 절약을 위해
+ * 빼기 때문) — areaCode(건물 코드)는 사업장마다 고유하므로 이것만으로 역추적 가능하다.
+ * [20260826] YTN 본사 추가로 site가 더 이상 상수 하나가 아니게 되면서 필요해졌다. */
+function siteNameForAreaCode(areaCode: string): string {
+  return config.cjSites.find((site) => site.areaCode === areaCode)?.name ?? areaCode;
+}
+
 function toRoomLike(input: RoomInputFromModel): RoomLike {
   const now = new Date().toISOString();
   return {
     id: input.id,
-    site: FIXED_SITE,
+    site: siteNameForAreaCode(input.areaCode),
     areaCode: input.areaCode,
     subAreaCode: input.subAreaCode,
     roomCode: input.roomCode,

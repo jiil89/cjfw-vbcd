@@ -21,11 +21,8 @@ export const MAX_ADVANCE_DAYS = 7;
  * (20260820 마이그레이션 — 사내망 전용 방어막이 사라지는 외부 노출에 대비한 브루트포스 방어). */
 export const MAX_LOGIN_ATTEMPTS = 5;
 
-/** 1차 범위 사업장 — 상암S시티 고정 (도메인 정의서 6번). */
-export const FIXED_SITE = "상암S시티";
-
-/** 1차 범위 지원 층 (도메인 정의서 9번 "[결정됨]" — B1F/2F는 후보 풀에서 제외). */
-export const SUPPORTED_FLOOR_LABELS = ["3F", "12F", "13F", "14F", "15F", "16F"] as const;
+/** 지원 층 (도메인 정의서 9번 "[결정됨]" — 상암S시티 3F·12F~16F, YTN 본사 17F. B1F/2F는 후보 풀에서 제외). */
+export const SUPPORTED_FLOOR_LABELS = ["3F", "12F", "13F", "14F", "15F", "16F", "17F"] as const;
 
 /** 선호 회의실 최대 등록 개수. 회원가입 폼(frontend/src/pages/register/PreferredRoomPicker.tsx의
  * MAX_PRIORITY_COUNT)과 반드시 같은 값을 유지해야 한다 — 값을 바꾸면 두 곳을 함께 고칠 것.

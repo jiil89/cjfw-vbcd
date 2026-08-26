@@ -71,10 +71,12 @@ const LOGIN_NAV_TIMEOUT_MS = 30_000;
 // 실사용 검증: 로그인 직후 이 워밍업 없이 SaveReserve → 항상 Result:0. 워밍업 한 번(회의실을
 // 특정하지 않아도 무방 — room_code를 비워도 동일하게 작동함을 확인) 후에는 같은 세션으로
 // 여러 회의실(3F-4, 3F-9 등)의 SaveReserve가 전부 Result:1(성공)로 정상 동작함을 확인했다.
-// area_code/sub_area_code는 이 프로젝트가 지원하는 유일한 사업장·층 조합(상암S시티 예시로
-// 도메인 정의서 8번/9번에 이미 등장하는 상수, 6번 "1차 범위는 상암S시티 고정")을 그대로 쓴다 —
-// 이 워밍업은 실제 예약 대상 회의실과 무관하며 세션 상태만 채우는 용도라 특정 회의실코드가
-// 필요 없다. [20260821] 실제 코드값이라 config(CJ_SITE_AREA_CODE/CJ_SITE_SUB_AREA_CODE)로 뺐다.
+// area_code/sub_area_code는 config.cjSites[0](지원 사업장 목록의 첫 번째 항목, 어느
+// 사업장이든 무방)의 건물/층 코드를 그대로 쓴다 — 이 워밍업은 실제 예약 대상 회의실과
+// 무관하며 세션 상태만 채우는 용도라 특정 사업장·회의실코드가 필요 없다(실측 확인,
+// 도메인 정의서 8번). [20260821] 실제 코드값이라 config로 뺐다. [20260826] YTN 본사
+// 추가로 사업장이 여러 개가 되면서 "유일한 사업장" 가정이 깨졌지만, 워밍업 자체는
+// 여전히 사업장 무관하게 동작하므로 cjSites[0]을 대표값으로 그대로 쓴다.
 
 // CJ 예약 서버 API 호출에 필요한 쿠키만 골라낸다: CJ 예약 서버 전용 쿠키(AP, NCF 등)와
 // 여러 cj.net 서브도메인이 공유하는 상위 도메인 쿠키(.cj.net, 예: cAccess_token, CJW).
@@ -158,9 +160,11 @@ async function warmUpReservationSession(page: Page): Promise<void> {
     // [버그 수정, 20260818] CJ는 한국 시스템이라 UTC 날짜를 넘기면 자정~오전 9시 사이엔
     // 어제 날짜로 워밍업하게 된다. KST로 계산한다.
     const today = toKstDate(new Date());
+    const warmupSite = config.cjSites[0];
+    const warmupFloorCode = Object.values(warmupSite?.floorAreaCodes ?? {})[0] ?? "";
     const warmupUrl =
       `${config.cjBaseUrl}/NConf/conferenceRoom/reserve_insmod.aspx` +
-      `?area_code=${config.cjSiteAreaCode}&sub_area_code=${config.cjSiteSubAreaCode}` +
+      `?area_code=${warmupSite?.areaCode ?? ""}&sub_area_code=${warmupFloorCode}` +
       `&reserve_date=${today}&room_code=&start_time=&end_time=&time_count=1&adminyn=N`;
 
     await reserveFrame.goto(warmupUrl, { waitUntil: "domcontentloaded", timeout: WARMUP_NAV_TIMEOUT_MS });

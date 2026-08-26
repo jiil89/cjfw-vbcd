@@ -71,16 +71,24 @@ export interface AppConfig {
   // CJ 사내 회의실 예약 시스템(ASMX API) 베이스 URL. 위와 같은 이유로 필수 환경변수.
   cjBaseUrl: string;
 
-  // 이 프로젝트가 지원하는 유일한 사업장(상암S시티)의 CJ 시스템상 건물/기본층 코드.
-  // 세션 워밍업(cj-automation/session.ts)과 회의실 동기화(services/roomSyncService.ts)가
-  // 공유한다. [20260821] 같은 이유로 하드코딩을 없애고 필수 환경변수로 뺐다.
-  cjSiteAreaCode: string;
-  cjSiteSubAreaCode: string;
+  // 이 프로젝트가 지원하는 사업장(상암S시티, YTN 본사) 목록 — 각 사업장의 CJ 시스템상
+  // 건물 코드(area_code)와 층 목록(floor_label -> sub_area_code)을 담는다.
+  // 세션 워밍업(cj-automation/session.ts, cjSites[0]을 아무 사업장이나 하나 골라 사용 —
+  // 워밍업은 사업장/회의실과 무관하게 동작함이 실측 확인됨)과 회의실 동기화
+  // (services/roomSyncService.ts, 전체 사업장을 순회)가 공유한다.
+  // [20260821] 실제 코드값이라 하드코딩을 없애고 필수 환경변수로 뺐다.
+  // [20260826] YTN 본사 추가로 단일 사업장 가정을 깨고 배열로 확장했다 — 딱 2개 사업장만
+  // 지원하면 되므로(오버엔지니어링 방지) 별도 사업장 관리 테이블/Admin UI는 만들지 않는다.
+  cjSites: CjSiteConfig[];
+}
 
-  // roomSyncService.ts가 스캔하는 층 목록: floor_label -> CJ 시스템상 sub_area_code.
-  // "3F:1128,12F:1111,..." 형식의 콤마 구분 문자열을 파싱한다. [20260821] 실제 코드값이라
-  // 소스에 하드코딩하지 않고 필수 환경변수로 뺐다.
-  cjFloorAreaCodes: Record<string, string>;
+export interface CjSiteConfig {
+  /** 사업장명 (rooms.site와 동일한 값, 예: "상암S시티", "YTN 본사"). */
+  name: string;
+  /** 건물 코드 (SaveReserve의 area_code, listArea의 areacode). */
+  areaCode: string;
+  /** floor_label -> sub_area_code (예: "3F" -> "1128"). */
+  floorAreaCodes: Record<string, string>;
 }
 
 function loadConfig(): AppConfig {
@@ -100,16 +108,46 @@ function loadConfig(): AppConfig {
     throw new Error("[config/env] ALLOWED_ORIGINS에 최소 1개 이상의 origin이 필요합니다.");
   }
 
-  const cjFloorAreaCodes: Record<string, string> = {};
-  for (const entry of requireEnv("CJ_FLOOR_AREA_CODES").split(",")) {
-    const [floorLabel, subAreaCode] = entry.split(":").map((part) => part.trim());
-    if (!floorLabel || !subAreaCode) {
+  // CJ_SITE_AREA_CODES: "사업장명:건물코드,..." (예: "상암S시티:804,YTN 본사:997")
+  const areaCodeBySite = new Map<string, string>();
+  const siteOrder: string[] = [];
+  for (const entry of requireEnv("CJ_SITE_AREA_CODES").split(",")) {
+    const [siteName, areaCode] = entry.split(":").map((part) => part.trim());
+    if (!siteName || !areaCode) {
       throw new Error(
-        `[config/env] CJ_FLOOR_AREA_CODES 형식이 올바르지 않습니다(예: "3F:1128,12F:1111"): "${entry}"`
+        `[config/env] CJ_SITE_AREA_CODES 형식이 올바르지 않습니다(예: "상암S시티:804,YTN 본사:997"): "${entry}"`
       );
     }
-    cjFloorAreaCodes[floorLabel] = subAreaCode;
+    areaCodeBySite.set(siteName, areaCode);
+    siteOrder.push(siteName);
   }
+
+  // CJ_FLOOR_AREA_CODES: "사업장명/층라벨:층코드,..." (예: "상암S시티/3F:1128,YTN 본사/17F:1002")
+  // 기존(단일 사업장 시절) "층라벨:층코드" 형식에 사업장명 접두사("/") 한 단계만 더한 확장이다.
+  const floorAreaCodesBySite = new Map<string, Record<string, string>>();
+  for (const entry of requireEnv("CJ_FLOOR_AREA_CODES").split(",")) {
+    const [key, subAreaCode] = entry.split(":").map((part) => part.trim());
+    const [siteName, floorLabel] = (key ?? "").split("/").map((part) => part.trim());
+    if (!siteName || !floorLabel || !subAreaCode) {
+      throw new Error(
+        `[config/env] CJ_FLOOR_AREA_CODES 형식이 올바르지 않습니다(예: "상암S시티/3F:1128,YTN 본사/17F:1002"): "${entry}"`
+      );
+    }
+    if (!areaCodeBySite.has(siteName)) {
+      throw new Error(
+        `[config/env] CJ_FLOOR_AREA_CODES에 CJ_SITE_AREA_CODES에 없는 사업장이 있습니다: "${siteName}"`
+      );
+    }
+    const floors = floorAreaCodesBySite.get(siteName) ?? {};
+    floors[floorLabel] = subAreaCode;
+    floorAreaCodesBySite.set(siteName, floors);
+  }
+
+  const cjSites: CjSiteConfig[] = siteOrder.map((name) => ({
+    name,
+    areaCode: areaCodeBySite.get(name)!,
+    floorAreaCodes: floorAreaCodesBySite.get(name) ?? {},
+  }));
 
   return {
     nodeEnv,
@@ -124,9 +162,7 @@ function loadConfig(): AppConfig {
     allowedOrigins,
     cjPortalBaseUrl: requireEnv("CJ_PORTAL_BASE_URL"),
     cjBaseUrl: requireEnv("CJ_BASE_URL"),
-    cjSiteAreaCode: requireEnv("CJ_SITE_AREA_CODE"),
-    cjSiteSubAreaCode: requireEnv("CJ_SITE_SUB_AREA_CODE"),
-    cjFloorAreaCodes,
+    cjSites,
   };
 }
 
