@@ -67,8 +67,9 @@
 ### 내 예약 조회
 
 1. 사용자가 "오늘/내일/이번 주 내 예약 뭐 있어?" 같은 질문을 함
-2. Agent가 `bindMyReservation`(9번 API 참고)으로 해당 기간의 본인 예약 목록을 조회
+2. Agent가 우리 DB(`reservations`)에서 이 챗봇으로 만든 예약을 조회하고, `bindMyReservation`(9번 API 참고)으로 해당 기간의 **CJ 실제 예약 목록**도 함께 조회
 3. 목록을 정리해서 답변 (없으면 "예약 내역 없음"으로 응답). **같은 `reservation_request_id`를 공유하는 예약이 여러 건이면(위 "긴 회의 요청" 분할 케이스) 하나로 묶어서 "OO~OO 연속 회의 (2개 회의실로 분할: 14F-2, 14F-3)"처럼 안내한다** — 사용자에게는 서로 다른 두 건의 예약이 아니라 하나의 회의로 인식되게 함
+4. **[2026-08-31 추가, 실사용에서 발견]** 이 챗봇을 거치지 않고(CJ WORLD 웹사이트에서 직접 등) 잡은 예약은 우리 DB에 없어서, DB만 보던 이전 버전은 이런 예약을 "없다"고 잘못 안내했다. 이제 `bindMyReservation`의 실제 응답을 `cj_seq`로 우리 DB 기록과 교차 대조해서, DB에 없는 CJ 예약도 "이 챗봇 밖에서 잡힌 예약"으로 구분해 함께 보여준다 — 단, 그런 예약은 우리 DB에 행이 없어 **이 챗봇으로는 변경/취소할 수 없다**는 점을 사용자에게 알린다.
 
 ### 예약 변경
 
@@ -323,7 +324,7 @@ Playwright로 실제 사이트에 로그인하여 조회→예약→취소 전�
 | **예약 생성/수정**                                     | `POST WSConfReserveinsmod.asmx/SaveReserve`                | `area_code`(건물), `subarea_code`(층), `room_code`, `room_name`, `reserve_date`, `start_time`, `end_time`, `title`, `contents`, `phone_num`, `is_send_mail`, `reservetype`(`I`=생성) 등 |
 | **예약 취소**                                          | `POST WSINConference.asmx/delReserve`                      | `seq`(예약 고유ID)                                                                                                                                                                      |
 | 예약 상세 조회                                         | `POST WSConferenceReserve.asmx/getConfReservationInfo`     | `seq`                                                                                                                                                                                   |
-| 내 예약 목록 조회                                      | `POST m_WSConfReservelist.asmx/bindMyReservation`          | `email_alias`, `sdate`, `edate` (실측 확인 — 이전 버전엔 "날짜 범위 등"으로만 적혀 있었음)                                                                                              |
+| 내 예약 목록 조회                                      | `POST m_WSConfReservelist.asmx/bindMyReservation`          | `email_alias`, `sdate`, `edate` (실측 확인 — 이전 버전엔 "날짜 범위 등"으로만 적혀 있었음). 응답은 `{ Table: [...] }`이고 각 행에 `SEQ`(예약고유ID), `ROOM_NAME`, `CONF_TITE`(회의명), `CONTENTS`(내용), `START_DATE`, `START_TIME`, `END_TIME`, `DEL_YN`("0"=유효)이 있다. **주의**: `END_DATETIME`은 `END_TIME`보다 항상 30분 크게 와서 실제 종료 시각이 아니다 — 반드시 `END_TIME`을 써야 한다(2026-08-31 실측 확인). |
 
 **주의할 점**
 

@@ -426,14 +426,41 @@ export async function getConfReservationInfo(
 
 // ── 9. 내 예약 목록 조회 ─────────────────────────────────────────────────
 //
-// 9번 명세에 정확한 파라미터 이름이 나와있지 않다 ("날짜 범위 등"으로만 서술됨).
-// 명세에 없는 파라미터 이름을 추측해서 만들지 않기 위해(작업 지침), 호출자가
-// 원본 CJ 파라미터를 그대로 넘기도록 Record<string, unknown>을 받는다. 정확한
-// 파라미터 이름은 실사용 확인 후 도메인 정의서 9번에 반영하고 이 시그니처도
-// 구체화해야 한다.
+// [2026-08-31 실사용 확인 완료] jiil 실계정으로 직접 호출해 파라미터/응답 스키마를
+// 전부 확정했다(이전 버전은 스키마 미확정이라 응답을 버렸었다 — myReservations.tool.ts
+// 참고). 응답은 { Table: [...] } 형태이고 각 행이 예약 1건이다.
+//
+// [실측으로만 알 수 있던 함정] END_DATETIME은 END_TIME보다 항상 30분 더 크다
+// (예: END_TIME="12:00"인데 END_DATETIME="...12:30") — 그리드 슬롯 경계를 반영하는
+// 필드로 보이며 실제 종료 시각이 아니다. 종료 시각은 반드시 END_TIME을 써야 한다.
+export interface BindMyReservationParams {
+  email_alias: string;
+  sdate: string; // "YYYY-MM-DD"
+  edate: string; // "YYYY-MM-DD"
+}
+
+export interface BindMyReservationRow {
+  SEQ: string;
+  ROOM_NAME: string;
+  CONF_TITE: string; // 회의명
+  CONTENTS: string; // 내용
+  START_DATE: string; // "YYYY-MM-DD"
+  START_TIME: string; // "HH:mm"
+  END_TIME: string; // "HH:mm" — END_DATETIME 말고 이 필드를 써야 한다(위 주석 참고)
+  DEL_YN: string; // "0"=유효, 그 외=삭제됨(실측으로 "1" 등을 본 적은 없으나 방어적으로 필터링)
+}
+
+export interface BindMyReservationResponse {
+  Table: BindMyReservationRow[];
+}
+
 export async function bindMyReservation(
   session: CjSession,
-  rawParams: Record<string, unknown>
-): Promise<unknown> {
-  return callCjApi(session, "m_WSConfReservelist.asmx/bindMyReservation", rawParams);
+  params: BindMyReservationParams
+): Promise<BindMyReservationResponse> {
+  return callCjApi<BindMyReservationResponse>(session, "m_WSConfReservelist.asmx/bindMyReservation", {
+    email_alias: params.email_alias,
+    sdate: params.sdate,
+    edate: params.edate,
+  });
 }

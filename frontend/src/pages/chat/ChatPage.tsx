@@ -777,7 +777,8 @@ function MyReservationsListCard({
   const now = Date.now();
   const rows = groups.flatMap((group) =>
     group.segments.map((segment) => ({
-      key: segment.reservationId,
+      // source="cj"(이 챗봇 밖에서 잡힌 예약)는 reservationId가 없다 — cjSeq로 대체한다.
+      key: segment.reservationId ?? segment.cjSeq ?? `${group.title}-${segment.startAt}`,
       room: segment.roomName ?? "회의실 미상",
       title: group.title,
       startAt: segment.startAt,

@@ -64,9 +64,12 @@ export interface CheckAvailabilityData {
 export interface MyReservationGroup {
   reservationRequestId: string | null;
   title: string;
+  /** "app"=이 챗봇으로 만든 예약(변경/취소 가능), "cj"=사내 예약 시스템에서 직접 잡혀
+   * 이 앱엔 기록이 없는 예약(reservationId 없음, 여기서 변경/취소 불가). */
+  source: "app" | "cj";
   isSplit: boolean;
   segments: Array<{
-    reservationId: string;
+    reservationId: string | null;
     roomName: string | null;
     startAt: string;
     endAt: string;
