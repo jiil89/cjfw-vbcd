@@ -58,6 +58,7 @@ import {
   ReservationModifyFailedError,
 } from "../tools/modifyReservation.tool";
 import {
+  cancelCjOnlyReservation,
   cancelReservation,
   SplitGroupCancelScopeRequiredError,
   ReservationAlreadyCancelledError,
@@ -371,7 +372,9 @@ async function runCancelReservation(
   pending: PendingConfirmation
 ): Promise<ToolExecutionResult> {
   try {
-    const results = await cancelReservation(userId, pending.params as Parameters<typeof cancelReservation>[1]);
+    const params = pending.params as { cjSeq: string; date: string } | Parameters<typeof cancelReservation>[1];
+    const results =
+      "cjSeq" in params ? [await cancelCjOnlyReservation(userId, params)] : await cancelReservation(userId, params);
     setPendingConfirmation(session, null);
     setResolvedTarget(session, null);
     return { content: { status: "confirmed", cancelled: results }, toolNameOverride: "confirm_cancel_reservation" };
@@ -720,23 +723,35 @@ async function executeTool(
       }
 
       case "propose_cancel_reservation": {
-        const reservationId = requireString(args, "reservationId");
-        if (!reservationId) return errorResult("reservationId는 필수입니다.");
+        const reservationId = typeof args.reservationId === "string" ? args.reservationId : undefined;
+        // cjSeq: 챗봇 밖(CJ WORLD 웹사이트 등)에서 잡혀 우리 DB엔 없는 예약(get_my_reservations
+        // 결과의 source="cj")을 취소할 때 reservationId 대신 쓴다 -- date는 그 예약의
+        // 날짜(YYYY-MM-DD, get_my_reservations 결과의 startAt 날짜)로, ownership 재확인 범위를
+        // 좁히는 용도다 (cancelCjOnlyReservation 주석 참고).
+        const cjSeq = typeof args.cjSeq === "string" ? args.cjSeq : undefined;
+        const date = typeof args.date === "string" ? args.date : undefined;
+        if (!reservationId && !cjSeq) return errorResult("reservationId 또는 cjSeq 중 하나는 필수입니다.");
+        if (cjSeq && !date) return errorResult("cjSeq로 취소할 때는 date가 필수입니다.");
+
         const scopeRaw = args.scope;
         const scope = scopeRaw === "single" || scopeRaw === "entire_group" ? scopeRaw : undefined;
 
-        const summary = `예약(${reservationId}) 취소${scope ? ` (범위: ${scope === "entire_group" ? "전체" : "이 구간만"})` : ""}`;
+        const summary = cjSeq
+          ? `사내 예약 시스템에서 직접 잡은 예약(${date}) 취소`
+          : `예약(${reservationId}) 취소${scope ? ` (범위: ${scope === "entire_group" ? "전체" : "이 구간만"})` : ""}`;
         const pending: PendingConfirmation = {
           token: randomUUID(),
           kind: "cancel_reservation",
           summary,
-          params: { reservationId, scope },
+          params: cjSeq ? { cjSeq, date } : { reservationId, scope },
           createdAtTurn: session.turnIndex,
         };
         setPendingConfirmation(session, pending);
         // 대상이 서버가 직접 1건으로 좁힌 그 예약이면 바로 취소한다(3-6b). 분할 예약이라
         // 범위를 정해야 하는 경우는 runCancelReservation이 scope_required로 되돌려준다.
-        if (isResolvedTarget(session, reservationId)) {
+        // cjSeq 경로는 서버가 미리 좁힌 적이 없으므로(find_reservation_candidates는 우리
+        // DB만 검색) 항상 확인을 한 번 거친다.
+        if (reservationId && isResolvedTarget(session, reservationId)) {
           return runCancelReservation(session, userId, pending);
         }
         return { content: { confirmationToken: pending.token, summary, requiresUserConfirmation: true } };

@@ -2,7 +2,7 @@
 // 도메인 정의서 2번 "예약 취소": 대상이 여러 건이면 되묻고, 분할 예약(긴 회의) 건이면
 // "전체 취소"인지 "그중 한 회의실만 취소"인지 기본값 없이 반드시 확인받는다.
 
-import { delReserve } from "../cj-automation/client";
+import { bindMyReservation, delReserve } from "../cj-automation/client";
 import { getValidSession } from "../cj-automation/session";
 import {
   cancelReservationById,
@@ -10,6 +10,8 @@ import {
   findReservationsByRequestId,
   type Reservation,
 } from "../db/repositories/reservationRepository";
+import { toKstTimestamp } from "../lib/kst";
+import { resolveEmailAlias } from "./availability.tool";
 import { ReservationNotFoundError } from "./reservationTargeting";
 
 export { findReservationCandidates as findCancellableReservationCandidates } from "./reservationTargeting";
@@ -41,8 +43,10 @@ export interface CancelReservationParams {
 }
 
 export interface CancelledReservationSummary {
-  reservationId: string;
-  roomId: string;
+  /** 챗봇 밖(CJ WORLD 웹사이트 등)에서 잡힌 예약을 취소한 경우 우리 DB 행이 없어 null이다. */
+  reservationId: string | null;
+  roomId: string | null;
+  roomName?: string;
   startAt: string;
   endAt: string;
 }
@@ -105,4 +109,40 @@ export async function cancelReservation(
   }
 
   return results;
+}
+
+/**
+ * 챗봇 밖(CJ WORLD 웹사이트 등)에서 잡혀 우리 DB엔 없는 예약을 취소한다
+ * (myReservations.tool.ts의 source="cj" 항목). reservationId가 없으므로 cjSeq로
+ * 대상을 지정하되, 임의의 cjSeq를 취소당하지 않도록 delReserve 전에 반드시
+ * bindMyReservation으로 "이 사용자 자신의 예약이 맞는지"를 다시 확인한다 -- date는
+ * 그 조회 범위를 좁히는 용도(get_my_reservations 결과의 startAt 날짜를 그대로 쓰면 됨).
+ */
+export async function cancelCjOnlyReservation(
+  userId: string,
+  params: { cjSeq: string; date: string }
+): Promise<CancelledReservationSummary> {
+  const session = await getValidSession(userId);
+  const emailAlias = await resolveEmailAlias(userId);
+
+  const cjResponse = await bindMyReservation(session, {
+    email_alias: emailAlias,
+    sdate: params.date,
+    edate: params.date,
+  });
+  const row = cjResponse.Table?.find((r) => r.SEQ === params.cjSeq && r.DEL_YN === "0");
+  if (!row) {
+    throw new ReservationNotFoundError();
+  }
+
+  await delReserve(session, params.cjSeq);
+
+  return {
+    reservationId: null,
+    roomId: null,
+    roomName: row.ROOM_NAME,
+    // END_DATETIME이 아니라 END_TIME을 써야 한다(myReservations.tool.ts와 동일한 이유).
+    startAt: toKstTimestamp(row.START_DATE, row.START_TIME),
+    endAt: toKstTimestamp(row.START_DATE, row.END_TIME),
+  };
 }

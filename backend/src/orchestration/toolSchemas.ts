@@ -268,18 +268,19 @@ export const toolSchemas: OpenAiToolDefinition[] = [
     function: {
       name: "propose_cancel_reservation",
       description:
-        "이미 대상이 명확히 특정된 기존 예약의 취소를 제안한다. 대상이 분할 예약(긴 회의) 그룹의 일부이고 scope를 지정하지 않으면, 실행 대신 '전체 취소/이 회의실만 취소' 중 무엇인지 되물어야 하는 상태를 반환한다(기본값을 임의로 정하지 않음). 아직 실행하지 않음 — confirmationToken 반환.",
+        "이미 대상이 명확히 특정된 기존 예약의 취소를 제안한다. reservationId와 cjSeq 중 정확히 하나만 넘긴다 — get_my_reservations 결과에서 source=\"app\"이면 reservationId를, source=\"cj\"(사내 예약 시스템에서 직접 잡아 이 앱 DB엔 없는 예약)면 그 세그먼트의 cjSeq와 date(YYYY-MM-DD, startAt의 날짜)를 쓴다. 대상이 분할 예약(긴 회의) 그룹의 일부이고 scope를 지정하지 않으면, 실행 대신 '전체 취소/이 회의실만 취소' 중 무엇인지 되물어야 하는 상태를 반환한다(기본값을 임의로 정하지 않음). 아직 실행하지 않음 — confirmationToken 반환.",
       parameters: {
         type: "object",
         properties: {
-          reservationId: { type: "string", description: "취소 대상 예약 id (find_reservation_candidates 결과에서 정확히 특정된 1건)" },
+          reservationId: { type: "string", description: "취소 대상 예약 id (find_reservation_candidates 결과, 또는 get_my_reservations의 source=\"app\" 세그먼트에서 특정된 1건)" },
+          cjSeq: { type: "string", description: "get_my_reservations의 source=\"cj\" 세그먼트의 cjSeq. reservationId가 없는 예약을 취소할 때만 사용." },
+          date: { type: "string", description: "cjSeq로 취소할 때 함께 필요(YYYY-MM-DD). 그 세그먼트의 startAt 날짜." },
           scope: {
             type: "string",
             enum: ["single", "entire_group"],
-            description: "분할 예약 그룹의 일부일 때만 필요. single=이 구간만 취소, entire_group=전체 취소. 사용자가 명시하지 않았다면 생략하고, 서버가 되물어야 할 때 그 안내를 그대로 사용자에게 전달할 것.",
+            description: "분할 예약 그룹의 일부일 때만 필요(reservationId 경로 전용). single=이 구간만 취소, entire_group=전체 취소. 사용자가 명시하지 않았다면 생략하고, 서버가 되물어야 할 때 그 안내를 그대로 사용자에게 전달할 것.",
           },
         },
-        required: ["reservationId"],
         additionalProperties: false,
       },
     },

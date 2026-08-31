@@ -4,7 +4,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../cj-automation/client", () => ({ delReserve: vi.fn() }));
+vi.mock("../../cj-automation/client", () => ({ delReserve: vi.fn(), bindMyReservation: vi.fn() }));
 vi.mock("../../cj-automation/session", () => ({
   getValidSession: vi.fn(async () => ({ cookieHeader: "fake", baseUrl: "https://example.test" })),
 }));
@@ -13,14 +13,16 @@ vi.mock("../../db/repositories/reservationRepository", () => ({
   findReservationById: vi.fn(),
   findReservationsByRequestId: vi.fn(),
 }));
+vi.mock("../availability.tool", () => ({ resolveEmailAlias: vi.fn(async () => "jiil") }));
 
-import { delReserve } from "../../cj-automation/client";
+import { bindMyReservation, delReserve } from "../../cj-automation/client";
 import {
   cancelReservationById,
   findReservationById,
   findReservationsByRequestId,
 } from "../../db/repositories/reservationRepository";
-import { cancelReservation, SplitGroupCancelScopeRequiredError } from "../cancelReservation.tool";
+import { cancelCjOnlyReservation, cancelReservation, SplitGroupCancelScopeRequiredError } from "../cancelReservation.tool";
+import { ReservationNotFoundError } from "../reservationTargeting";
 
 function makeReservation(overrides: Record<string, unknown>) {
   return {
@@ -100,5 +102,40 @@ describe("cancelReservation -- 분할 예약 그룹 취소 범위 확인", () =>
     expect(result[0].reservationId).toBe("res-1");
     expect(delReserve).toHaveBeenCalledTimes(1);
     expect(delReserve).toHaveBeenCalledWith(expect.anything(), "1001");
+  });
+});
+
+describe("cancelCjOnlyReservation -- 챗봇 밖(CJ)에서 잡힌 예약 취소", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("bindMyReservation에서 cjSeq가 확인되면 delReserve로 취소한다", async () => {
+    (bindMyReservation as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      Table: [
+        {
+          SEQ: "9001",
+          ROOM_NAME: "15F-4",
+          START_DATE: "2026-08-27",
+          START_TIME: "14:00",
+          END_TIME: "15:00",
+          DEL_YN: "0",
+        },
+      ],
+    });
+
+    const result = await cancelCjOnlyReservation("user-1", { cjSeq: "9001", date: "2026-08-27" });
+    expect(delReserve).toHaveBeenCalledWith(expect.anything(), "9001");
+    expect(result.reservationId).toBeNull();
+    expect(result.roomName).toBe("15F-4");
+  });
+
+  it("이 사용자의 CJ 예약 목록에 없는 cjSeq는 ReservationNotFoundError로 거부하고 취소를 시도하지 않는다", async () => {
+    (bindMyReservation as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ Table: [] });
+
+    await expect(cancelCjOnlyReservation("user-1", { cjSeq: "9999", date: "2026-08-27" })).rejects.toBeInstanceOf(
+      ReservationNotFoundError
+    );
+    expect(delReserve).not.toHaveBeenCalled();
   });
 });

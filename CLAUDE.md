@@ -10,6 +10,8 @@
 
 - 안드레 카파시의 CLAUDE.md
 - https://raw.githubusercontent.com/multica-ai/andrej-karpathy-skills/refs/heads/main/CLAUDE.md
+- Ponytail (게으른 시니어 개발자 모드 — 필요한지부터 따지고, 있는 걸 재사용하고, 최소한만 작성)
+- https://raw.githubusercontent.com/dietrichgebert/ponytail/main/AGENTS.md
 
 ## 프로젝트 문서 참조 (source of truth)
 
